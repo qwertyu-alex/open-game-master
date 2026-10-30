@@ -102,6 +102,8 @@ import { textKey } from "@/lib/language/text-logic";
 import { conversationNote, type Conversation } from "@/lib/dm/conversation-logic";
 import { ADVANTAGE_SOURCES } from "@/lib/dm/pc-attack-options";
 import { PLACE_DIRECTIONS, PLACE_DISTANCES } from "@/lib/overworld/places";
+import { COUCH_RULES, couchAgendaBlock } from "@/lib/couch/prompt-logic";
+import { navigationPrompt, type CouchNavigation } from "@/lib/couch/navigation-logic";
 
 export { DM_SYSTEM, dmSystemText, ENCOUNTER_RULES, encounterRulesText } from "@/lib/dm/prompt-rules";
 
@@ -150,6 +152,12 @@ export function buildDmSystem(
   }
   if (campaign.gameSettings.genre === "custom" && campaign.gameSettings.customGenreText) {
     parts.push(`Tone and world, set by the table: ${campaign.gameSettings.customGenreText}`);
+  }
+  // A couch night's standing rules (docs/couch-mode-spec.md): the one-shot's
+  // pacing and tone, the agendas as missions, whispers and delivery tags.
+  // Here, above the turn heading, because they change only with the mode.
+  if (campaign.gameSettings.couchMode) {
+    parts.push(COUCH_RULES);
   }
   const language = languageDirective(campaign.gameSettings.tableLanguage);
   if (language) {
@@ -250,6 +258,7 @@ export type DmGameState = {
     partOf?: string;
   } | null;
   visitedLocationNames?: string[];
+  couchNavigation?: CouchNavigation | null;
   // Recent lasting milestones per campaign character id.
   recentEventsByCharacter?: Map<string, string[]>;
   // Afflictions, lifestyle and downtime per character id
@@ -884,11 +893,16 @@ export function buildGameStateBlock(state: DmGameState): string {
   // built from fixtures in several tests as well as from a real row, and a
   // missing clock should cost the prompt a line, not throw.
   const clock = normalizeClock(campaign.clock);
-  state.skyLine = `Date and time: ${describeInstant(clock.calendar, clock.instant)}. ${
-    isDark(breakDown(clock.calendar, clock.instant).hour)
-      ? "It is dark; light sources, darkvision and stealth apply."
-      : "It is daylight."
-  }${clock.weather ? ` ${describeWeather(clock.weather)} The server enforces it: Perception, sight, ranged attacks and travel already account for the sky; narrate it, never restate the numbers.` : ""}`;
+  // A couch one-shot happens aboard ships and stations: the world's calendar,
+  // daylight and weather made the GM narrate "midday" and painted snow
+  // outside an airlock in deep space. Its light is the scene's own.
+  state.skyLine = campaign.gameSettings.couchMode
+    ? "Time: ship time, in the hours the story needs. No sun, season or weather unless a scene is planetside; light is what the scene has (emergency lamps, torches, screens)."
+    : `Date and time: ${describeInstant(clock.calendar, clock.instant)}. ${
+        isDark(breakDown(clock.calendar, clock.instant).hour)
+          ? "It is dark; light sources, darkvision and stealth apply."
+          : "It is daylight."
+      }${clock.weather ? ` ${describeWeather(clock.weather)} The server enforces it: Perception, sight, ranged attacks and travel already account for the sky; narrate it, never restate the numbers.` : ""}`;
   sections.push(state.skyLine);
   // The selected world's own nouns, and the alias table that lets the DM
   // narrate "Curaga" while still calling use_spell_slot with "Cure Wounds".
@@ -1019,6 +1033,7 @@ export function buildGameStateBlock(state: DmGameState): string {
     }
     sections.push(lines.join("\n"));
   }
+  if (campaign.gameSettings?.couchMode) sections.push(navigationPrompt(state.couchNavigation ?? null));
   if (state.encounter) {
     const encounter = state.encounter;
     const lines: string[] = [];
@@ -1312,6 +1327,16 @@ export function buildGameStateBlock(state: DmGameState): string {
       })
       .join("\n")}`,
   );
+  // The couch crew's secret agendas, from the claimed sheets: beside the
+  // party, in the part that changes only when an act turns or a story point
+  // lands. Left out of a prompt whose answer the whole table reads (an
+  // out-of-character answer), like the storyteller's secrets below.
+  if (campaign.gameSettings?.couchMode && !state.withholdStorytellerSecrets) {
+    const agendas = couchAgendaBlock(sheets);
+    if (agendas) {
+      sections.push(agendas);
+    }
+  }
   if (rollLines.length) {
     moment.push(`Recent rolls:\n${rollLines.join("\n")}`);
   }
@@ -1629,6 +1654,18 @@ export const firstMovePartyTool = {
   function: {
     ...movePartyTool.function,
     parameters: { ...movePartyTool.function.parameters, properties: firstMoveProperties },
+  },
+} as const;
+
+// The cabin's shared route never offers a way to name only part of the crew.
+export const couchMovePartyTool = {
+  ...movePartyTool,
+  function: {
+    ...movePartyTool.function,
+    parameters: {
+      ...movePartyTool.function.parameters,
+      properties: Object.fromEntries(Object.entries(movePartyTool.function.parameters.properties).filter(([key]) => key !== "characterIds")),
+    },
   },
 } as const;
 

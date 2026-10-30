@@ -69,3 +69,17 @@ export function heldRollUserIds(
   }
   return ids;
 }
+
+// Whose rolls park at this table. A couch night holds every player's
+// (docs/couch-mode-spec.md 2.10): each crew member throws from their phone,
+// the server still draws the number, and the TV shows the dice land. The
+// prompt's "rolls PHYSICAL dice" mark keeps heldRollUserIds, since nobody
+// on a couch types a face.
+export function rollHolderIds(
+  settings: { dicePolicy: string; couchMode?: boolean },
+  members: ReadonlyArray<HeldRollMember>,
+): Set<string> {
+  return settings.couchMode
+    ? new Set(members.map((member) => member.userId))
+    : heldRollUserIds(settings.dicePolicy, members);
+}

@@ -69,6 +69,9 @@ const DELIBERATELY_OMITTED = new Set([
   "waitForTable",
   "waitForTableSeconds",
   "companionConscience",
+  // Chosen by starting a couch night (src/app/couch), never in the dialog:
+  // it decides how the crew is made, so it cannot be a toggle beside the rest.
+  "couchMode",
 ]);
 
 let passed = 0;

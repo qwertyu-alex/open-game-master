@@ -36,6 +36,7 @@ import { handlePartyStash } from "@/lib/dm/party-tools";
 import { handleClearEffect, handleSetEffect } from "@/lib/dm/effect-tools";
 import { handleEndScene, handleSceneCheck, handleStartScene } from "@/lib/dm/scene-tools";
 import { handlePlaySting, handleSetAmbience } from "@/lib/dm/ambience-tools";
+import { handleAdvanceAct, handleAwardStoryPoint } from "@/lib/dm/couch-tools";
 import { handleDismount, handleMountUp } from "@/lib/dm/mount-tools";
 import { handleItemCall } from "@/lib/dm/gear-tool";
 import {
@@ -220,6 +221,10 @@ export async function dispatchAdjudication(
       return handleSetAmbience(campaign, rawArguments);
     case "play_sting":
       return handlePlaySting(campaign, rawArguments);
+    case "advance_act":
+      return handleAdvanceAct(campaign, rawArguments);
+    case "award_story_point":
+      return handleAwardStoryPoint(campaign, rawArguments);
     case "mount_up":
       return handleMountUp(campaign, rawArguments, sheets, sheetsById, turn);
     case "dismount":

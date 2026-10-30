@@ -227,9 +227,32 @@ export type LobbySeat = { userId: string; ready: boolean; hasSheet: boolean };
 //
 // Readiness still counts every seat, DM included: the DM readies up to say the
 // table is set, which is the whole point of their ready button.
-export function lobbyBlocker(seats: DmSeats, lobby: LobbySeat[]): string {
+//
+// A couch table (docs/couch-mode-spec.md) names its display seat: the TV's
+// own account, which plays no character, is never asked to ready up, and is
+// left out of every count. The rest is the same rule with the crew cards as
+// the characters: at least one taken, and nobody who joined without one, so
+// a night where fewer friends came than the crew was written for can still
+// start (the cards nobody took never reach the story).
+export function lobbyBlocker(seats: DmSeats, lobby: LobbySeat[], couch: { displayUserId: string } | null = null): string {
   if (!lobby.length) {
     return "The table is empty.";
+  }
+  if (couch) {
+    const players = lobby.filter((seat) => seat.userId !== couch.displayUserId);
+    if (!players.length) {
+      return "Waiting for a player to join.";
+    }
+    if (!players.some((seat) => seat.hasSheet)) {
+      return "Waiting for someone to take a crew card.";
+    }
+    if (players.some((seat) => !seat.hasSheet)) {
+      return "Everyone who joined needs to take a crew card first.";
+    }
+    if (players.some((seat) => !seat.ready)) {
+      return "Waiting for everyone to ready up.";
+    }
+    return "";
   }
   // A DM alone at the table has nobody to run the game for.
   if (lobby.every((seat) => isDmSeat(seats, seat.userId))) {

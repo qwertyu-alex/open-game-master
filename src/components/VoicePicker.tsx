@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Select, type SelectOption } from "@/components/ui/Select";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
+import { isElevenLabsVoiceId } from "@/lib/tts-elevenlabs-logic";
 import { TTS_VOICES } from "@/lib/tts-voices";
 
 // The narrator voice pickers (campaign settings, the campaign creator, the
@@ -13,7 +14,9 @@ import { TTS_VOICES } from "@/lib/tts-voices";
 // no list could hold. Until the server answers, and on a server older than
 // the endpoint, the list is the shipped Kokoro one, as it always was.
 
-type Voice = { id: string; label: string };
+// `group` heads a run of voices (ElevenLabs: the account's own, the
+// library's, ElevenLabs' set).
+type Voice = { id: string; label: string; group?: string };
 type VoiceList = { voices: Voice[]; provider: string; defaultVoice: string };
 
 const SHIPPED: VoiceList = {
@@ -58,11 +61,18 @@ export function useTtsVoices(): VoiceList {
   return list;
 }
 
+// ElevenLabs speaks only its own voice ids: a campaign made on Kokoro
+// ("af_heart") is read in the server's default voice there, so that is what
+// its picker shows rather than an id that is never heard.
+function readsAsDefault(list: VoiceList, voice: string): boolean {
+  return list.provider === "elevenlabs" && voice !== "" && !isElevenLabsVoiceId(voice) && !list.voices.some((entry) => entry.id === voice);
+}
+
 // The name a voice goes by in a summary line.
 // A voice as a person reads it. A campaign with no voice of its own uses the
 // server's, and says so: "Heart (warm female) · server default".
 export function voiceLabel(list: VoiceList, voice: string): string {
-  if (!voice.trim()) {
+  if (!voice.trim() || readsAsDefault(list, voice)) {
     const fallback = list.voices.find((entry) => entry.id === list.defaultVoice)?.label ?? list.defaultVoice;
     return fallback ? `${fallback} · server default` : "The server's default voice";
   }
@@ -89,7 +99,8 @@ export function VoicePicker({
   noneLabel?: string;
 }) {
   const list = useTtsVoices();
-  const listed = list.voices.some((voice) => voice.id === value);
+  const asDefault = readsAsDefault(list, value);
+  const listed = asDefault || list.voices.some((voice) => voice.id === value);
   // Typing is open when asked for, and whenever the saved voice is one the
   // server did not list (a custom one, or a voice from another server).
   const [typing, setTyping] = useState(false);
@@ -104,8 +115,16 @@ export function VoicePicker({
 
   const options: SelectOption<string>[] = [
     ...(noneLabel ? [{ value: "", label: noneLabel }] : []),
-    ...list.voices.map((voice) => ({ value: voice.id, label: voice.label })),
-    { value: CUSTOM, label: "Custom voice…", hint: "Type any voice this server understands" },
+    ...(asDefault ? [{ value, label: voiceLabel(list, value), hint: "Saved on another speech server" }] : []),
+    ...list.voices.map((voice) => ({ value: voice.id, label: voice.label, ...(voice.group ? { group: voice.group } : {}) })),
+    // Under a heading of its own when the voices have theirs, or the menu
+    // would file it with the entries above the first heading.
+    {
+      value: CUSTOM,
+      label: "Custom voice…",
+      hint: "Type any voice this server understands",
+      ...(list.voices.some((voice) => voice.group) ? { group: "Another voice" } : {}),
+    },
   ];
 
   function commit() {
@@ -144,7 +163,7 @@ export function VoicePicker({
           }}
           maxLength={120}
           aria-label={`${label}: custom voice`}
-          placeholder={list.provider === "openai" ? "alloy" : "af_heart(30)+af_bella(70)"}
+          placeholder={list.provider === "openai" ? "alloy" : list.provider === "elevenlabs" ? "An ElevenLabs voice id" : "af_heart(30)+af_bella(70)"}
           className={cn(ui.input, "reveal min-w-0 grow basis-40", size === "sm" && "px-2 py-1 text-xs")}
         />
       ) : null}

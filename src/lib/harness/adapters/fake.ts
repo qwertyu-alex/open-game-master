@@ -184,7 +184,10 @@ async function start(options: HarnessStartOptions) {
   };
 
   return {
-    send(text: string) {
+    send(text: string, pictures: readonly string[] = []) {
+      if (pictures.length) {
+        log("pictures", [...pictures]);
+      }
       runTurn(text).catch((error) => {
         if (!closed) {
           options.onEvent({ type: "error", kind: "crash", message: error instanceof Error ? error.message : String(error) });
@@ -206,6 +209,8 @@ export const fakeAdapter: HarnessAdapter = {
   signInHint: "",
   lockdown: "removed",
   paints: false,
+  // As Codex does, so the tests see which references a picture run carried.
+  attachesPictures: true,
   async probe() {
     return {
       installed: true,

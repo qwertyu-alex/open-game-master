@@ -23,6 +23,9 @@
 @import "./styles/setup.css";
 @import "./styles/world.css";
 @import "./styles/table-layout.css";
+@import "./styles/couch.css";
+@import "./styles/couch-phone.css";
+@import "./styles/couch-map.css";
 
 /*
   Arcane night theme. The neutral ramp (stone-*) is redefined as deep

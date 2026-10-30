@@ -64,8 +64,19 @@ git clone --depth 1 -b stable https://github.com/Lebbitheplow/open-game-master.g
 cd open-game-master
 npm install
 npm run setup        # database key, content pack, memory model, production build
-npm run start:lan    # 0.0.0.0:3005 so your party can reach it on the LAN
+npm run start:lan    # port 3005, with an ngrok link for your party
 ```
+
+`start:lan` and `dev:lan` start ngrok alongside the server. Install
+[ngrok](https://ngrok.com/download) and connect it to your ngrok account once
+before running either command. The terminal prints the public HTTPS address;
+invite links and QR codes use that address for the current run. Keep the command
+running while you play. Ctrl+C stops both the server and ngrok. If either process
+fails, the other stops too. The tunnel address is not saved in your settings.
+Use `npm run start:lan -- --port 3010` (or `PORT`) to choose a different port.
+
+For local development without online sharing, use `npm run dev`. For a LAN-only
+production server, run `npm run start -- -H 0.0.0.0 -p 3005`.
 
 `-b stable --depth 1` fetches only the latest stable release, and `git pull` keeps it on
 the stable releases (see [Updating](#updating)). Leave out `-b stable` to follow `main`,

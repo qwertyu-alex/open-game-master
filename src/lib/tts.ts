@@ -8,7 +8,15 @@ import { publishEphemeral, publishPersisted } from "@/lib/events";
 import { publishMediaStatus } from "@/lib/dm/images";
 import { stripToolText } from "@/lib/dm/tool-text";
 import { enqueueMediaJob } from "@/lib/media-queue";
-import { describeSpeechFailure, synthesizeSpeech, ttsBackend, withNarrationModel, type TtsBackend } from "@/lib/tts-backend";
+import {
+  describeSpeechFailure,
+  elevenLabsStandIn,
+  synthesizeSpeech,
+  ttsBackend,
+  voiceFits,
+  withNarrationModel,
+  type TtsBackend,
+} from "@/lib/tts-backend";
 import type { Speaker, SpokenLine } from "@/lib/dm/speech";
 import { closeLiveNarration, openLiveNarration, pushLiveNarration, renderSpeech } from "@/lib/tts-render";
 import { castUnvoiced, voiceRoster, type RosterEntry } from "@/lib/tts-roster";
@@ -64,18 +72,21 @@ function castOf(roster: RosterEntry[]): CastVoice[] {
 }
 
 // Who speaks in this passage without a voice yet: the person it is spoken
-// as, else the speakers stored with its lines.
+// as, else the speakers stored with its lines. `fits` says whether a saved
+// voice is one the server can speak (tts-backend.ts voiceFits); one that is
+// not counts as none.
 export function unvoicedSpeakers(
   lines: readonly SpokenLine[],
   roster: RosterEntry[],
   speaker: Speaker | null,
+  fits: (voiceId: string) => boolean = () => true,
 ): Set<string> {
   const keys = new Set<string>();
   const who = speaker && speaker.kind !== "narrator" ? [speaker] : lines.map((entry) => entry.speaker);
   for (const person of who) {
     const wanted = [textKey(person.name), textKey(baseCreatureName(person.name))];
     const entry = roster.find((candidate) => wanted.includes(textKey(candidate.name)));
-    if (entry && !entry.voice) {
+    if (entry && (!entry.voice || !fits(entry.voice.voiceId))) {
       keys.add(entry.key);
     }
   }
@@ -119,7 +130,7 @@ export function enqueueNarrationAudio(
   // The person the whole message is spoken as, when the DM said so.
   speaker: Speaker | null = null,
   // A player asked for this passage (the replay button): never skipped.
-  options: { onDemand?: boolean } = {},
+  options: { onDemand?: boolean; narratorOnly?: boolean } = {},
 ) {
   const settings: NarrationSettings = typeof narration === "string" ? { ttsVoice: narration } : narration;
   const speech = stripForSpeech(text);
@@ -150,7 +161,11 @@ export function enqueueNarrationAudio(
       // Read once per passage, so every clip goes to the same server and
       // model even if the admin saves a change halfway through.
       const backend = await withNarrationModel(ttsBackend());
-      const paid = backend.provider === "openai" && backend.apiKey !== "" && !isPrivateBackendHost(backend.v1);
+      // ElevenLabs bills every character it reads to the host's account,
+      // wherever its address points.
+      const paid =
+        backend.provider === "elevenlabs" || (backend.provider === "openai" && backend.apiKey !== "" && !isPrivateBackendHost(backend.v1));
+      const audioTags = backend.provider === "elevenlabs";
       const version = Date.now();
       const url = narrationAudioUrl(campaignId, messageId, version);
       const live = openLiveNarration(campaignId, messageId);
@@ -158,12 +173,12 @@ export function enqueueNarrationAudio(
       try {
         let roster: RosterEntry[] = [];
         try {
-          roster = voiceRoster(campaignId);
+          roster = options.narratorOnly ? [] : voiceRoster(campaignId);
         } catch {
           // No readable roster: the narrator reads it all.
         }
         if (settings.ttsAutoCast && roster.length) {
-          const keys = unvoicedSpeakers(lines, roster, speaker);
+          const keys = unvoicedSpeakers(lines, roster, speaker, (voiceId) => voiceFits(voiceId, backend.provider));
           if (keys.size) {
             await castUnvoiced(campaignId, roster, settings.ttsVoice, { only: keys, backend });
           }
@@ -182,7 +197,10 @@ export function enqueueNarrationAudio(
           speaker,
           lines,
         });
-        clips = await renderSpeech(speechRequests(plan), backend, (audio, index) => {
+        // Out of credits or turned away, ElevenLabs hands the rest of the
+        // passage to a Kokoro on this server, when one answers.
+        const render = audioTags ? { standIn: (error: unknown) => elevenLabsStandIn(error, backend) } : {};
+        clips = await renderSpeech(speechRequests(plan, { audioTags }), backend, (audio, index) => {
           pushLiveNarration(live, audio);
           if (index === 0) {
             // The first words exist: the table may start listening now.
@@ -191,7 +209,7 @@ export function enqueueNarrationAudio(
             // it arrives instead.
             publishEphemeral(campaignId, "tts_stream", { messageId, url: `${url}&live=1` });
           }
-        });
+        }, render);
       } catch (error) {
         closeLiveNarration(messageId, live, "failed");
         const reason = error instanceof PaidAiRefusedError ? error.message : describeSpeechFailure(error, backend);

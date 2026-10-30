@@ -18,6 +18,7 @@ export const STARTING_ROUTES = {
   starter: "A prepared one-evening adventure, heroes included",
   new: "Your own table: its world, its rules, your friends",
   solo: "A custom adventure for you alone",
+  couch: "One TV, everyone's phone, a sci-fi horror one-shot",
   join: "Sit at a friend's table with their invite",
 } as const;
 
@@ -52,6 +53,10 @@ export function HomeMenu({
       : []),
     ...(showNew ? [{ id: "new", label: "New campaign", glyph: "ui-new", onClick: onNewCampaign, tour: "tile-new-campaign", sub: STARTING_ROUTES.new }] : []),
     ...(showSolo ? [{ id: "solo", label: "Solo adventure", glyph: "ui-solo", onClick: onSolo, tour: "tile-solo", sub: STARTING_ROUTES.solo }] : []),
+    // Couch night (docs/couch-mode-spec.md): the AI writes and runs the whole
+    // evening, so it is offered where Quick start is, a server that may start
+    // a table and has a storyteller.
+    ...(showNew && showSolo ? [{ id: "couch", label: "Couch night", glyph: "ui-act", href: "/couch", tour: "tile-couch", sub: STARTING_ROUTES.couch }] : []),
     { id: "join", label: "Join with a code", glyph: "ui-join", onClick: onJoin, tour: "tile-join", sub: STARTING_ROUTES.join },
   ];
   const places: Item[] = [

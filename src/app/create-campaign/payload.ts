@@ -141,6 +141,10 @@ export function campaignPayload(draft: CampaignDraft, { solo, aiNarrates }: Pick
       // default, nothing is decided by it before the first scene, and it
       // matters only once a lasting companion travels with the party, so it
       // lives in the campaign's Bonds settings (AGENTS.md settings rule 2).
+      //
+      // `couchMode` (docs/couch-mode-spec.md): a couch night is its own way
+      // in (src/app/couch), since the AI writes the crew before anyone sits
+      // down; this dialog's tables build their own characters.
     },
   };
 }

@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { registerOutput, releaseOutput } from "@/lib/audio-devices";
 import { ui } from "@/lib/ui";
 import { PageSection } from "@/components/PageShell";
+import { VoicePicker, useTtsVoices } from "@/components/VoicePicker";
 import { BuiltinSpeechCard } from "@/app/admin/BuiltinSpeechCard";
 import { ModelChoiceField } from "@/app/admin/ModelChoice";
 import { BLANK, SPEECH_MODELS, fromEnv } from "@/app/admin/model-blanks";
@@ -28,7 +29,8 @@ import {
 // through exactly what is typed. The paragraph under the picker says where a
 // passage's text goes, because "Narration: on" in a campaign says nothing
 // about that. Every model here is picked from what its server lists; a
-// blank one sends nothing.
+// blank one sends nothing. ElevenLabs' model is typed instead: most of its
+// keys are scoped and may not list models at all.
 
 type Speech = MaskedConfig["speech"];
 type Provider = Speech["ttsProvider"];
@@ -79,10 +81,13 @@ export function AdminSpeechSection({
   // runs its only one.
   const [narrationListing, setNarrationListing] = useState<ModelChoices | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // The saved server's voices, which name ElevenLabs' opaque ids once it is
+  // the one saved.
+  const savedVoices = useTtsVoices();
 
   // What "Auto" means on this server right now.
   const envProvider: Exclude<Provider, ""> =
-    env.ttsProvider === "openai" || env.ttsProvider === "off" ? env.ttsProvider : "kokoro";
+    env.ttsProvider === "openai" || env.ttsProvider === "elevenlabs" || env.ttsProvider === "off" ? env.ttsProvider : "kokoro";
   const provider = speech.ttsProvider || envProvider;
   const set = (patch: Partial<Speech>) => {
     setResult(null);
@@ -98,10 +103,10 @@ export function AdminSpeechSection({
   const soleNarrationModel =
     narrationListing?.reachable === true && narrationListing.models.filter((model) => model.listed).length === 1;
   const narrationNeedsModel =
-    provider === "openai" &&
+    (provider === "openai" || provider === "elevenlabs") &&
     !speech.ttsModel.trim() &&
     !env.ttsModel &&
-    (official || (narrationListing?.reachable === true && !soleNarrationModel));
+    (provider === "elevenlabs" || official || (narrationListing?.reachable === true && !soleNarrationModel));
 
   async function test() {
     setTesting(true);
@@ -153,10 +158,13 @@ export function AdminSpeechSection({
           options={[
             {
               value: "",
-              label: `Auto (${envProvider === "openai" ? "OpenAI-compatible" : envProvider === "off" ? "off" : "Kokoro"})`,
+              label: `Auto (${
+                envProvider === "openai" ? "OpenAI-compatible" : envProvider === "elevenlabs" ? "ElevenLabs" : envProvider === "off" ? "off" : "Kokoro"
+              })`,
             },
             { value: "kokoro", label: "Kokoro-FastAPI (local)" },
             { value: "openai", label: "OpenAI-compatible server" },
+            { value: "elevenlabs", label: "ElevenLabs (hosted, paid)" },
             { value: "off", label: "Off: no narration on this server" },
           ]}
         />
@@ -218,13 +226,64 @@ export function AdminSpeechSection({
             />
           </>
         ) : null}
-        {provider === "off" ? null : (
+        {provider === "elevenlabs" ? (
+          <>
+            <Field
+              label="Model"
+              hint={
+                env.ttsModel
+                  ? inheritedHint(speech.ttsModel, env.ttsModel)
+                  : "The model's id, as ElevenLabs' model list names it. One that reads audio tags such as [whispers] lets the storyteller direct the delivery. Blank reads nothing aloud."
+              }
+            >
+              <input
+                className={ui.input}
+                value={speech.ttsModel}
+                maxLength={200}
+                spellCheck={false}
+                onChange={(event) => set({ ttsModel: event.target.value })}
+                placeholder={env.ttsModel}
+              />
+            </Field>
+            <SecretField
+              label="ElevenLabs API key"
+              isSet={speech.hasTtsApiKey}
+              value={apiKey}
+              onChange={(value) => {
+                setResult(null);
+                onApiKey(value);
+              }}
+              hint={
+                env.hasElevenLabsApiKey
+                  ? "Blank uses ELEVENLABS_API_KEY from .env.server; one typed here wins. Billed to that ElevenLabs account."
+                  : "From the API keys page of the ElevenLabs account. It needs text to speech and voice reading. Billed to that account."
+              }
+            />
+          </>
+        ) : null}
+        {provider === "elevenlabs" && savedVoices.provider === "elevenlabs" ? (
+          <Field
+            label="Default voice"
+            group
+            hint="The narrator's voice for every campaign whose own voice this account does not have, such as one made on Kokoro."
+          >
+            <VoicePicker
+              value={speech.ttsVoice}
+              onChange={(ttsVoice) => set({ ttsVoice })}
+              label="Default voice"
+              noneLabel="One of ElevenLabs' own storytellers"
+              className="w-full"
+            />
+          </Field>
+        ) : provider === "off" ? null : (
           <Field
             label="Default voice"
             hint={
-              provider === "openai"
-                ? `Used for the test, and whenever a campaign asks for a voice this server does not have. Blank = ${official ? "alloy" : "the first voice the server lists"}.`
-                : "Used for the test. Blank = af_heart. Campaigns pick their own from the server's list, or type one."
+              provider === "elevenlabs"
+                ? "A voice id from the account, used whenever a campaign asks for a voice it does not have. Save, then reload, to pick one by name. Blank = one of ElevenLabs' own storytellers."
+                : provider === "openai"
+                  ? `Used for the test, and whenever a campaign asks for a voice this server does not have. Blank = ${official ? "alloy" : "the first voice the server lists"}.`
+                  : "Used for the test. Blank = af_heart. Campaigns pick their own from the server's list, or type one."
             }
           >
             <input
@@ -232,7 +291,7 @@ export function AdminSpeechSection({
               value={speech.ttsVoice}
               maxLength={120}
               onChange={(event) => set({ ttsVoice: event.target.value })}
-              placeholder={provider === "openai" ? (official ? "alloy" : "") : "af_heart"}
+              placeholder={provider === "openai" ? (official ? "alloy" : "") : provider === "elevenlabs" ? "" : "af_heart"}
             />
           </Field>
         )}
@@ -247,7 +306,9 @@ export function AdminSpeechSection({
           ? "No passage is read aloud and no text is sent anywhere. Campaigns that have Narration on are told it is off here."
           : provider === "kokoro"
             ? `Each passage is sent as text to the Kokoro server at ${host(kokoroAt)} and comes back as audio. It is not sent to the text model's server or anywhere else.`
-            : `Each passage is sent as text to ${host(openaiAt)} and comes back as audio${official ? ", billed to the API key" : ""}. It is not sent to the text model's server or anywhere else.`}
+            : provider === "elevenlabs"
+              ? "Each passage is sent as text to ElevenLabs and comes back as audio, billed to the account's credits. If ElevenLabs turns a passage away (out of credits, a refused key) and Kokoro answers on this server, Kokoro reads the rest of it."
+              : `Each passage is sent as text to ${host(openaiAt)} and comes back as audio${official ? ", billed to the API key" : ""}. It is not sent to the text model's server or anywhere else.`}
       </p>
       {provider === "off" ? null : (
         <div className="mt-3">

@@ -99,6 +99,7 @@ export type ToolGroupId =
   | "effects"
   | "scenes"
   | "sound"
+  | "couch"
   | "mounts"
   | "gear"
   | "pets"
@@ -135,6 +136,7 @@ export const TOOL_GROUPS: Record<ToolGroupId, { summary: string; tools: readonly
   effects: { summary: "a lasting blessing, curse or boon that is not a condition", tools: ["set_effect", "clear_effect"] },
   scenes: { summary: "structured scenes: chases, heists, skill challenges", tools: ["start_scene", "scene_check", "end_scene"] },
   sound: { summary: "the table's music and sound stings", tools: ["set_ambience", "play_sting"] },
+  couch: { summary: "a couch one-shot's acts and story points", tools: ["advance_act", "award_story_point"] },
   mounts: { summary: "mounting and dismounting", tools: ["mount_up", "dismount"] },
   gear: { summary: "donning a shield, drawing a weapon, dropping, picking up or handing over an item", tools: ["handle_item"] },
   // A pet's damage is apply_damage's (issue #471), which a table with pets
@@ -201,6 +203,8 @@ export type ProfileSignals = {
   // An NPC is ready to make a romantic move (issue 501, src/lib/dm/advance-
   // tick.ts): romance_advance is offered while the window is open.
   advanceReady?: boolean;
+  // A couch one-shot: its act and story-point tools stay offered.
+  couch?: boolean;
   // The newest player lines at an English table, read for the English words
   // of ENGLISH_INTENT (none at another table), and the tool a card played
   // from the Hand names.
@@ -240,6 +244,7 @@ export function autoGroups(signals: ProfileSignals): Set<ToolGroupId> {
   if (signals.inEncounter && signals.legendary) groups.add("legendary");
   if (signals.caster) groups.add("spells");
   if (signals.advanceReady) groups.add("relationships");
+  if (signals.couch) groups.add("couch");
   const text = signals.englishPlayerText ?? "";
   for (const [group, pattern] of ENGLISH_INTENT) {
     if (pattern.test(text)) groups.add(group);

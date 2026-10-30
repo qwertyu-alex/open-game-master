@@ -119,6 +119,9 @@ export const EVENT_AUDIENCE: Readonly<Record<string, Audience>> = {
   // who passed. Both are what every seat already sees across the table.
   table_wait: TABLE,
   table_pass: TABLE,
+  couch_answers: TABLE,
+  couch_roll: TABLE,
+  couch_navigation: TABLE,
   // A disputed ruling and its outcome: who objected and to what is the
   // table's business, and the vote is the table's.
   ruling_disputed: TABLE,

@@ -23,6 +23,9 @@ import type { Chapter } from "@/lib/db/chapters";
 import type { CharacterEvent } from "@/lib/db/character-events";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
 import type { CampaignMessage } from "@/lib/db/messages";
+import type { CouchAnswers } from "@/lib/couch/answers-logic";
+import type { CouchNavigation } from "@/lib/couch/navigation-logic";
+import type { CouchRollFeedback } from "@/lib/couch/roll-feedback-logic";
 import type { DmBeat } from "@/lib/db/dm-beats";
 import type { Note } from "@/lib/db/notes";
 import type { StoredRoll } from "@/lib/db/rolls";
@@ -84,6 +87,9 @@ export type PendingRoll = {
   advantage: string;
   dc: number | null;
   reason: string;
+  // Why it waits (src/lib/dice/held-rolls.ts): real dice the player types,
+  // or a held roll the server throws when the player lets it go.
+  parkedFor?: "real_dice" | "held" | null;
   createdAt: string;
 };
 
@@ -181,6 +187,9 @@ export type CampaignState = {
   // Who the DM is waiting on before its next turn, at a table that waits
   // for everyone (src/lib/dm/table-wait.ts); null when it is not waiting.
   tableWait: TableWaitView | null;
+  couchAnswers: (CouchAnswers & { live?: boolean }) | null;
+  couchNavigation: CouchNavigation | null;
+  couchRolls: Array<CouchRollFeedback & { seq: number }>;
     // The table holds a story arc AI Story Setup has not built on yet (the
   // lobby's warning, issue 249); false for anyone who does not steer.
   prepArc: boolean;
@@ -358,6 +367,9 @@ const initialState: CampaignState = {
   testFight: null,
   coordination: null,
   tableWait: null,
+  couchAnswers: null,
+  couchNavigation: null,
+  couchRolls: [],
   // A plain player until the snapshot says otherwise: the safe default is
   // the one that shows the fewest controls and no secrets.
   caps: capsForRole("player", "ai"),
@@ -482,7 +494,12 @@ function placeBySeq<T extends { seq: number }>(list: T[]): T[] {
 export function campaignReducer(state: CampaignState, action: Action): CampaignState {
   switch (action.type) {
     case "snapshot":
-      return { ...state, ...action.payload, loading: false, error: "" };
+      return {
+        ...state, ...action.payload, loading: false, error: "",
+        couchAnswers: action.payload.couchAnswers ? { ...action.payload.couchAnswers, live: false } : null,
+        couchNavigation: action.payload.couchNavigation ?? null,
+        couchRolls: [],
+      };
     case "notes":
       return { ...state, notes: action.notes };
     case "sideThreads":
@@ -978,6 +995,15 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
         case "table_wait":
           next.tableWait = (payload.wait as TableWaitView | null) ?? null;
           return next;
+        case "couch_answers":
+          next.couchAnswers = { ...(payload as unknown as CouchAnswers), live: true };
+          return next;
+        case "couch_navigation":
+          next.couchNavigation = (payload.navigation as CouchNavigation | null) ?? null;
+          return next;
+        case "couch_roll":
+          next.couchRolls = [...state.couchRolls, { ...(payload as unknown as CouchRollFeedback), seq: action.seq ?? 0 }].slice(-50);
+          return next;
         case "floor_changed":
           next.campaign = state.campaign
             ? { ...state.campaign, floor: payload.floor as Campaign["floor"] }
@@ -1073,6 +1099,8 @@ const PERSISTED_EVENTS = [
   "coordination_updated",
   "message_updated",
   "roll_result",
+  "couch_roll",
+  "couch_navigation",
   "roll_pending",
   "member_joined",
   "member_ready",
@@ -1146,6 +1174,7 @@ const EPHEMERAL_EVENTS = [
   // Who the DM waits on before its next turn (src/lib/dm/table-wait.ts).
   // The whole view each time, and the snapshot carries it for a reload.
   "table_wait",
+  "couch_answers",
   "dm_job",
   "utility_calls",
   "dm_delta",
@@ -1325,6 +1354,8 @@ export function useCampaignStream(campaignId: string) {
           testFight: (data.testFight as CampaignState["testFight"]) ?? null,
           coordination: (data.coordination as CoordinationPhase | null) ?? null,
           tableWait: (data.tableWait as TableWaitView | null) ?? null,
+          couchAnswers: data.couchAnswers ?? null,
+          couchNavigation: data.couchNavigation ?? null,
           caps: data.caps ?? capsForRole("player", "ai"),
           me: data.me,
           members: data.members,

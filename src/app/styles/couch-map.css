@@ -1,0 +1,268 @@
+/* Couch mode's map (docs/couch-navigation.md),
+   src/components/couch/CouchNavigation.tsx: the TV's rail under the title,
+   and the phone's Map button and sheet. A deck plan in the couch's
+   phosphor green: faint on the TV, so the picture stays in front, and at
+   reading size in the phone's sheet. Like the rest of the phone, the sheet
+   is painted, never backdrop-filtered (couch-phone.css). */
+
+/* ---- the TV: one faint rail under the title ---- */
+
+.couch-rail {
+  --rail-line: rgba(143, 224, 181, 0.42);
+  --rail-dash: rgba(143, 224, 181, 0.38);
+  --rail-gap: 0.85vw;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--rail-gap);
+  width: max-content;
+  max-width: 60vw;
+  margin-top: 1.1vh;
+  padding: 0.55vw 0.8vw;
+  border-radius: 0.9vw;
+  /* A feathered dark patch rather than a panel, so the lines read over a
+     bright frame without a box sitting on the picture. */
+  background: rgba(0, 0, 0, 0.34);
+  box-shadow: 0 0 2vw 1.2vw rgba(0, 0, 0, 0.34);
+  color: rgba(143, 224, 181, 0.66);
+  font: 500 max(0.6rem, 0.64vw) / 1.2 var(--font-geist-mono), ui-monospace, monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+/* Side rooms hang below the rail; keep the next element clear of them. */
+.couch-rail[data-sided] { margin-bottom: 3.6em; }
+.couch-rail-earlier { color: rgba(143, 224, 181, 0.45); white-space: nowrap; }
+.couch-rail-trail { display: flex; align-items: center; gap: var(--rail-gap); margin: 0; padding: 0; list-style: none; }
+.couch-rail-room { position: relative; }
+.couch-rail-room + .couch-rail-room::before,
+.couch-rail-earlier + .couch-rail-trail > .couch-rail-room:first-child::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 100%;
+  width: var(--rail-gap);
+  border-top: 1px solid var(--rail-line);
+}
+.couch-rail-box {
+  display: block;
+  max-width: 10vw;
+  overflow: hidden;
+  padding: 0.32em 0.65em;
+  border: 1px solid var(--rail-line);
+  border-radius: 3px;
+  background: rgba(143, 224, 181, 0.05);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.couch-rail-room[data-here] .couch-rail-box {
+  max-width: 14vw;
+  border-color: rgba(143, 224, 181, 0.95);
+  background: rgba(143, 224, 181, 0.3);
+  color: rgba(232, 238, 234, 0.96);
+  font-weight: 700;
+}
+.couch-rail-side {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  display: grid;
+  justify-items: center;
+  gap: 0.35em;
+  margin: 0;
+  padding: 0.75em 0 0;
+  list-style: none;
+  font-size: 0.9em;
+  transform: translateX(-50%);
+}
+.couch-rail-side::before { content: ""; position: absolute; top: 0; left: 50%; height: 0.75em; border-left: 1px solid var(--rail-line); }
+.couch-rail-side li {
+  max-width: 10vw;
+  overflow: hidden;
+  padding: 0.25em 0.55em;
+  border: 1px solid rgba(143, 224, 181, 0.3);
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.42);
+  color: rgba(143, 224, 181, 0.55);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The exits fork off the room the crew is in: a dashed bracket, one line
+   each. A room already visited by another way keeps a solid stub. */
+.couch-rail-exits {
+  position: relative;
+  display: grid;
+  gap: 0.3em;
+  margin: 0;
+  padding: 0 0 0 0.6vw;
+  list-style: none;
+  border-left: 1px dashed var(--rail-dash);
+}
+.couch-rail-exits::before { content: ""; position: absolute; top: 50%; right: 100%; width: var(--rail-gap); border-top: 1px dashed var(--rail-dash); }
+.couch-rail-exits li { max-width: 13vw; overflow: hidden; color: rgba(143, 224, 181, 0.62); text-overflow: ellipsis; white-space: nowrap; }
+.couch-rail-exits li::before {
+  content: "";
+  display: inline-block;
+  width: 0.6vw;
+  margin-right: 0.45em;
+  border-top: 1px dashed var(--rail-dash);
+  vertical-align: middle;
+}
+.couch-rail-exits li[data-visited]::before { border-top-style: solid; }
+.couch-rail .couch-rail-more { color: rgba(143, 224, 181, 0.42); }
+.couch-rail .couch-rail-more::before { display: none; }
+
+/* ---- the phone: a Map button beside the tabs ---- */
+
+.couch-bar-row { display: flex; align-items: center; gap: 8px; }
+.couch-bar-row > .couch-tabs { flex: 1; min-width: 0; }
+/* The tabs' own height and corner (couch-phone.css .couch-tabs), so the
+   button reads as part of the same bar. */
+.couch-map-button {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--couch-raise);
+  color: var(--couch-ink);
+  font-size: 0.66rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  -webkit-tap-highlight-color: transparent;
+}
+.couch-map-button svg { color: var(--couch-accent); }
+.couch-map-button:active,
+.couch-map-button[aria-expanded="true"] { background: var(--couch-surface); box-shadow: 0 0 0 1px var(--couch-line-strong); }
+
+/* ---- the phone: the sheet ---- */
+
+html[data-sheet="open"],
+html[data-sheet="open"] body { overflow: hidden; }
+.couch-map-sheet {
+  inset: auto 0 0;
+  width: 100%;
+  max-width: min(34rem, 100%);
+  height: auto;
+  max-height: min(88svh, 52rem);
+  margin: 0 auto;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  color: var(--couch-ink);
+}
+.couch-map-sheet::backdrop { background: rgba(0, 0, 0, 0.55); }
+.couch-map-panel {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88svh, 52rem);
+  padding-bottom: env(safe-area-inset-bottom);
+  border-top: 1px solid var(--couch-line-strong);
+  border-radius: 18px 18px 0 0;
+  background: var(--couch-surface);
+  box-shadow: 0 -8px 24px -12px rgba(0, 0, 0, 0.6);
+  transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.couch-map-sheet[open] .couch-map-panel { animation: couch-map-sheet-in 280ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes couch-map-sheet-in { from { transform: translateY(100%); } }
+/* The grabber and title row is the handle: drag it down to let go. */
+.couch-map-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 8px max(16px, env(safe-area-inset-right)) 12px max(16px, env(safe-area-inset-left));
+  border-bottom: 1px solid var(--couch-line);
+  touch-action: none;
+  cursor: grab;
+}
+.couch-map-grabber { grid-column: 1 / -1; justify-self: center; width: 36px; height: 5px; margin-bottom: 4px; border-radius: 3px; background: var(--couch-line-strong); }
+.couch-map-title { margin: 0; font-size: 1.1rem; font-weight: 650; }
+.couch-map-sub { margin: 2px 0 0; color: var(--couch-dim); font-size: 0.78rem; }
+.couch-map-done { min-height: 44px; padding: 0 14px; border-radius: 10px; color: var(--couch-accent); font-size: 1rem; font-weight: 650; }
+.couch-map-done:active { background: var(--couch-raise); }
+.couch-map-body {
+  display: grid;
+  gap: 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 18px max(16px, env(safe-area-inset-right)) 20px max(16px, env(safe-area-inset-left));
+}
+
+/* The plan, top to bottom: the way the crew came, rooms off it to the
+   right, and the exits from here at the foot. */
+.couch-plan { --plan-line: var(--couch-line-strong); font-family: var(--font-geist-mono), ui-monospace, monospace; }
+.couch-plan-trail { display: grid; margin: 0; padding: 0; list-style: none; }
+.couch-plan-stop { position: relative; display: grid; grid-template-columns: 1fr minmax(0, auto) 1fr; align-items: center; padding-top: 14px; }
+.couch-plan-stop:first-child { padding-top: 0; }
+.couch-plan-stop + .couch-plan-stop::before { content: ""; position: absolute; top: 0; left: 50%; height: 14px; border-left: 1.5px solid var(--plan-line); }
+.couch-plan-room {
+  grid-column: 2;
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  /* One width down the trail, so it reads as a corridor, not a stack of
+     labels. */
+  width: min(11.5rem, 56vw);
+  padding: 10px 14px;
+  border: 1px solid var(--plan-line);
+  border-radius: 8px;
+  background: var(--couch-bg);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  overflow-wrap: anywhere;
+  text-align: center;
+  text-transform: uppercase;
+}
+.couch-plan-room small { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.14em; opacity: 0.8; }
+.couch-plan-stop[data-here] .couch-plan-room { border-color: var(--couch-accent); background: var(--couch-accent); color: var(--couch-accent-ink); }
+.couch-plan-side { position: relative; grid-column: 3; display: grid; justify-items: start; gap: 6px; margin: 0; padding: 0 0 0 14px; list-style: none; }
+.couch-plan-side::before { content: ""; position: absolute; top: 50%; left: 0; width: 14px; border-top: 1.5px solid var(--plan-line); }
+.couch-plan-side li {
+  max-width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--couch-line-strong);
+  border-radius: 6px;
+  color: var(--couch-dim);
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  overflow-wrap: anywhere;
+  text-transform: uppercase;
+}
+.couch-plan-exits { position: relative; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 24px 0 0; padding: 0; list-style: none; }
+.couch-plan-exits::before { content: ""; position: absolute; bottom: 100%; left: 50%; height: 24px; border-left: 1.5px dashed var(--plan-line); }
+.couch-plan-exit {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  min-width: 7.5rem;
+  max-width: 100%;
+  padding: 9px 12px;
+  border: 1.5px dashed var(--plan-line);
+  border-radius: 8px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  overflow-wrap: anywhere;
+  text-align: center;
+  text-transform: uppercase;
+}
+.couch-plan-exit small { color: var(--couch-dim); font-size: 0.6rem; font-weight: 500; letter-spacing: 0.1em; }
+.couch-plan-exit[data-visited] { border-style: solid; }
+.couch-plan-none { margin: 18px 0 0; color: var(--couch-dim); font-size: 0.85rem; text-align: center; }
+.couch-map-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; margin: 0; padding: 0; list-style: none; color: var(--couch-dim); font-size: 0.75rem; }
+.couch-map-legend li { display: flex; align-items: center; gap: 6px; }
+.couch-map-legend i { width: 14px; height: 10px; border: 1px solid var(--couch-line-strong); border-radius: 2px; }
+.couch-map-legend i[data-here] { border-color: var(--couch-accent); background: var(--couch-accent); }
+.couch-map-legend i[data-unexplored] { border-style: dashed; }
+.couch-map-tip { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--couch-raise); font-size: 0.9rem; line-height: 1.45; }
+
+@media (prefers-reduced-motion: reduce) {
+  .couch-map-sheet[open] .couch-map-panel { animation: none; }
+  .couch-map-panel { transition: none; }
+}

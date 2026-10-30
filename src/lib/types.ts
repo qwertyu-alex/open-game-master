@@ -1,4 +1,5 @@
 import type { LocalTextModelId, TextProvider } from "@/lib/text-models";
+import type { PictureShot } from "@/lib/dm/scene-shot-logic";
 
 export type AspectPreset = "square" | "portrait" | "landscape";
 
@@ -74,6 +75,9 @@ export type GeneratedImage = {
   elapsedSeconds?: number;
   seed?: number;
   warnings?: string[];
+  // A couch scene picture's framing (src/lib/dm/scene-shot-logic.ts): an
+  // insert shows beside the place, not in its stead.
+  shot?: PictureShot;
 };
 
 export type StorySettings = {

@@ -7,7 +7,8 @@ import type { NpcVoice } from "@/lib/npcs/forge";
 import { castingPool, pickVoice, type VoiceGender } from "@/lib/tts-cast";
 import { genderMark } from "@/lib/gender";
 import { baseCreatureName } from "@/lib/tts-segments";
-import { serverVoices, ttsBackend, type TtsBackend } from "@/lib/tts-backend";
+import { effectiveVoice, listedDefaultVoice, serverVoices, ttsBackend, voiceFits, type TtsBackend } from "@/lib/tts-backend";
+import { elevenLabsTraits } from "@/lib/tts-elevenlabs-logic";
 import { textKey } from "@/lib/language/text-logic";
 
 // Everyone at a table who may be given a voice (issue 97): the characters
@@ -113,18 +114,28 @@ export async function castUnvoiced(
   narratorVoice: string,
   options: { only?: Set<string>; backend?: TtsBackend } = {},
 ): Promise<number> {
-  const waiting = roster.filter((entry) => !entry.voice && (!options.only || options.only.has(entry.key)));
+  const backend = options.backend ?? ttsBackend();
+  // A voice saved on another kind of server (Kokoro's af_heart on
+  // ElevenLabs) is no voice here, so its speaker is cast again.
+  const voiced = (entry: RosterEntry) => Boolean(entry.voice && voiceFits(entry.voice.voiceId, backend.provider));
+  const waiting = roster.filter((entry) => !voiced(entry) && (!options.only || options.only.has(entry.key)));
   if (!waiting.length) {
     return 0;
   }
-  const backend = options.backend ?? ttsBackend();
-  const { ids } = await serverVoices(backend);
-  const pool = castingPool(ids, narratorVoice || backend.defaultVoice);
-  const taken = roster.flatMap((entry) => (entry.voice ? [entry.voice.voiceId] : []));
+  const listing = await serverVoices(backend);
+  const { ids } = listing;
+  // The voice the narrator is really read in: a campaign made on Kokoro
+  // still names af_heart on an ElevenLabs server, and nobody should be cast
+  // in the voice the narration is actually heard in.
+  const narrator = effectiveVoice(narratorVoice, { ...backend, defaultVoice: backend.defaultVoice || listedDefaultVoice(listing) }, ids);
+  // ElevenLabs ids say nothing; its labels give each voice's gender.
+  const traits = elevenLabsTraits(listing.details);
+  const pool = castingPool(ids, narrator, traits);
+  const taken = roster.flatMap((entry) => (entry.voice && voiced(entry) ? [entry.voice.voiceId] : []));
   let cast = 0;
   let npcChanged = false;
   for (const entry of waiting) {
-    const voiceId = pickVoice(entry.name, entry.gender, pool, taken);
+    const voiceId = pickVoice(entry.name, entry.gender, pool, taken, traits);
     if (!voiceId) {
       break;
     }

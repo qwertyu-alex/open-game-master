@@ -65,6 +65,14 @@ test("context needs both a loaded campaign and story authority", () => {
   );
 });
 
+test("couch mode shuts the world and what the GM was sent, even for the lead", () => {
+  const tabs = visiblePanelTabs({ ...base, isLead: true, secretStory: true, couchMode: true });
+  assert.equal(tabs.includes("world"), false);
+  assert.equal(tabs.includes("context"), false);
+  assert.equal(tabs.includes("settings"), true);
+  assert.equal(tabs[0], "lead");
+});
+
 test("the battle tab exists only while a map is live", () => {
   assert.equal(visiblePanelTabs(base).includes("battle"), false);
   assert.equal(visiblePanelTabs({ ...base, hasBattleMap: true }).includes("battle"), true);

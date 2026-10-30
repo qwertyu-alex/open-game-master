@@ -51,6 +51,9 @@ import { tableBreakOn } from "@/lib/dm/table-break";
 import { latestEventOfType, publishPersisted, publishWithSeq } from "@/lib/events";
 import type { HandoutShown, TitleCard } from "@/lib/scene/state";
 import { narrationAudioFor } from "@/lib/tts";
+import { latestCouchAnswers } from "@/lib/couch/answers";
+import { couchNavigation } from "@/lib/couch/navigation";
+import { publishCouchRules } from "@/lib/couch/rules";
 import { tableAuthors, workshopClassesFor } from "@/lib/db/homebrew";
 import { testFightSource } from "@/lib/db/test-fights";
 import { isPlaytest } from "@/lib/workshop/kind";
@@ -128,6 +131,8 @@ export async function GET(
     // Who the DM is waiting on before its next turn, at a table that waits
     // for everyone (src/lib/dm/table-wait.ts); null when it is not waiting.
     tableWait: currentTableWait(campaignId),
+    couchAnswers: campaign.gameSettings.couchMode ? latestCouchAnswers(campaignId) : null,
+    couchNavigation: couchNavigation(campaign),
     members: listMembers(campaignId),
     // Names and faces of the cast, for the transcript's speech lines.
     cast: publicCast(campaignId),
@@ -285,6 +290,8 @@ export async function PATCH(
     // offered. Asking seat by seat also closes a hole the old sheet count
     // had: a companion's sheet made up the numbers for a player who had none.
     const lobbySheets = listSheets(campaignId);
+    // A couch night's TV (its lead) plays no character and is never waited
+    // on; the crew cards are the characters (docs/couch-mode-spec.md).
     const blocker = lobbyBlocker(
       seats,
       listMembers(campaignId).map((member) => ({
@@ -292,6 +299,7 @@ export async function PATCH(
         ready: member.ready,
         hasSheet: lobbySheets.some((sheet) => sheet.userId === member.userId),
       })),
+      campaign.gameSettings.couchMode ? { displayUserId: campaign.leadUserId } : null,
     );
     if (blocker) {
       return Response.json({ error: blocker }, { status: 400 });
@@ -322,6 +330,12 @@ export async function PATCH(
     // because a human DM's plan lives in their own notes, not in an outline
     // the server invented.
     const humanDm = hasHumanDm(campaignSeats(campaign));
+    // A couch night's forge wrote the whole one-shot (src/lib/couch/forge.ts):
+    // the premise, the GM's outline and the crew's agendas. A setup pass or a
+    // story arc planned on top would only steer away from it, and on an
+    // agent program each costs the room minutes before the first scene.
+    const forged = campaign.gameSettings.couchMode;
+    publishCouchRules(campaign);
     const seq = allocateSeq(campaignId);
     const message = insertCampaignMessage({
       campaignId,
@@ -336,13 +350,13 @@ export async function PATCH(
     // An assisted table asked for this in the wizard ("the AI fills this in
     // if left blank"), so the premise pass runs for it as well; only a fully
     // human table never gets one. The arc below stays the AI table's alone.
-    if (narratorIsAi(campaign.gameSettings.dmMode) && campaign.gameSettings.aiStorySetup) {
+    if (narratorIsAi(campaign.gameSettings.dmMode) && campaign.gameSettings.aiStorySetup && !forged) {
       enqueueDmJob(campaignId, () => runStorySetup(campaignId));
     }
     // Every AI-run campaign gets a structured story arc built from the
     // premise (whether the table wrote it or the setup pass just did); the
     // kickoff narration behind it on the queue already steers by the arc.
-    if (!humanDm) {
+    if (!humanDm && !forged) {
       enqueueDmJob(campaignId, () => generateStoryArc(campaignId));
     }
     // Chapter 1's rewind point: the settled pre-adventure world (setup and

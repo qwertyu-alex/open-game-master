@@ -297,9 +297,11 @@ async function narrationFacts(table: ReportTable | undefined, caps: Capabilities
       ? "off"
       : speech.provider === "kokoro"
         ? `Kokoro ${where(speech.v1)}`
-        : hostedProvider(speech.v1)
-          ? `${hostedProvider(speech.v1)} speech (hosted API)`
-          : `an OpenAI-compatible speech server ${where(speech.v1)}`;
+        : speech.provider === "elevenlabs"
+          ? "ElevenLabs speech (hosted API)"
+          : hostedProvider(speech.v1)
+            ? `${hostedProvider(speech.v1)} speech (hosted API)`
+            : `an OpenAI-compatible speech server ${where(speech.v1)}`;
   if (on && caps) {
     if (caps.tts.needsModel) checks.push("Narration is on, but no speech model is chosen.");
     else if (!caps.tts.reachable) checks.push("Narration is on, but the speech server did not answer.");

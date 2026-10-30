@@ -1,12 +1,10 @@
 import { execFileSync } from "node:child_process";
 import type { NextConfig } from "next";
+import { localDevOrigins } from "./src/lib/local-start-logic";
 
 // Extra hostnames/IPs allowed to reach the dev server (e.g. a phone on your
 // tailnet). Comma-separated, set in .env.local: ALLOWED_DEV_ORIGINS=ip1,host2
-const extraDevOrigins = (process.env.ALLOWED_DEV_ORIGINS || "")
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+const extraDevOrigins = localDevOrigins(process.env.ALLOWED_DEV_ORIGINS, process.env.ODM_TUNNEL_PUBLIC_URL);
 
 // The Docker image builds with output: "standalone" so the runtime stage needs
 // no node_modules. It is gated behind DOCKER_BUILD because "next start" refuses

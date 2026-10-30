@@ -1,0 +1,565 @@
+/* Couch mode's phone (docs/couch-mode-spec.md 2.7), src/components/couch/:
+   each player's own screen, in two views behind two tabs along the top.
+   Story reads like a chat, down to a one-line action box pinned to the
+   foot; Character is the player's sheet, laid out for deciding what to try.
+   The palette and the shared pieces (labels, cards, buttons, faces, health)
+   are in couch.css.
+
+   Built for an iPhone's compositor as much as for the eye: the pinned bars
+   are painted, never backdrop-filtered, nothing is blurred with a filter,
+   and the app's backdrop is switched off underneath (useCalmBackdrop in
+   CouchParts.tsx). Translucent blurred bars over a full-screen layer, with
+   a canvas redrawn under all of it, made the phone flicker and parts of
+   the screen drop out. */
+
+/* ---- the frame ---- */
+
+/* While a couch phone is up: the contour canvas, the dust and the stars are
+   covered whole, so they go, and the page behind the rubber-band scroll is
+   the couch's own background (--couch-bg, written out: the variables live
+   on .couch, below these). */
+html[data-backdrop="off"] .ambient-dust,
+html[data-backdrop="off"] .topo-backdrop,
+html[data-backdrop="off"] body::before { display: none; }
+html[data-backdrop="off"],
+html[data-backdrop="off"] body { background: #06080a; }
+html[data-theme="light"][data-backdrop="off"],
+html[data-theme="light"][data-backdrop="off"] body { background: #eef1ed; }
+
+.couch-phone {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  /* svh, not dvh: the smallest viewport never changes while iOS slides its
+     toolbars away, so a scroll does not relay the whole page out. */
+  min-height: 100svh;
+  background: var(--couch-bg);
+}
+.couch-col {
+  width: 100%;
+  max-width: 34rem;
+  margin: 0 auto;
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
+.couch-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1.1rem;
+  padding-top: 0.75rem;
+  padding-bottom: 1rem;
+}
+.couch-view { display: flex; flex-direction: column; gap: 1.1rem; }
+.couch-view[hidden],
+.couch-dock[hidden] { display: none; }
+
+/* ---- the bar: two tabs ---- */
+
+.couch-bar {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  border-bottom: 1px solid var(--couch-line);
+  background: var(--couch-bg);
+  padding-top: max(0.5rem, env(safe-area-inset-top));
+  padding-bottom: 0.5rem;
+}
+.couch-bar-title {
+  overflow: hidden;
+  padding-block: 0.2rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.couch-tabs {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--couch-raise);
+}
+.couch-tab {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  padding: 0 0.6rem;
+  border-radius: 10px;
+  color: var(--couch-dim);
+  font-size: 0.98rem;
+  font-weight: 650;
+}
+.couch-tab[aria-selected="true"] {
+  background: var(--couch-surface);
+  color: var(--couch-ink);
+  box-shadow: 0 0 0 1px var(--couch-line-strong), 0 2px 6px -2px rgba(0, 0, 0, 0.35);
+}
+.couch-tab-you { justify-content: flex-start; }
+.couch-tab-you .couch-face { border-radius: 8px; }
+.couch-tab-text { display: grid; min-width: 0; gap: 3px; text-align: left; }
+.couch-tab-name { overflow: hidden; font-size: 0.92rem; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; }
+.couch-tab-hp {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--couch-dim);
+  font: 500 0.7rem var(--font-geist-mono), ui-monospace, monospace;
+}
+.couch-tab-hp .couch-hp { width: 3rem; height: 5px; flex: none; }
+/* Something waits in that tab: a new passage, a whisper, your turn, an
+   unread agenda. */
+.couch-dot {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--couch-accent);
+  box-shadow: 0 0 0 2px var(--couch-raise);
+}
+
+/* ---- the agenda: a redacted file until held ---- */
+
+.couch-agenda { display: grid; gap: 0.7rem; padding: 0.9rem; }
+.couch-agenda-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; }
+.couch-points { display: inline-flex; align-items: center; gap: 0.35rem; color: var(--couch-dim); font-size: 0.85rem; }
+.couch-points i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--couch-accent);
+  border-radius: 999px;
+}
+.couch-points i[data-on] { background: var(--couch-accent); }
+.couch-secret {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-height: 96px;
+  padding: 0.95rem 1rem;
+  border: 1px dashed var(--couch-line-strong);
+  border-radius: 12px;
+  background: var(--couch-raise);
+  color: var(--couch-ink);
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+.couch-secret[data-revealed] { border-style: solid; border-color: var(--couch-accent); }
+.couch-secret-text { display: grid; gap: 0.6rem; font-size: 1.05rem; line-height: 1.5; }
+/* The masked words (maskSecret) as blacked-out bars, line by line. */
+.couch-redact {
+  border-radius: 3px;
+  background: var(--couch-line-strong);
+  color: transparent;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.couch-secret-hint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 0.5rem;
+  color: var(--couch-ink);
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-align: center;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+.couch-secret[data-revealed] .couch-secret-hint { opacity: 0; }
+.couch-secret-new { color: var(--couch-accent); }
+
+/* ---- the Story view ---- */
+
+.couch-feed-title {
+  padding-block: 0.15rem;
+  color: var(--couch-dim);
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-align: center;
+  text-transform: uppercase;
+}
+.couch-story { display: grid; gap: 1rem; }
+.couch-earlier-toggle {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px dashed var(--couch-line-strong);
+  border-radius: 12px;
+  color: var(--couch-dim);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.couch-earlier {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding-left: 0.85rem;
+  border-left: 2px solid var(--couch-line);
+}
+.couch-earlier .couch-prose { color: var(--couch-dim); font-size: 0.98rem; }
+.couch-gm { display: grid; gap: 0.6rem; }
+/* Scrolled to when it lands, clear of the bar. */
+.couch-gm-latest { scroll-margin-top: 5rem; }
+.couch-scene {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--couch-line);
+  border-radius: 14px;
+  background: var(--couch-raise);
+  object-fit: cover;
+}
+/* A thing found (an insert) is painted square; cut to 16:9 it lost its
+   top and bottom. */
+.couch-scene[data-insert] { width: min(100%, 22rem); aspect-ratio: 1 / 1; }
+.couch-prose { display: grid; gap: 0.85em; font-size: 1.0625rem; line-height: 1.62; }
+.couch-prose p { white-space: pre-line; }
+.couch-chevron { flex: none; color: var(--couch-faint); transition: transform 180ms ease; }
+[aria-expanded="true"] > .couch-chevron { transform: rotate(180deg); }
+
+/* What the players did and said: chat lines, your own on the right. */
+.couch-post {
+  display: grid;
+  gap: 0.2rem;
+  justify-self: start;
+  max-width: 85%;
+  padding: 0.55rem 0.8rem 0.6rem;
+  border-radius: 16px 16px 16px 4px;
+  background: var(--couch-raise);
+}
+.couch-post[data-mine] {
+  justify-self: end;
+  border-radius: 16px 16px 4px 16px;
+  background: color-mix(in srgb, var(--couch-accent) 14%, var(--couch-surface));
+}
+.couch-post-who { color: var(--couch-dim); font-size: 0.75rem; font-weight: 600; }
+.couch-post-text { font-size: 0.98rem; line-height: 1.45; overflow-wrap: anywhere; white-space: pre-wrap; }
+
+/* A roll where the GM rolled it. */
+.couch-roll-chip {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--couch-line-strong);
+  border-radius: 12px;
+  background: var(--couch-surface);
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+.couch-roll-chip-icon { color: var(--couch-dim); }
+.couch-roll-chip-body { display: grid; min-width: 0; gap: 0.1rem; }
+.couch-roll-chip-what { font-weight: 600; overflow-wrap: anywhere; }
+.couch-roll-chip-math { color: var(--couch-dim); font: 0.82rem var(--font-geist-mono), ui-monospace, monospace; }
+.couch-roll-chip-verdict { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.couch-roll-chip-verdict[data-good] { color: var(--couch-accent); }
+.couch-roll-chip-verdict[data-bad] { color: var(--couch-danger); }
+
+/* Only you: the GM's private line. */
+.couch-private {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.9rem;
+  border: 1px solid var(--couch-line-strong);
+  border-radius: 14px;
+  background: var(--couch-surface);
+}
+.couch-private[data-unread] { border-color: var(--couch-accent); }
+.couch-private-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.couch-private-new {
+  color: var(--couch-accent);
+  font: 600 0.72rem var(--font-geist-mono), ui-monospace, monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.couch-whisper {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.65rem 0.85rem;
+  border-left: 2px solid var(--couch-accent);
+  border-radius: 4px 10px 10px 4px;
+  background: var(--couch-raise);
+  font-size: 1rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.couch-whisper[data-unread] { box-shadow: 0 0 0 1px var(--couch-accent) inset; }
+.couch-whisper[data-mine] { border-left-color: var(--couch-faint); color: var(--couch-dim); }
+.couch-whisper-who { color: var(--couch-faint); font-size: 0.75rem; white-space: normal; }
+.couch-private-reply { justify-self: start; min-height: 44px; font-size: 0.95rem; }
+
+/* ---- the dock: whose move, and the action box ---- */
+
+/* Fades in over the story rather than cutting it with a rule, as a chat
+   app's input does. The clear top lets taps through to the story under it. */
+.couch-dock {
+  position: sticky;
+  bottom: 0;
+  z-index: 6;
+  padding-top: 1.1rem;
+  padding-bottom: max(0.6rem, env(safe-area-inset-bottom));
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--couch-bg) 0%, transparent), var(--couch-bg) 1.1rem);
+  pointer-events: none;
+}
+.couch-dock-inner { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.45rem; pointer-events: auto; }
+.couch-turn { display: grid; gap: 0.25rem; padding-inline: 0.35rem; }
+.couch-turn-row { display: flex; min-height: 26px; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.couch-turn-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--couch-dim);
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.couch-turn-head .couch-pulse { flex: none; }
+/* The move is this player's: the one thing on the screen that asks. */
+.couch-turn[data-tone="yours"] {
+  padding: 0.55rem 0.55rem 0.6rem 0.85rem;
+  border: 1px solid var(--couch-accent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--couch-accent) 12%, var(--couch-surface));
+}
+.couch-turn[data-tone="yours"] .couch-turn-head { color: var(--couch-accent); font-size: 0.95rem; font-weight: 700; }
+.couch-turn-prompt { color: var(--couch-ink); font-size: 1rem; line-height: 1.4; }
+.couch-turn[data-tone="waiting"] .couch-turn-prompt { color: var(--couch-dim); font-size: 0.92rem; }
+.couch-turn-pass { min-height: 40px; padding: 0 1rem; }
+
+/* The box: at rest a rounded line with the send button in it; writing, a
+   card with the text above and Do, Say and Private beside the send. */
+.couch-composer {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "lock input send";
+  align-items: center;
+  column-gap: 0.4rem;
+  padding: 4px 4px 4px 1rem;
+  border: 1px solid var(--couch-line-strong);
+  border-radius: 26px;
+  background: var(--couch-surface);
+  box-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.45);
+}
+.couch-composer:focus-within { border-color: var(--couch-accent); box-shadow: 0 0 0 1px var(--couch-accent); }
+.couch-composer[data-expanded] {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "input input"
+    "modes send";
+  row-gap: 0.4rem;
+  padding: 0.55rem 0.5rem 0.5rem 0.9rem;
+  border-radius: 20px;
+}
+.couch-composer[data-private] { border-style: dashed; }
+.couch-composer-lock { grid-area: lock; color: var(--couch-accent); }
+.couch-composer-input {
+  grid-area: input;
+  min-width: 0;
+  min-height: 40px;
+  max-height: 40px;
+  overflow-y: auto;
+  resize: none;
+  padding: 0.5rem 0;
+  border: 0;
+  background: transparent;
+  color: var(--couch-ink);
+  /* 17px: iOS zooms into a field set under 16px. */
+  font-size: 1.0625rem;
+  line-height: 1.4;
+}
+.couch-composer[data-expanded] .couch-composer-input { min-height: 3.2rem; max-height: 9rem; padding: 0.25rem 0.1rem; }
+/* The frame round the box carries the focus (above), not the box itself. */
+.couch .couch-composer-input:focus-visible { outline: none; }
+.couch-composer-input::placeholder { color: var(--couch-faint); }
+.couch-composer-input:disabled { opacity: 0.6; }
+.couch-composer-modes { grid-area: modes; display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.couch-composer-modes > button {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0 0.9rem;
+  border: 1px solid var(--couch-line-strong);
+  border-radius: 999px;
+  color: var(--couch-dim);
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+.couch-composer-modes > button[aria-pressed="true"] {
+  border-color: var(--couch-accent);
+  background: var(--couch-accent);
+  color: var(--couch-accent-ink);
+}
+.couch-composer-send {
+  grid-area: send;
+  display: grid;
+  width: 40px;
+  height: 40px;
+  align-self: end;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--couch-accent);
+  color: var(--couch-accent-ink);
+}
+.couch-composer-send:disabled { opacity: 0.35; }
+.couch-composer-note { padding-inline: 0.9rem; color: var(--couch-dim); font-size: 0.85rem; line-height: 1.4; }
+
+/* ---- the Character view ---- */
+
+.couch-me-name { font-size: 1.15rem; font-weight: 650; line-height: 1.2; }
+.couch-me-role { color: var(--couch-dim); font-size: 0.95rem; line-height: 1.3; }
+.couch-sheet { display: grid; gap: 0.9rem; padding-bottom: 1rem; }
+.couch-sheet-hero { display: flex; align-items: center; gap: 0.9rem; padding-top: 0.25rem; }
+.couch-sheet-hero .couch-face { border-radius: 16px; }
+.couch-sheet-block {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.9rem;
+  border: 1px solid var(--couch-line);
+  border-radius: 14px;
+  background: var(--couch-surface);
+}
+.couch-sheet-hint { color: var(--couch-dim); font-size: 0.85rem; line-height: 1.45; }
+.couch-sheet-text { color: var(--couch-dim); font-size: 0.95rem; line-height: 1.55; white-space: pre-line; }
+.couch-vitals .couch-hp { height: 10px; }
+.couch-vitals-hp { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; }
+.couch-vitals-hp b { font: 650 1.5rem var(--font-geist-mono), ui-monospace, monospace; }
+.couch-vitals-hp small { color: var(--couch-dim); font-size: 0.95rem; font-weight: 500; }
+.couch-vitals-temp { color: var(--couch-accent); }
+.couch-pills { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.couch-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--couch-line-strong);
+  border-radius: 999px;
+  color: var(--couch-dim);
+  font-size: 0.88rem;
+}
+.couch-pill b { color: var(--couch-ink); font: 600 0.95rem var(--font-geist-mono), ui-monospace, monospace; }
+.couch-pill[data-tone="warn"] { border-color: var(--couch-warn); color: var(--couch-warn); }
+
+.couch-checks { display: grid; }
+.couch-check { display: flex; min-height: 42px; align-items: center; gap: 0.6rem; border-top: 1px solid var(--couch-line); }
+.couch-check:first-child { border-top: 0; }
+.couch-check-name { flex: 1; min-width: 0; font-size: 0.98rem; }
+.couch-check-ability {
+  color: var(--couch-faint);
+  font: 0.7rem var(--font-geist-mono), ui-monospace, monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.couch-check-tag {
+  padding: 2px 7px;
+  border: 1px solid var(--couch-accent);
+  border-radius: 999px;
+  color: var(--couch-accent);
+  font: 600 0.64rem var(--font-geist-mono), ui-monospace, monospace;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.couch-check[data-training="expert"] .couch-check-tag { background: var(--couch-accent); color: var(--couch-accent-ink); }
+.couch-check-bonus { min-width: 2.6rem; font: 650 1.05rem var(--font-geist-mono), ui-monospace, monospace; text-align: right; }
+.couch-check:not([data-training]) .couch-check-name,
+.couch-check:not([data-training]) .couch-check-bonus { color: var(--couch-dim); }
+
+.couch-abilities { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.45rem; }
+.couch-ability {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 0.55rem 0.3rem;
+  border: 1px solid var(--couch-line);
+  border-radius: 12px;
+  text-align: center;
+}
+.couch-ability b { font: 650 1.35rem var(--font-geist-mono), ui-monospace, monospace; line-height: 1.1; }
+.couch-ability-name { overflow-wrap: anywhere; color: var(--couch-dim); font-size: 0.74rem; }
+.couch-ability-save { color: var(--couch-faint); font: 0.7rem var(--font-geist-mono), ui-monospace, monospace; }
+.couch-ability[data-trained] .couch-ability-save { color: var(--couch-accent); }
+
+.couch-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.2rem 0.75rem;
+  padding-block: 0.5rem;
+  border-top: 1px solid var(--couch-line);
+}
+.couch-row:first-child,
+.couch-feature:first-child { border-top: 0; padding-top: 0; }
+.couch-row-name { font-weight: 600; overflow-wrap: anywhere; }
+.couch-row-numbers { color: var(--couch-dim); font: 0.85rem var(--font-geist-mono), ui-monospace, monospace; }
+.couch-feature { display: grid; gap: 0.2rem; padding-block: 0.5rem; border-top: 1px solid var(--couch-line); }
+.couch-feature p { color: var(--couch-dim); font-size: 0.9rem; line-height: 1.5; }
+.couch-gear { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.couch-gear li {
+  padding: 0.3rem 0.65rem;
+  border: 1px solid var(--couch-line);
+  border-radius: 999px;
+  font-size: 0.88rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.couch-gear-qty { color: var(--couch-dim); font-family: var(--font-geist-mono), ui-monospace, monospace; }
+.couch-sheet-rules summary { min-height: 44px; align-content: center; cursor: pointer; font-weight: 600; }
+.couch-rules { display: grid; gap: 1rem; padding-top: 0.5rem; color: var(--couch-dim); font-size: 0.95rem; line-height: 1.55; }
+.couch-rules h3 { color: var(--couch-ink); }
+
+/* ---- the lobby on a phone: crew cards to choose from ---- */
+
+.couch-crew-list { display: grid; gap: 0.7rem; }
+.couch-crew {
+  display: grid;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.85rem;
+  border-radius: 14px;
+  text-align: left;
+}
+.couch-crew[data-state="taken"] { opacity: 0.45; filter: grayscale(1); }
+.couch-crew[data-state="chosen"] { border-color: var(--couch-accent); }
+.couch-crew-head { display: flex; align-items: center; gap: 0.8rem; }
+.couch-crew-story {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  color: var(--couch-dim);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+.couch-crew[data-state="chosen"] .couch-crew-story { -webkit-line-clamp: unset; }
+.couch-center { display: grid; justify-items: center; gap: 0.75rem; padding: 2.5rem 0.5rem; text-align: center; }
+
+@media (prefers-reduced-motion: reduce) {
+  .couch-chevron { transition: none; }
+}

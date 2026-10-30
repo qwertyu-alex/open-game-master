@@ -43,7 +43,7 @@ export async function GET(request: Request) {
       storyWorking: Boolean(story?.configured && story.reachable),
     }),
     lanUrls: lanOrigins(os.networkInterfaces(), protocol, url.port),
-    publicUrl: livePublicUrl(config.publicUrl, os.networkInterfaces()),
+    publicUrl: livePublicUrl(config.publicUrl, os.networkInterfaces(), process.env.ODM_TUNNEL_PUBLIC_URL),
   });
 }
 

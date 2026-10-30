@@ -33,6 +33,27 @@ test("E1: a rolls refetch replaces the visible list", () => {
   assert.equal(next.lastSeq, 10);
 });
 
+test("couch answer batches are live on the stream and historical in a snapshot", () => {
+  const round = { id: "couch-answers-10", throughSeq: 10, answers: [{ userId: "a", name: "Ada", content: "I listen.", characterId: null, passed: false }] };
+  const live = campaignReducer(loaded, event("couch_answers", round, 11));
+  assert.equal(live.couchAnswers.live, true);
+  assert.equal(live.couchAnswers.answers[0].content, "I listen.");
+  const reloaded = campaignReducer(live, { type: "snapshot", payload: { lastSeq: 12, couchAnswers: round } });
+  assert.equal(reloaded.couchAnswers.live, false);
+  assert.equal(reloaded.latestTts, null);
+});
+
+test("the crew map updates over the stream and survives snapshot reloads", () => {
+  const navigation = { id: "route-1", from: "Airlock", votes: { ada: "engineering" }, winnerId: null };
+  const live = campaignReducer(loaded, event("couch_navigation", { navigation }, 11));
+  assert.deepEqual(live.couchNavigation, navigation);
+  assert.equal(campaignReducer(live, event("couch_navigation", { navigation: null }, 11)), live, "duplicate events cannot clear the map");
+  const reloaded = campaignReducer(live, { type: "snapshot", payload: { lastSeq: 12, couchNavigation: navigation } });
+  assert.deepEqual(reloaded.couchNavigation, navigation);
+  assert.ok(STREAMED_EVENTS.includes("couch_navigation"));
+  assert.deepEqual(EVENT_AUDIENCE.couch_navigation, { kind: "table" });
+});
+
 test("an unknown seq-less event returns the same state object", () => {
   assert.equal(campaignReducer(loaded, event("battle_map_updated")), loaded);
   assert.equal(campaignReducer(loaded, event("voice_speaking", { userId: "u1" })), loaded);

@@ -78,7 +78,18 @@ function rows(input: {
       : wait
         ? { key: "narration", title: "Narration", tone: "wait", text: "Asking…", step: steps.voice }
         : caps.tts.configured && caps.tts.reachable
-          ? { key: "narration", title: "Narration", tone: "ok", text: draft.narration === "kokoro" ? "Kokoro reads it aloud" : "OpenAI reads it aloud, on the key", step: steps.voice }
+          ? {
+              key: "narration",
+              title: "Narration",
+              tone: "ok",
+              text:
+                draft.narration === "kokoro"
+                  ? "Kokoro reads it aloud"
+                  : draft.narration === "elevenlabs"
+                    ? "ElevenLabs reads it aloud, on the account's credits"
+                    : "OpenAI reads it aloud, on the key",
+              step: steps.voice,
+            }
           : caps.tts.needsModel
             ? { key: "narration", title: "Narration", tone: "warn", text: "Saved, but no model is picked, so nothing is read aloud until one is.", step: steps.voice }
             : { key: "narration", title: "Narration", tone: "warn", text: "Saved, but not answering yet.", step: steps.voice };

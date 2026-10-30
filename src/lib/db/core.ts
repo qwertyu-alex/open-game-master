@@ -1700,6 +1700,20 @@ function ensureSchema(db: SqliteDatabase) {
     // notes only by the owner and a DM seat at the table. Per table: an edit
     // here never syncs to the library.
     ["hopes", `TEXT NOT NULL DEFAULT ''`],
+    // Couch mode's secret agenda (src/lib/schemas/sheet.ts sheetAgendaSchema),
+    // as JSON, '' for none: written by the scenario forge, moved by the act
+    // changes (src/lib/couch/play.ts), read only by the owner, a DM seat and
+    // the GM, like the hopes. Never synced to the library.
+    ["agenda_json", `TEXT NOT NULL DEFAULT ''`],
+    // Couch mode's public crew line ("Colonial Marine, the ship's sergeant"),
+    // shown in place of race and class. '' outside couch mode.
+    ["crew_role", `TEXT NOT NULL DEFAULT ''`],
+    // What the character looks like, as the sheet it was made from said it
+    // (createSheetSchema appearance). A campaign sheet used to drop it, so a
+    // picture of the scene had only the library row to ask, and a couch
+    // crew member, who has none, was painted as "a human" (src/lib/dm/
+    // scene-shot.ts sheetLook). Public, like the portrait it describes.
+    ["appearance", `TEXT NOT NULL DEFAULT ''`],
   ]);
 
   if (sheetsNeedAcOverride) {

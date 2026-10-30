@@ -218,6 +218,8 @@ check("the DM's maps and scene pictures are gated on imagesAvailable", () => {
   // dropped one is marked not needed so its placeholder does not outlive it.
   assert.match(turn, /void fulfillAutoImage\(campaignId, message\.id, message\.imageRequest/);
   assert.doesNotMatch(turn, /fulfillMessageImage\(/);
+  // Couch mode's per-turn picture is the same door with its own frame.
+  assert.match(images, /export async function fulfillSceneShot\([^)]*\) \{\s*await fulfillAutoImage\(/);
   assert.match(images, /if \(await imagesAvailable\(settings\)\) \{\s*return fulfillMessageImage\(/);
   assert.match(images, /setMessageImageRequest\(messageId, \{ \.\.\.request, needed: false \}\)/);
   // A campaign's ComfyUI address counts while the admin still names it, and

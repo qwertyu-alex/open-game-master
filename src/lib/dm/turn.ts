@@ -1,4 +1,5 @@
 import { emptyTurnLine, type EmptyTurnPlayer } from "@/lib/dm/empty-turn";
+import { couchMoveRefusal, couchNavigation, publishCouchNavigation } from "@/lib/couch/navigation";
 import { legendaryLairLines } from "@/lib/dm/legendary-tools";
 import { defaultSide } from "@/lib/dm/combat-sides-logic";
 import { combatantsOf } from "@/lib/dm/combatant";
@@ -66,13 +67,14 @@ import { narrationShown, takeNarrationSeq } from "@/lib/dm/narration-slot";
 import { getRoll, listRecentRolls } from "@/lib/db/rolls";
 import { listSheets } from "@/lib/db/sheets";
 import { describeConditionDuration } from "@/lib/dm/condition-logic";
-import { heldRollUserIds } from "@/lib/dice/held-rolls";
+import { rollHolderIds } from "@/lib/dice/held-rolls";
 import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
 import { generateImageTool, parseGenerateImageToolCall } from "@/lib/image-tool";
 import { createStreamingArtifactFilter, extractReplyText, extractStoryText } from "@/lib/story-prompt";
 import { salvageJsonToolCalls } from "@/lib/dm/json-salvage";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { fulfillAutoImage } from "@/lib/dm/images";
+import { fulfillAutoImage, fulfillSceneShot, sceneShotRequest } from "@/lib/dm/images";
+import type { ImageRequest } from "@/lib/types";
 import { imagesAvailable } from "@/lib/capabilities";
 import { imageProducerReady } from "@/lib/image-generate";
 import { enqueueNarrationAudio } from "@/lib/tts";
@@ -140,6 +142,7 @@ import {
   tableConscienceRules,
   completeBeatTool,
   firstMovePartyTool,
+  couchMovePartyTool,
   movePartyTool,
   recallStoryTool,
   recordEventTool,
@@ -250,6 +253,7 @@ import { openToAdvanceNames } from "@/lib/dm/advance-logic";
 import { PARTY_TOOL_NAMES, partyTools } from "@/lib/dm/party-tools";
 import { SCENE_TOOL_NAMES, sceneTools } from "@/lib/dm/scene-tools";
 import { AMBIENCE_TOOL_NAMES, ambienceTools, followSceneAmbience } from "@/lib/dm/ambience-tools";
+import { COUCH_TOOL_NAMES, couchTools } from "@/lib/dm/couch-tools";
 import { MOUNT_TOOL_NAMES, mountTools } from "@/lib/dm/mount-tools";
 import { describeGround, GEAR_TOOL_NAMES, handleItemTool } from "@/lib/dm/gear-tool";
 import { effectTools, EFFECT_TOOL_NAMES } from "@/lib/dm/effect-tools";
@@ -294,6 +298,7 @@ const WORLD_RUN_NAMES = new Set<string>([
   ...MOUNT_TOOL_NAMES,
   ...GEAR_TOOL_NAMES,
   ...AMBIENCE_TOOL_NAMES,
+  ...COUCH_TOOL_NAMES,
   ...BINDER_TOOL_NAMES,
   ...FACTION_TOOL_NAMES,
   ...SHOP_TOOL_NAMES,
@@ -400,6 +405,11 @@ function resolvesOutcome(toolCall: { name: string }): boolean {
 const UNSEEN_CHECKS = new Set(["group_check", "check_notice", "social_check", "npc_reaction"]);
 const UNSEEN_CHECK_NOTE =
   "The table has seen nothing you wrote beside this check: narrate the moment and what the result decides together.";
+
+// The narrator's generate_image call as the turn keeps it. The record is
+// stored as JSON whole (src/lib/db/dm-turns.ts), so the characters the call
+// named ride along to finalize, where their portraits become references.
+type TurnImageArgs = NonNullable<DmTurn["imageArgs"]> & { characterIds?: string[] };
 
 type TurnContext = {
   campaign: Campaign;
@@ -545,7 +555,7 @@ function buildMapText(encounterId: string, sheets: CharacterSheet[]): string | n
 function loadContext(campaign: Campaign): TurnContext {
   const sheets = listSheets(campaign.id);
   const members = listMembers(campaign.id);
-  const realDiceUserIds = heldRollUserIds(campaign.gameSettings.dicePolicy, members);
+  const realDiceUserIds = rollHolderIds(campaign.gameSettings, members);
   return {
     campaign,
     sheets,
@@ -830,6 +840,7 @@ async function openTurn(
         .filter((location) => location.visited)
         .map((location) => location.name)
         .slice(0, 15),
+      couchNavigation: couchNavigation(campaign),
       recentEventsByCharacter: new Map(
         [...listRecentEventsForCampaign(campaignId, 3)].map(([characterId, events]) => [
           characterId,
@@ -1122,7 +1133,50 @@ function keptWhenTrimmed(name: string, inEncounter: boolean): boolean {
 // the moment start_encounter succeeds mid-turn, the combat tools must appear
 // on the very next call. Encounter tools ignore DM_LEAN_TOOLS; they are the
 // point of combat. Rest tools only exist outside combat.
+// What a couch one-shot never needs (docs/couch-mode-spec.md 2.9): the
+// fantasy calendar and overland travel (pass_time posted "Greening 1, year
+// 1" to the TV), coin, shops, levels, mounts, downtime and the quest log.
+// Each is a few hundred tokens on every turn of a three-hour night, and each
+// pulled the sci-fi story back toward the 5e world underneath.
+const COUCH_DROPPED_TOOLS = new Set([
+  "pass_time",
+  "travel",
+  "set_weather",
+  "roll_treasure",
+  "lift",
+  "set_lifestyle",
+  "downtime",
+  "open_shop",
+  "haggle",
+  "purchase",
+  "modify_gold",
+  "award_xp",
+  "party_award",
+  "generate_settlement",
+  "party_stash",
+  "adjust_reputation",
+  "faction_note",
+  "mount_up",
+  "dismount",
+  "set_quest",
+  "tick_objective",
+  "add_companion",
+  "dismiss_companion",
+]);
+
 export function dmTurnTools(
+  campaign: Campaign,
+  inEncounter: boolean,
+  imageEnabled: boolean,
+  leanTools: boolean,
+): unknown[] {
+  const tools = allTurnTools(campaign, inEncounter, imageEnabled, leanTools);
+  return campaign.gameSettings.couchMode
+    ? tools.filter((tool) => !COUCH_DROPPED_TOOLS.has((tool as { function?: { name?: string } }).function?.name ?? ""))
+    : tools;
+}
+
+function allTurnTools(
   campaign: Campaign,
   inEncounter: boolean,
   imageEnabled: boolean,
@@ -1133,7 +1187,7 @@ export function dmTurnTools(
     requestPlayerInputTool,
     // partOf and bearing ride once there is a place to be part of or to set
     // out from (issue 548).
-    getCurrentLocation(campaign.id) ? movePartyTool : firstMovePartyTool,
+    getCurrentLocation(campaign.id) ? (campaign.gameSettings.couchMode ? couchMovePartyTool : movePartyTool) : firstMovePartyTool,
     updateLocationTool,
     recordEventTool,
     ...(isStageEnabled(campaign.gameSettings.stages, "recall") ? [recallStoryTool] : []),
@@ -1177,6 +1231,8 @@ export function dmTurnTools(
     // the library switched off, which is why it is gated here rather
     // than left to the handler to refuse.
     ...(campaign.gameSettings.ambienceEnabled ? ambienceTools : []),
+    // A couch one-shot's acts and story points (src/lib/dm/couch-tools.ts).
+    ...(campaign.gameSettings.couchMode ? couchTools : []),
     // Mounting and dismounting cost half a turn's movement in a fight
     // (mount-tools.ts), so a rider who is up can get down mid-round; a table
     // with nobody mounted carries neither tool into a fight (issue #424).
@@ -1193,7 +1249,9 @@ export function dmTurnTools(
     ...(inEncounter ? [] : restTools),
     ...companionTools(campaign, inEncounter),
     ...(leanTools ? mutationTools.filter((tool) => keptWhenTrimmed(tool.function.name, inEncounter)) : mutationTools),
-    ...(imageEnabled ? [generateImageTool] : []),
+    // Couch mode paints every turn on its own (finalize, sceneShotRequest),
+    // so a picture the narrator asked for would be a second one.
+    ...(imageEnabled && !campaign.gameSettings.couchMode ? [generateImageTool] : []),
     ];
 }
 
@@ -1257,6 +1315,7 @@ export function profileSignals(campaign: Campaign, sheets: readonly CharacterShe
     // An NPC is ready to make a romantic move (issue 501): its tool is
     // offered while the window is open.
     advanceReady: !inEncounter && advanceWindowOpen(campaign),
+    couch: campaign.gameSettings.couchMode,
   };
 }
 
@@ -1955,7 +2014,12 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     if (!turn.imageArgs) {
       const parsedImage = parseGenerateImageToolCall(echoedToolCalls);
       if (parsedImage?.prompt) {
-        turn.imageArgs = { prompt: parsedImage.prompt, reason: parsedImage.reason };
+        const imageArgs: TurnImageArgs = {
+          prompt: parsedImage.prompt,
+          reason: parsedImage.reason,
+          characterIds: parsedImage.characterIds,
+        };
+        turn.imageArgs = imageArgs;
       }
     }
 
@@ -2378,6 +2442,39 @@ const PARKED = "__turnParked";
 // goes through the same dispatch the DM console uses
 // (src/lib/dm/invoke-dispatch.ts), so the two callers cannot drift.
 async function resolveModelCall(
+  context: TurnContext,
+  turn: DmTurn,
+  toolCall: { id?: string; name: string; rawArguments: string },
+): Promise<ToolResult> {
+  const before = turn.rollIds.length;
+  const outcome = await resolveModelCallInner(context, turn, toolCall);
+  // The couch readout is only the TV's show of a roll that has already
+  // happened. It must never stop the turn: once it threw on every parked
+  // roll, failing each turn the moment it asked for dice.
+  if (context.campaign.gameSettings.couchMode) {
+    try {
+      const { announceCouchRollCalls, publishCouchRollFeedback } = await import("@/lib/couch/roll-feedback");
+      if (turn.rollIds.length > before) {
+        let reason = "";
+        if (toolCall.name === "request_roll") {
+          try {
+            const args = JSON.parse(toolCall.rawArguments);
+            if (typeof args.reason === "string") reason = args.reason;
+          } catch { /* The tool has already answered malformed arguments. */ }
+        }
+        publishCouchRollFeedback(context.campaign, turn.rollIds.slice(before), reason, outcome);
+      }
+      // A crew member's own roll parked for their phone (rollHolderIds): its
+      // call is read now, its result when they throw it (pending-rolls route).
+      announceCouchRollCalls(context.campaign, turn.id);
+    } catch (error) {
+      console.error(`[couch] roll readout failed for turn ${turn.id}:`, error);
+    }
+  }
+  return outcome;
+}
+
+async function resolveModelCallInner(
   context: TurnContext,
   turn: DmTurn,
   toolCall: { id?: string; name: string; rawArguments: string },
@@ -2956,6 +3053,8 @@ export function handleLocationCall(
       return { error: "move_party needs a location name.", retry: true };
     }
     const previous = getCurrentLocation(campaign.id);
+    const refused = couchMoveRefusal(campaign, args.characterIds);
+    if (refused) return refused;
     const onRecord = getLocationByName(campaign.id, name);
     location = upsertCurrentLocation({
       campaignId: campaign.id,
@@ -3034,6 +3133,7 @@ export function handleLocationCall(
   }
 
   publishPersisted(campaign.id, "location_updated", { location });
+  publishCouchNavigation(campaign);
 
   // The place is what the room should be hearing, so a DM who never touches
   // the sound controls still gets a cave that sounds like one; a held layer
@@ -3230,24 +3330,28 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string, spoken: re
 
   const imageEnabled =
     context.campaign.settings.imageGenerationEnabled && context.campaign.settings.autoImages;
+  const askedImage: ImageRequest | undefined =
+    imageEnabled && turn.imageArgs?.prompt
+      ? {
+          needed: true,
+          prompt: turn.imageArgs.prompt,
+          mode: context.campaign.settings.imageMode,
+          backend: context.campaign.settings.imageBackend,
+          aspect: context.campaign.settings.aspect,
+          reason: turn.imageArgs.reason,
+          characterIds: (turn.imageArgs as TurnImageArgs).characterIds ?? [],
+        }
+      : undefined;
+  // Couch mode's picture of this passage, unless the narrator asked for one
+  // of its own (a turn begun before the table went couch).
+  const sceneImage = askedImage ? undefined : sceneShotRequest(context.campaign, content);
   const seq = claimed ?? allocateSeq(campaignId);
   const message = insertCampaignMessage({
     campaignId,
     seq,
     authorType: "dm",
     content,
-    imageRequest:
-      imageEnabled && turn.imageArgs?.prompt
-        ? {
-            needed: true,
-            prompt: turn.imageArgs.prompt,
-            mode: context.campaign.settings.imageMode,
-            backend: context.campaign.settings.imageBackend,
-            aspect: context.campaign.settings.aspect,
-            reason: turn.imageArgs.reason,
-            characterIds: [],
-          }
-        : undefined,
+    imageRequest: askedImage ?? sceneImage,
     locationId: turn.locationId ?? undefined,
     // Links the narration back to the conversation it came from so the lead
     // can reroll its prose (src/lib/dm/renarrate.ts) without re-running the
@@ -3284,7 +3388,13 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string, spoken: re
   }
 
   if (message.imageRequest && imageProducerReady(context.campaign.settings)) {
-    void fulfillAutoImage(campaignId, message.id, message.imageRequest, context.campaign.settings);
+    // Both go through fulfillAutoImage's imagesAvailable gate; the couch
+    // shot only plans its own frame and shares one queue slot per table.
+    if (sceneImage) {
+      void fulfillSceneShot(campaignId, message.id, message.imageRequest, context.campaign.settings);
+    } else {
+      void fulfillAutoImage(campaignId, message.id, message.imageRequest, context.campaign.settings);
+    }
   }
   if (context.campaign.gameSettings.ttsEnabled) {
     void enqueueNarrationAudio(

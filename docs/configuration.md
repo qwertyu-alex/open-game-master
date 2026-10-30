@@ -39,11 +39,13 @@ falls through to the env var.
 | `STT_MODEL` | — | Model push-to-talk and the voice-chat transcript ask the Whisper service for. Also picked in Admin > Speech, which wins. Without one, the service's only model when it lists one; otherwise the Whisper service is skipped |
 | `STT_OPENAI_MODEL` | — | OpenAI transcription model for dictation when nothing free listens. Also picked in Admin > Speech, which wins. Without one OpenAI never listens |
 | `KOKORO_URL` | `http://127.0.0.1:8880` | Kokoro-FastAPI TTS service for GM narration |
-| `TTS_PROVIDER` | `kokoro` | Kind of narration server: `kokoro`, `openai` (any server with OpenAI's `/v1/audio/speech`), or `off`. Also set in Admin > Speech, which wins |
+| `TTS_PROVIDER` | `kokoro` | Kind of narration server: `kokoro`, `openai` (any server with OpenAI's `/v1/audio/speech`), `elevenlabs`, or `off`. Also set in Admin > Speech, which wins |
 | `TTS_BASE_URL` | `https://api.openai.com/v1` | Address of the `openai` kind of narration server |
-| `TTS_MODEL` | `kokoro` on Kokoro | Model name sent with each narration request. The `openai` kind has no default: pick one from the server's list in Admin > Speech, or set it here. Without one, a server that is not OpenAI itself and lists exactly one model runs it; otherwise no passage is read aloud |
+| `TTS_MODEL` | `kokoro` on Kokoro | Model name sent with each narration request. The `openai` kind has no default: pick one from the server's list in Admin > Speech, or set it here. Without one, a server that is not OpenAI itself and lists exactly one model runs it; otherwise no passage is read aloud. `elevenlabs` has no default either: type its model id in Admin > Speech, or set it here |
 | `TTS_API_KEY` | — | Bearer key for the narration server. Blank on OpenAI itself falls back to the key saved for pictures |
-| `TTS_VOICE` | `af_heart`, or `alloy` on OpenAI | Voice used when a campaign names one the server does not have |
+| `TTS_VOICE` | `af_heart`, or `alloy` on OpenAI | Voice used when a campaign names one the server does not have. On ElevenLabs a voice id from the account; blank is one of ElevenLabs' own storytellers |
+| `ELEVENLABS_API_KEY` | — | Key for the `elevenlabs` kind when none is saved in Admin > Speech. It needs text to speech and voice reading; it never leaves the server |
+| `ELEVENLABS_BASE_URL` | `https://api.elevenlabs.io` | ElevenLabs' address, for its regional hosts |
 | `TTS_CONCURRENCY` | `2` | Speech requests sent to the narration server at once, across every table (1 to 8). A passage with character voices is several short requests; two at a time was the fastest on a CPU Kokoro, a hosted API can take more |
 | `ODM_UPDATE_CHECK` | on | `off` stops the server asking GitHub whether a newer release exists (one anonymous request every six hours at most; the answer is shown in the account menu's About dialog) |
 | `ODM_UPDATE_CHANNEL` | `stable` | `beta` has the About dialog compare against the newest release of any kind, the nightly betas included, instead of the latest stable release ([releases.md](releases.md)) |
@@ -124,6 +126,21 @@ server refuses to start without `DB_ENCRYPTION_KEY` in `.env.server`.
   lines are then read in it. Narration MP3s are written under
   `public/generated-audio/<campaignId>/`; a passage starts playing as soon
   as its first clip is rendered.
+
+### ElevenLabs narration
+
+Choose ElevenLabs in Admin > Speech (or `TTS_PROVIDER=elevenlabs`), with its
+key (there, or `ELEVENLABS_API_KEY`), the model's id and, optionally, a
+default voice id. The campaign voice pickers then list the account's own
+voices, a few hundred saved from the voice library and ElevenLabs' set, by
+name and what they sound like; casting gives each speaker one of the right
+gender in the narrator's language. A campaign made on Kokoro (`af_heart`) is
+read in the default voice, and its characters are cast again. Models that
+read audio tags take the storyteller's `[whispers]` or `[screams]` as
+direction; every other server has the tags cut before it hears them. If
+ElevenLabs turns a passage away (out of credits, a refused key, too many
+requests) and Kokoro answers on this server, Kokoro reads the rest of that
+passage. Every character sent is billed to the ElevenLabs account.
 
 ## Sharing a server with other people
 

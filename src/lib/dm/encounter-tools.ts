@@ -49,7 +49,7 @@ import { askShares, conductGate } from "@/lib/dm/party-conduct";
 import { registerFightStarter } from "@/lib/dm/turncoat";
 import { hasHumanDm } from "@/lib/dm/viewer";
 import { decideAmbush, rollOpeningInitiative } from "@/lib/dm/encounter-open";
-import { heldRollUserIds } from "@/lib/dice/held-rolls";
+import { rollHolderIds } from "@/lib/dice/held-rolls";
 import { healthState } from "@/lib/bestiary/health";
 import {
   advanceOrder,
@@ -401,7 +401,7 @@ function handleStartEncounter(
       ? rollOpeningInitiative(
           campaign,
           [...sheets, ...against],
-          heldRollUserIds(campaign.gameSettings.dicePolicy, listMembers(campaign.id)),
+          rollHolderIds(campaign.gameSettings, listMembers(campaign.id)),
           (characterId, total) => recordInitiativeRoll(campaign.id, characterId, total),
         )
       : null;

@@ -3,6 +3,7 @@ import { comfyModelPicked, generateComfyImage } from "@/lib/comfyui";
 import { comfyModel } from "@/lib/image-models/catalog";
 import { generateOpenAiImage, openAiImagesConfigured, openAiImagesPaid } from "@/lib/openai-images";
 import { generateHarnessImage, harnessImagesReady } from "@/lib/harness/images";
+import type { PictureReference } from "@/lib/harness/picture-prompt-logic";
 import { PaidAiRefusedError, paidAiAllowedNow } from "@/lib/shared-host";
 import { recordUsage } from "@/lib/usage/ledger";
 import type { AspectPreset, GeneratedImage, ImageMode, StorySettings } from "@/lib/types";
@@ -48,9 +49,14 @@ export async function generateStoryImage(
     // The admin's test picture (src/lib/harness/picture-test.ts): the agent
     // may paint before its pictures are switched on for the tables.
     verifying?: boolean;
+    // Portraits and places the picture keeps (src/lib/dm/scene-shot.ts).
+    // Only the agent program's pictures take them; ComfyUI and OpenAI paint
+    // from the words alone and say so in the picture's warnings.
+    references?: readonly PictureReference[];
   },
 ): Promise<GeneratedImage> {
-  const { verifying, ...request } = options;
+  const { verifying, references, ...rest } = options;
+  const request = { ...rest, hasReferences: rest.hasReferences || Boolean(references?.length) };
   // OpenAI pictures run on the host's key and the agent program on the
   // admin's plan: the shared-host policy answers for both before anything
   // is painted (src/lib/shared-host.ts). ComfyUI is the host's own GPU.
@@ -63,7 +69,7 @@ export async function generateStoryImage(
   const image = await (settings.imageBackend === "openai"
     ? generateOpenAiImage(request, settings)
     : settings.imageBackend === "harness"
-      ? generateHarnessImage({ ...request, force: Boolean(verifying) })
+      ? generateHarnessImage({ ...request, force: Boolean(verifying), references })
       : // Everything else lands on ComfyUI, which was the previous behavior
         // for every producer-side call regardless of the selected backend.
         generateComfyImage({

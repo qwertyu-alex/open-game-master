@@ -458,6 +458,7 @@ export function VoiceStep({
   env,
   suggestion,
   onRescan,
+  elevenLabsSaved = false,
 }: {
   draft: Draft;
   update: Update;
@@ -468,6 +469,9 @@ export function VoiceStep({
   env: EnvDefaults;
   suggestion?: NarrationSuggestion;
   onRescan?: () => void;
+  // The server already narrates with ElevenLabs (Admin > Speech): offered
+  // as the answer to keep, and only then.
+  elevenLabsSaved?: boolean;
 }) {
   const kokoro = scan?.kokoro ?? null;
   const whisper = scan?.whisper ?? null;
@@ -503,6 +507,15 @@ export function VoiceStep({
           title="OpenAI's voices"
           sub={storyIsOpenAi ? "On the storyteller's key. Every passage read aloud is billed to it." : "Billed to an OpenAI key for every passage read aloud."}
         />
+        {elevenLabsSaved ? (
+          <ChoiceCard
+            picked={draft.narration === "elevenlabs"}
+            onPick={() => pick("elevenlabs")}
+            glyph="ui-speech"
+            title="ElevenLabs, as set up"
+            sub="Keeps the ElevenLabs voices saved in Admin > Speech, billed to that account. Its key, model and voices are changed there."
+          />
+        ) : null}
         <ChoiceCard
           picked={draft.narration === "off"}
           onPick={() => pick("off")}
@@ -514,7 +527,7 @@ export function VoiceStep({
       </ChoiceCards>
 
       <ScanAgain scanning={scanning} onRescan={onRescan} what="Kokoro" />
-      {!kokoro && !scanning && draft.narration !== "openai" ? <KokoroStartHints /> : null}
+      {!kokoro && !scanning && draft.narration !== "openai" && draft.narration !== "elevenlabs" ? <KokoroStartHints /> : null}
 
       {draft.narration === "kokoro" ? (
         <div key="kokoro" className="reveal-height space-y-3">
@@ -570,6 +583,10 @@ export function VoiceStep({
             preselect={!env.ttsModel && !draft.answered.includes("narration")}
           />
           <NarrationTest body={{ provider: "openai", baseUrl: "", apiKey: draft.narrationKey, model: draft.narrationModel }} />
+        </div>
+      ) : draft.narration === "elevenlabs" ? (
+        <div key="elevenlabs" className="reveal-height space-y-3">
+          <NarrationTest body={{ provider: "elevenlabs" }} />
         </div>
       ) : null}
 

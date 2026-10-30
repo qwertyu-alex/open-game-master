@@ -2,6 +2,7 @@ import { getDatabase, parseJson } from "@/lib/db/core";
 import { getOpenChapter } from "@/lib/db/chapters";
 import { getCampaignById } from "@/lib/db/campaigns";
 import { actTitle, currentAct } from "@/lib/dm/arc-logic";
+import { sceneComposition } from "@/lib/dm/scene-shot-logic";
 import { characterPlaceholder } from "@/lib/placeholders";
 import { clipRecap } from "@/lib/recap";
 
@@ -35,16 +36,20 @@ function latestRecap(campaignId: string): { recap: string; at: string } | null {
   return null;
 }
 
+// The place the table was last in, not a detail found there: an insert
+// (src/lib/dm/scene-shot-logic.ts) stands for the campaign only when no
+// picture of a place is near it.
 function latestSceneImage(campaignId: string): string | null {
-  const row = getDatabase()
+  const rows = getDatabase()
     .prepare(
       `SELECT generated_image_json FROM campaign_messages
        WHERE campaign_id = ? AND generated_image_json IS NOT NULL
-       ORDER BY seq DESC LIMIT 1`,
+       ORDER BY seq DESC LIMIT 12`,
     )
-    .get(campaignId) as { generated_image_json: string | null } | undefined;
-  const image = parseJson<GeneratedImage | null>(row?.generated_image_json, null);
-  return image?.url || null;
+    .all(campaignId) as Array<{ generated_image_json: string | null }>;
+  const pictures = rows.reverse().map((row) => ({ generatedImage: parseJson<GeneratedImage | null>(row.generated_image_json, null) }));
+  const { stage, insert } = sceneComposition(pictures);
+  return (stage ?? insert)?.url || null;
 }
 
 type FaceRow = {

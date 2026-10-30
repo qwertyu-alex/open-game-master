@@ -559,11 +559,14 @@ export function SessionView({
     },
     [setMobileView],
   );
+  // Not in couch mode (docs/couch-mode-spec.md): the host who reaches this
+  // screen there came to fix a setting, not to learn the table.
+  const couchMode = campaign?.gameSettings?.couchMode === true;
   useEffect(() => {
-    if (seatTourFinished !== false) return;
+    if (seatTourFinished !== false || couchMode) return;
     const timer = window.setTimeout(() => startTour(isDm ? "dm" : "first"), 1200);
     return () => clearTimeout(timer);
-  }, [seatTourFinished, isDm, startTour]);
+  }, [seatTourFinished, isDm, startTour, couchMode]);
   // The tour that was on screen is the one finished: Help can replay the
   // other seat's, and the seat can change while a tour is open.
   const closeTour = useCallback(
@@ -613,6 +616,7 @@ export function SessionView({
         secretStory: caps.secretStory,
         adjudicates: caps.adjudicates,
         isLead,
+        couchMode: campaign?.gameSettings?.couchMode === true,
       }),
     [state.battleMap, campaign, caps.secretStory, caps.adjudicates, isLead],
   );

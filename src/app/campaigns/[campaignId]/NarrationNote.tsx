@@ -30,7 +30,8 @@ export function NarrationNote() {
       </p>
     );
   }
-  const server = tts.provider === "kokoro" ? "the Kokoro speech server" : "an OpenAI-compatible speech server";
+  const server =
+    tts.provider === "kokoro" ? "the Kokoro speech server" : tts.provider === "elevenlabs" ? "ElevenLabs" : "an OpenAI-compatible speech server";
   const where = tts.place === "local" || !tts.place ? "on this server's own network" : `at ${tts.place}`;
   // The server answers but has no model to ask for (an older server sends
   // no such field and says nothing here).

@@ -10,7 +10,7 @@
 // wrote as text, and they are checked before anything is written.
 
 import { randomUUID } from "node:crypto";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { imageSize, sniffImage as sniffImageFormat } from "@/lib/image-format";
@@ -20,6 +20,7 @@ import { buildChildEnv } from "./child-env.ts";
 import { childPath } from "./discover.ts";
 import { adapterFor, ADAPTERS, harnessConfig, resolveHarnessBinary } from "./status.ts";
 import { isHarnessId } from "./types.ts";
+import { pictureReferences, picturePrompt, pictureRequest, type PictureReference } from "./picture-prompt-logic.ts";
 import { recordMediaFile } from "@/lib/media-access";
 import { asciiSlugOf } from "@/lib/language/text-logic";
 
@@ -57,12 +58,6 @@ export function harnessImagesReady(): boolean {
     Boolean(config.imagesVerifiedAt)
   );
 }
-
-const ASPECT_WORDS: Record<AspectPreset, string> = {
-  square: "square (1:1)",
-  portrait: "portrait (2:3, taller than wide)",
-  landscape: "landscape (3:2, wider than tall)",
-};
 
 function newestImageIn(dir: string, since: number): Buffer | null {
   let best: { file: string; mtime: number } | null = null;
@@ -109,6 +104,10 @@ export async function generateHarnessImage(options: {
   negative?: string;
   // The admin's test picture runs before images are switched on.
   force?: boolean;
+  // Portraits and places to keep (src/lib/harness/picture-prompt-logic.ts),
+  // attached only by a program that takes pictures with its message; for
+  // any other the prompt's own words carry the look, as before.
+  references?: readonly PictureReference[];
 }): Promise<GeneratedImage> {
   const config = harnessConfig();
   if (!isHarnessId(config.id) || !ADAPTERS[config.id].paints) {
@@ -125,6 +124,12 @@ export async function generateHarnessImage(options: {
   const cwd = mkdtempSync(path.join(os.tmpdir(), "odm-harness-img-"));
   const env = buildChildEnv(process.env, config.id, await childPath(binary), { HOME: os.homedir() });
   const adapter = adapterFor(config.id);
+  // A reference whose file has gone (a portrait replaced since) is left
+  // out rather than failing the run: Codex refuses a turn whose attached
+  // file it cannot read.
+  const references = adapter.attachesPictures
+    ? pictureReferences(options.references).filter((reference) => existsSync(reference.path))
+    : [];
   let captured: Buffer | null = null;
   // What the program said instead of painting (a refusal, a limit), so the
   // table and the admin read its reason rather than "no picture".
@@ -150,10 +155,11 @@ export async function generateHarnessImage(options: {
       adapter
         .start({
           binary,
-          system:
-            "You make one picture for a tabletop role-playing game. Use your image generation tool exactly once to draw what is asked, then reply with the single word done. Do not use any other tool.",
+          system: picturePrompt(references.length > 0),
           model: config.model,
-          effort: "",
+          // The story's reasoning budget is unnecessary for an image-only
+          // turn. Programs that do not offer low use their own default.
+          effort: options.mode === "fast" ? "low" : "",
           mcp: null,
           images: true,
           cwd,
@@ -183,13 +189,8 @@ export async function generateHarnessImage(options: {
             return;
           }
           started.send(
-            [
-              `Draw: ${options.prompt}`,
-              `Shape: ${ASPECT_WORDS[options.aspect]}.`,
-              options.negative ? `Leave out: ${options.negative}.` : "",
-            ]
-              .filter(Boolean)
-              .join("\n"),
+            pictureRequest({ prompt: options.prompt, aspect: options.aspect, mode: options.mode, negative: options.negative, references }),
+            references.map((reference) => reference.path),
           );
         })
         .catch((error) => finish(null, error instanceof Error ? error : new Error(String(error))));

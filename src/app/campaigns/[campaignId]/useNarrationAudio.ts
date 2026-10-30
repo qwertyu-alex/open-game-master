@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { registerOutput, releaseOutput } from "@/lib/audio-devices";
 import { AUDIO_PREF_FIELDS, hydrateAudioPrefs, writeAudioPref } from "@/lib/audio-prefs";
+import { narrationAfterUnlock, type NarrationClip } from "@/lib/narration-queue-logic";
 
 // Plays DM narration audio (tts_ready events). Only events that arrive
 // AFTER mount autoplay; reconnect backlog never replays old narration.
@@ -65,7 +66,7 @@ export type NarrationAudio = {
   unlock: () => void;
   play: (messageId: string, url: string) => void;
   audioByMessage: Map<string, string>;
-  onTtsReady: (messageId: string, url: string, live: boolean) => void;
+  onTtsReady: (messageId: string, url: string, live: boolean, keepWithNext?: boolean) => void;
 };
 
 export function useNarrationAudio(onBreak = false): NarrationAudio {
@@ -79,20 +80,22 @@ export function useNarrationAudio(onBreak = false): NarrationAudio {
   const [audioByMessage] = useState(() => new Map<string, string>());
   const unlockedRef = useRef(false);
   const playingRef = useRef<string | null>(null);
+  const playingKeepWithNextRef = useRef(false);
   // Counts every start, so a playback can tell it was overtaken even by a
   // replay of the same passage.
   const turnRef = useRef(0);
   // Narrations wait for the current one instead of cutting it off.
-  const queueRef = useRef<Array<{ messageId: string; url: string }>>([]);
+  const queueRef = useRef<NarrationClip[]>([]);
   // Every messageId ever started or queued; guards against replays when the
   // same tts_ready re-enters through re-renders or reducer echoes.
   const handledRef = useRef(new Set<string>());
   // Narration that landed before the first user gesture. SessionView hands
   // each message over exactly once, so they wait here, oldest first, and
-  // unlock() plays the newest; the rest keep their transcript replay.
-  const pendingRef = useRef<Array<{ messageId: string; url: string }>>([]);
+  // unlock() plays the newest passage with its answer readout, if any;
+  // the rest keep their transcript replay.
+  const pendingRef = useRef<NarrationClip[]>([]);
   // Every change to pendingRef goes through here so `held` follows it.
-  const setPending = useCallback((next: Array<{ messageId: string; url: string }>) => {
+  const setPending = useCallback((next: NarrationClip[]) => {
     pendingRef.current = next;
     setHeld(next.length);
   }, []);
@@ -168,10 +171,10 @@ export function useNarrationAudio(onBreak = false): NarrationAudio {
     }
   }, []);
 
-  const startPlayback = useCallback((messageId: string, url: string) => {
+  const startPlayback = useCallback((messageId: string, url: string, keepWithNext = false) => {
     // Named plain function so playback can chain into the queued narration
     // when the current one ends.
-    function run(id: string, src: string) {
+    function run(id: string, src: string, keepWithNext = false) {
       if (!audioRef.current) {
         audioRef.current = registerOutput(new Audio());
       }
@@ -187,7 +190,7 @@ export function useNarrationAudio(onBreak = false): NarrationAudio {
         }
         const next = queueRef.current.shift();
         if (next && !readMuted()) {
-          run(next.messageId, next.url);
+          run(next.messageId, next.url, next.keepWithNext);
         }
       };
       const fail = () => {
@@ -203,6 +206,7 @@ export function useNarrationAudio(onBreak = false): NarrationAudio {
       // a break, leaving the table.
       const overtaken = () => playingRef.current !== id || turnRef.current !== turn;
       playingRef.current = id;
+      playingKeepWithNextRef.current = keepWithNext;
       setPlayingMessageId(id);
       setPlaybackFailure((current) => (current === id ? null : current));
       audio.src = src;
@@ -218,10 +222,10 @@ export function useNarrationAudio(onBreak = false): NarrationAudio {
             // touched, or one that sat idle). This narration is offered only
             // once, so it goes back to wait, along with whatever queued
             // behind it, and the header shows the "enable audio" state
-            // again. Oldest first, so the next unlock() plays only the newest
-            // of them and leaves the rest to their replay buttons, as at
+            // again. Oldest first, so the next unlock() plays the newest
+            // passage and its readout and leaves the rest to replay, as at
             // first load.
-            setPending([{ messageId: id, url: src }, ...queueRef.current, ...pendingRef.current]);
+            setPending([{ messageId: id, url: src, keepWithNext }, ...queueRef.current, ...pendingRef.current]);
             queueRef.current = [];
             playingRef.current = null;
             setPlayingMessageId(null);
@@ -257,7 +261,7 @@ export function useNarrationAudio(onBreak = false): NarrationAudio {
       };
       start();
     }
-    run(messageId, url);
+    run(messageId, url, keepWithNext);
   }, [setPending]);
 
   // Explicit replay: interrupts whatever is playing and clears the queue.
@@ -274,7 +278,7 @@ export function useNarrationAudio(onBreak = false): NarrationAudio {
   const unlock = useCallback(() => {
     setUnlocked(true);
     unlockedRef.current = true;
-    // Only the newest passage that arrived before this gesture plays, on the
+    // Only the newest passage (with its answer readout, if any) plays, on the
     // same "never interrupt what is playing" rule as live narration. A tab
     // watched for an hour can hold ten minutes of narration, and playing it
     // all back to back would bury the live scene under stale passages (the
@@ -284,15 +288,16 @@ export function useNarrationAudio(onBreak = false): NarrationAudio {
     if (waiting.length) {
       setPending([]);
     }
-    const newest = waiting[waiting.length - 1];
+    const [newest, ...following] = narrationAfterUnlock(waiting);
     if (!newest || readMuted()) {
       return;
     }
     if (playingRef.current || breakRef.current) {
-      queueRef.current.push(newest);
+      queueRef.current.push(newest, ...following);
       return;
     }
-    startPlayback(newest.messageId, newest.url);
+    queueRef.current.push(...following);
+    startPlayback(newest.messageId, newest.url, newest.keepWithNext);
   }, [setPending, startPlayback]);
 
   // The break begins: the passage being read stops and waits at the front
@@ -312,7 +317,7 @@ export function useNarrationAudio(onBreak = false): NarrationAudio {
         audio.onerror = null;
         audio.pause();
       }
-      queueRef.current.unshift({ messageId: current, url: audioByMessage.get(current) ?? audio?.src ?? "" });
+      queueRef.current.unshift({ messageId: current, url: audioByMessage.get(current) ?? audio?.src ?? "", keepWithNext: playingKeepWithNextRef.current });
       return;
     }
     if (playingRef.current || !unlockedRef.current || readMuted()) {
@@ -320,7 +325,7 @@ export function useNarrationAudio(onBreak = false): NarrationAudio {
     }
     const next = queueRef.current.shift();
     if (next) {
-      startPlayback(next.messageId, audioByMessage.get(next.messageId) ?? next.url);
+      startPlayback(next.messageId, audioByMessage.get(next.messageId) ?? next.url, next.keepWithNext);
     }
   }, [onBreak, audioByMessage, startPlayback]);
 
@@ -346,7 +351,7 @@ export function useNarrationAudio(onBreak = false): NarrationAudio {
   }, [unlocked, unlock]);
 
   const onTtsReady = useCallback(
-    (messageId: string, url: string, live: boolean) => {
+    (messageId: string, url: string, live: boolean, keepWithNext = false) => {
       audioByMessage.set(messageId, url);
       if (!live || readMuted() || handledRef.current.has(messageId)) {
         return;
@@ -355,13 +360,13 @@ export function useNarrationAudio(onBreak = false): NarrationAudio {
       // The browser refuses to play before a user gesture, so hold rather
       // than drop: this narration is never offered a second time.
       if (!unlockedRef.current) {
-        setPending([...pendingRef.current, { messageId, url }]);
+        setPending([...pendingRef.current, { messageId, url, keepWithNext }]);
         return;
       }
       if (playingRef.current || breakRef.current) {
-        queueRef.current.push({ messageId, url });
+        queueRef.current.push({ messageId, url, keepWithNext });
       } else {
-        startPlayback(messageId, url);
+        startPlayback(messageId, url, keepWithNext);
       }
     },
     [audioByMessage, setPending, startPlayback],

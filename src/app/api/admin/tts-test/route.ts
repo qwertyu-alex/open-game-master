@@ -1,13 +1,21 @@
 import { z } from "zod";
 import { isErrorResponse, requireAdmin } from "@/lib/admin-api";
 import { PREVIEW_LINE } from "@/lib/tts";
-import { describeSpeechFailure, serverVoices, synthesizeSpeech, ttsBackend, withNarrationModel } from "@/lib/tts-backend";
+import {
+  describeSpeechFailure,
+  listedDefaultVoice,
+  serverVoices,
+  speechEndpoint,
+  synthesizeSpeech,
+  ttsBackend,
+  withNarrationModel,
+} from "@/lib/tts-backend";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const bodySchema = z.object({
-  provider: z.enum(["", "kokoro", "openai", "off"]).default(""),
+  provider: z.enum(["", "kokoro", "openai", "elevenlabs", "off"]).default(""),
   kokoroUrl: z.string().trim().max(500).default(""),
   baseUrl: z.string().trim().max(500).default(""),
   model: z.string().trim().max(200).default(""),
@@ -45,12 +53,16 @@ export async function POST(request: Request) {
       voice: form.voice,
     }),
   );
-  const endpoint = `${backend.v1}/audio/speech`;
   if (backend.provider === "off") {
     return Response.json({ ok: false, endpoint: "", error: "Narration is switched off, so there is nothing to test." });
   }
-  const { ids, listed } = await serverVoices(backend, true);
-  const voice = form.voice || backend.defaultVoice || ids[0] || "";
+  // Listed afresh, so the count is the server's now; ElevenLabs' list takes
+  // seconds to page through and is kept per key, so a new key is listed
+  // anyway.
+  const listing = await serverVoices(backend, backend.provider !== "elevenlabs");
+  const { ids, listed } = listing;
+  const voice = form.voice || backend.defaultVoice || listedDefaultVoice(listing);
+  const endpoint = speechEndpoint(backend, voice);
   if (!voice) {
     return Response.json({
       ok: false,

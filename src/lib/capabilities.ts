@@ -12,7 +12,8 @@ import { isHarnessId } from "@/lib/harness/types";
 import { harnessImagesReady } from "@/lib/harness/images";
 import { soleListedModel } from "@/lib/model-registry/discovery";
 import type { StorySettings } from "@/lib/types";
-import { isOpenAiHost, narrationModel, ttsBackend, type TtsBackend, type TtsProvider } from "@/lib/tts-backend";
+import { isOpenAiHost, narrationModel, speechAuthHeaders, ttsBackend, warmVoices, type TtsBackend, type TtsProvider } from "@/lib/tts-backend";
+import { elevenLabsProbeUrl } from "@/lib/tts-elevenlabs-logic";
 
 // What this server can actually do, derived from the same resolution the DM
 // path uses (configuredDefaultStorySettings, admin settings, env), not from
@@ -58,6 +59,7 @@ export type Capabilities = {
 // dropping it to its own pages over one button. Constant per release: a flag
 // only ever says this server's code has the thing.
 export const SERVER_FEATURES = {
+  couchNavigation: true,
   // "Paint a portrait" on a companion's card (issue 569):
   // POST /api/campaigns/[id]/companions/[characterId]/portrait.
   companionPortrait: true,
@@ -215,9 +217,15 @@ export function ttsProbeUrl(kokoroBaseUrl: string): string {
 // Where a liveness GET goes for the narration backend. Kokoro-FastAPI has
 // /health beside its /v1; an OpenAI-kind server is asked for its model list,
 // which every one of them serves. OpenAI itself is key-gated and not probed.
+// ElevenLabs is asked for one voice with the key (speechAuthHeaders): its
+// keys are scoped, and one that may narrate may list voices, while its
+// account and model endpoints answer 401 to many that narrate fine.
 export function speechProbeUrl(backend: Pick<TtsBackend, "provider" | "v1">): string {
   if (backend.provider === "off" || isOpenAiHost(backend.v1)) {
     return "";
+  }
+  if (backend.provider === "elevenlabs") {
+    return elevenLabsProbeUrl(backend.v1);
   }
   return backend.provider === "kokoro" ? ttsProbeUrl(backend.v1.replace(/\/v\d+$/, "")) : `${backend.v1}/models`;
 }
@@ -446,6 +454,9 @@ export async function capabilitiesSnapshot(): Promise<Capabilities> {
   });
   const ollamaBase = serverEnv("OLLAMA_BASE_URL", "http://127.0.0.1:11434");
   const speech = ttsBackend();
+  // ElevenLabs' voice list takes seconds to page through: fetched behind
+  // the first page anyone opens, not in front of the first passage.
+  warmVoices(speech);
   const comfyBase = configValue(cfg.images.comfyUrl, "COMFYUI_URL", "http://127.0.0.1:8188");
   const fluxBase = serverEnv("FLUX_WORKER_URL", "http://127.0.0.1:7869");
   const sttBase = configValue(cfg.speech.sttUrl, "STT_URL", "http://127.0.0.1:8870");
@@ -455,7 +466,10 @@ export async function capabilitiesSnapshot(): Promise<Capabilities> {
       : configured || blankModel
       ? probeReachable(storyProbeUrl(settings, ollamaBase), Date.now(), storyHeaders)
       : Promise.resolve(false),
-    probeReachable(speechProbeUrl(speech), Date.now(), speech.apiKey ? { Authorization: `Bearer ${speech.apiKey}` } : {}),
+    // ElevenLabs without a key would only spend a 401.
+    speech.provider === "elevenlabs" && !speech.apiKey
+      ? Promise.resolve(false)
+      : probeReachable(speechProbeUrl(speech), Date.now(), speechAuthHeaders(speech)),
     probeReachable(imagesProbeUrl(settings.imageBackend, comfyBase, fluxBase)),
     whisperSwitchedOff(sttBase) ? Promise.resolve(false) : probeReachable(sttProbeUrl(sttBase)),
   ]);
@@ -485,8 +499,11 @@ export async function capabilitiesSnapshot(): Promise<Capabilities> {
   // nothing here.
   const speechModel =
     speech.provider === "openai" && (isOpenAiHost(speech.v1) || ttsReachable) ? await narrationModel(speech) : speech.model;
+  // ElevenLabs lists no models to most keys, so its model is typed: one
+  // with a key and none typed is waiting for it.
   const narrationNeedsModel =
-    speech.provider === "openai" && !speechModel && (isOpenAiHost(speech.v1) ? speech.apiKey !== "" : ttsReachable);
+    (speech.provider === "openai" && !speechModel && (isOpenAiHost(speech.v1) ? speech.apiKey !== "" : ttsReachable)) ||
+    (speech.provider === "elevenlabs" && speech.apiKey !== "" && !speech.model);
 
   const dictation = await sttInputs(async () => sttReachable);
 
@@ -520,17 +537,21 @@ export async function capabilitiesSnapshot(): Promise<Capabilities> {
       // reads nothing aloud. OpenAI itself is ready when it has a key, like
       // the image backend; a server with an address counts as configured
       // when the admin or env named it, or when the default one answers.
+      // ElevenLabs is ready with its key and its model, like OpenAI, and
+      // reachable when its probe answers.
       configured:
         speech.provider === "off" || (speech.provider === "openai" && !speechModel)
           ? false
-          : isOpenAiHost(speech.v1)
-            ? speech.apiKey !== ""
-            : speechConfigured(
-                speech.provider === "openai"
-                  ? configValue(cfg.speech.ttsBaseUrl, "TTS_BASE_URL")
-                  : configValue(cfg.speech.kokoroUrl, "KOKORO_URL"),
-                ttsReachable,
-              ),
+          : speech.provider === "elevenlabs"
+            ? speech.apiKey !== "" && speech.model !== ""
+            : isOpenAiHost(speech.v1)
+              ? speech.apiKey !== ""
+              : speechConfigured(
+                  speech.provider === "openai"
+                    ? configValue(cfg.speech.ttsBaseUrl, "TTS_BASE_URL")
+                    : configValue(cfg.speech.kokoroUrl, "KOKORO_URL"),
+                  ttsReachable,
+                ),
       reachable: speech.provider !== "off" && (isOpenAiHost(speech.v1) ? speech.apiKey !== "" : ttsReachable),
       provider: speech.provider,
       place: backendPlace(speech.v1),

@@ -1,5 +1,6 @@
 import { segmentsOf, type Speaker, type SpokenLine } from "@/lib/dm/speech";
-import { textKey, words } from "@/lib/language/text-logic";
+import { textKey } from "@/lib/language/text-logic";
+import { carryAudioTags, hasSpokenWords, stripAudioTags } from "@/lib/tts-tags-logic";
 
 // Which voice reads which part of a message (docs/vtt-parity-
 // implementation-plan.md section 8.2, issue 97). Prose is the narrator's; a
@@ -122,11 +123,15 @@ export function chunkSentences(text: string, firstLimit = CHUNK_CHARS, limit = C
 export type SpeechRequest = { text: string; voice: string; speed: number };
 
 // The plan as the requests actually sent, in the order they are heard.
-export function speechRequests(plan: SpeechPlan): SpeechRequest[] {
+// `audioTags`: the server reads tags like [whispers] (ElevenLabs), so each
+// stays with the words it directs (src/lib/tts-tags-logic.ts); any other
+// server is sent the words alone. Either way no request is only a tag.
+export function speechRequests(plan: SpeechPlan, options: { audioTags?: boolean } = {}): SpeechRequest[] {
+  const parts = options.audioTags ? carryAudioTags(plan) : plan.map((part) => ({ ...part, text: stripAudioTags(part.text) }));
   const requests: SpeechRequest[] = [];
-  for (const part of plan) {
+  for (const part of parts) {
     for (const text of chunkSentences(part.text, requests.length ? CHUNK_CHARS : FIRST_CHUNK_CHARS)) {
-      if (words(text).length) {
+      if (hasSpokenWords(text)) {
         requests.push({ text, voice: part.voice, speed: part.speed });
       }
     }

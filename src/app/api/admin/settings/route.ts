@@ -96,6 +96,8 @@ function envDefaults() {
     ttsBaseUrl: serverEnv("TTS_BASE_URL"),
     ttsModel: serverEnv("TTS_MODEL"),
     hasTtsApiKey: serverEnv("TTS_API_KEY") !== "",
+    // Whether .env.server holds an ElevenLabs key, never the key.
+    hasElevenLabsApiKey: serverEnv("ELEVENLABS_API_KEY") !== "",
     sttUrl: serverEnv("STT_URL", "http://127.0.0.1:8870"),
     sttModel: serverEnv("STT_MODEL"),
     sttOpenaiModel: serverEnv("STT_OPENAI_MODEL"),
@@ -180,7 +182,7 @@ const patchSchema = z.object({
     .optional(),
   speech: z
     .object({
-      ttsProvider: z.enum(["", "kokoro", "openai", "off"]).optional(),
+      ttsProvider: z.enum(["", "kokoro", "openai", "elevenlabs", "off"]).optional(),
       kokoroUrl: z.string().trim().max(500).optional(),
       ttsBaseUrl: z.string().trim().max(500).optional(),
       ttsModel: z.string().trim().max(200).optional(),

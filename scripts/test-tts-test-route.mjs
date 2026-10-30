@@ -22,7 +22,7 @@ vi.mock("@/lib/admin-api", () => ({
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "odm-tts-test-route-"));
 process.env.SQLITE_DB_PATH = path.join(dir, "test.sqlite");
 process.env.DB_ENCRYPTION_KEY = randomBytes(32).toString("hex");
-for (const key of ["KOKORO_URL", "TTS_PROVIDER", "TTS_BASE_URL", "TTS_MODEL", "TTS_API_KEY", "TTS_VOICE", "OPENAI_API_KEY"]) {
+for (const key of ["KOKORO_URL", "TTS_PROVIDER", "TTS_BASE_URL", "TTS_MODEL", "TTS_API_KEY", "TTS_VOICE", "OPENAI_API_KEY", "ELEVENLABS_API_KEY", "ELEVENLABS_BASE_URL"]) {
   delete process.env[key];
 }
 
@@ -118,4 +118,41 @@ test("a provider the admin form picked but has not saved still wins", async () =
   const answer = await sample({ provider: "kokoro" });
   assert.equal(answer.ok, true, answer.error);
   assert.deepEqual(asked, ["kokoro"]);
+});
+
+// ElevenLabs (docs/couch-mode-spec.md 2.5), behind a mocked fetch: the
+// admin's typed key and model are tried, against ElevenLabs and nobody else,
+// and the endpoint shown is ElevenLabs' own.
+test("an ElevenLabs form is tested with its typed key and model, in a voice of the account's", async () => {
+  saved({ ttsProvider: "kokoro" });
+  const realFetch = globalThis.fetch;
+  const elevenCalls = [];
+  globalThis.fetch = async (input, init = {}) => {
+    const url = new URL(String(input));
+    if (url.host !== "api.elevenlabs.io") return realFetch(input, init);
+    const key = new Headers(init.headers).get("xi-api-key");
+    elevenCalls.push({ path: url.pathname, key, body: init.body ? JSON.parse(init.body) : null });
+    if (key !== "typed-key") return Response.json({ detail: { status: "invalid_api_key", message: "Invalid API key" } }, { status: 401 });
+    if (url.pathname === "/v2/voices") {
+      const voices = url.searchParams.get("voice_type") === "default" ? [{ voice_id: "GeorgeNarrator000000", name: "George", category: "premade", labels: { gender: "male", language: "en", use_case: "narrative_story" } }] : [];
+      return Response.json({ voices, has_more: false });
+    }
+    return new Response("ID3-eleven", { status: 200, headers: { "Content-Type": "audio/mpeg" } });
+  };
+  try {
+    const answer = await sample({ provider: "elevenlabs", apiKey: "typed-key", model: "typed-model", baseUrl: compatible.url });
+    assert.equal(answer.ok, true, answer.error);
+    assert.equal(answer.voice, "GeorgeNarrator000000", "with no voice typed, one of ElevenLabs' storytellers");
+    assert.equal(answer.endpoint, "https://api.elevenlabs.io/v1/text-to-speech/GeorgeNarrator000000?output_format=mp3_44100_128");
+    assert.equal(answer.voices, 1);
+    assert.deepEqual(asked, [], "neither Kokoro nor the OpenAI-kind address is asked");
+    const spoken = elevenCalls.filter((call) => call.path.startsWith("/v1/text-to-speech/"));
+    assert.equal(spoken.length, 1);
+    assert.equal(spoken[0].body.model_id, "typed-model");
+    const refused = await sample({ provider: "elevenlabs", apiKey: "wrong-key", model: "typed-model", voice: "GeorgeNarrator000000" });
+    assert.equal(refused.ok, false);
+    assert.equal(refused.error, "ElevenLabs refused the API key (HTTP 401). An admin can check it in Admin > Speech.");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });

@@ -187,7 +187,7 @@ git clone --depth 1 -b stable https://github.com/Lebbitheplow/open-game-master.g
 cd open-game-master
 npm install
 npm run setup        # database key, content pack, memory model, production build
-npm run start:lan    # 0.0.0.0:3005 so your party can reach it on the LAN
+npm run start:lan    # port 3005 + public link (ngrok installed and authenticated)
 ```
 
 The server prints a link with a one-time setup code. Open it on the same

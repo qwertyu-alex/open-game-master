@@ -62,6 +62,10 @@ export type TableTabInput = {
   // story authority, because a lead at a human-DM table keeps these while
   // the DM keeps the story, and the tab exists for both halves.
   isLead: boolean;
+  // Couch mode (docs/couch-mode-spec.md, Part 1): the GM writes the whole
+  // one-shot, secrets and agendas included, and the lead plays the night
+  // too, so the world and what the GM was sent stay shut for everyone.
+  couchMode?: boolean;
 };
 
 // The DM console first, then the lead's desk, then the tabs everyone shares,
@@ -76,6 +80,7 @@ export function visiblePanelTabs({
   secretStory,
   adjudicates,
   isLead,
+  couchMode = false,
 }: TableTabInput): TableTabId[] {
   const tabs: TableTabId[] = [];
   if (adjudicates) {
@@ -92,7 +97,7 @@ export function visiblePanelTabs({
     tabs.push("map");
   }
   tabs.push("story", "notes", "chat");
-  if (hasSettings && secretStory) {
+  if (hasSettings && secretStory && !couchMode) {
     tabs.push("world", "context");
   }
   if (hasSettings) {

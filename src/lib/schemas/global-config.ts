@@ -127,9 +127,11 @@ export const globalConfigSchema = z.object({
       // Narration (src/lib/tts-backend.ts). Blank provider = Kokoro, the
       // shipped default. kokoroUrl is the Kokoro address; an "openai" server
       // has its own address, so switching kinds never points one kind's
-      // requests at the other's server. The key is masked on the way to the
+      // requests at the other's server. "elevenlabs" uses neither address
+      // (ELEVENLABS_BASE_URL, else api.elevenlabs.io), and ttsApiKey, else
+      // ELEVENLABS_API_KEY, as its key. The key is masked on the way to the
       // admin UI like every other secret here.
-      ttsProvider: z.enum(["", "kokoro", "openai", "off"]).default(""),
+      ttsProvider: z.enum(["", "kokoro", "openai", "elevenlabs", "off"]).default(""),
       kokoroUrl: z.string().trim().max(500).default(""),
       ttsBaseUrl: z.string().trim().max(500).default(""),
       ttsModel: z.string().trim().max(200).default(""),

@@ -16,6 +16,26 @@ import { haltedTurnPrefix } from "@/lib/campaign-types";
 // The retry itself is durable server state: the moment it is claimed the
 // notice loses its dmTurnId and this banner disappears for every client via
 // message_updated. Local state here only covers the request in flight.
+// Sends the GM back into a halted turn. Answers what went wrong, or "" once
+// the retry is claimed. Shared with the couch TV (CouchTvHalted.tsx).
+export async function retryHaltedTurn(campaignId: string, turnId: string): Promise<string> {
+  try {
+    const response = await fetch(`/api/campaigns/${campaignId}/dm-turn/retry`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ turnId }),
+    });
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      return payload?.error || "Could not restart that turn.";
+    }
+    offerCorrectionReason(campaignId, await response.json().catch(() => null));
+    return "";
+  } catch {
+    return "Could not reach the server.";
+  }
+}
+
 export function HaltedTurnBanner({
   campaignId,
   turnId,
@@ -40,25 +60,10 @@ export function HaltedTurnBanner({
     }
     setRetrying(true);
     setError("");
-    try {
-      const response = await fetch(`/api/campaigns/${campaignId}/dm-turn/retry`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ turnId }),
-      });
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-        setError(payload?.error || "Could not restart that turn.");
-      } else {
-        offerCorrectionReason(campaignId, await response.json().catch(() => null));
-      }
-      // On success nothing else is done here: the banner goes away when the
-      // message_updated event lands, and the narration streams in as usual.
-    } catch {
-      setError("Could not reach the server.");
-    } finally {
-      setRetrying(false);
-    }
+    // On success nothing else is done here: the banner goes away when the
+    // message_updated event lands, and the narration streams in as usual.
+    setError(await retryHaltedTurn(campaignId, turnId));
+    setRetrying(false);
   }
 
   return (

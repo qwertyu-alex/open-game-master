@@ -11,6 +11,8 @@ import { useCampaignStream, type CampaignState } from "@/app/campaigns/[campaign
 import { ContentScopeProvider } from "@/lib/content-scope";
 import { pushView, replaceView } from "@/lib/navigation";
 import { installPageErrorRecorder } from "@/lib/page-errors";
+import { couchSeatView } from "@/components/couch/couch-logic";
+import { CouchTvRedirect } from "@/components/couch/CouchTvRedirect";
 
 // The lobby and the table are separate downloads: a table in play never
 // needs the lobby's character builder, and a lobby never needs the board,
@@ -22,6 +24,10 @@ const loadLobby = () => import("@/app/campaigns/[campaignId]/Lobby");
 const loadSessionView = () => import("@/app/campaigns/[campaignId]/SessionView");
 const Lobby = lazy(() => loadLobby().then((module) => ({ default: module.Lobby })));
 const SessionView = lazy(() => loadSessionView().then((module) => ({ default: module.SessionView })));
+// Couch mode's phone screens (src/components/couch/), their own downloads:
+// a campaign that is not in couch mode never fetches them.
+const CouchPhoneView = lazy(() => import("@/components/couch/CouchPhoneView").then((module) => ({ default: module.CouchPhoneView })));
+const CouchPhoneLobby = lazy(() => import("@/components/couch/CouchPhoneLobby").then((module) => ({ default: module.CouchPhoneLobby })));
 
 export default function CampaignPage({
   params,
@@ -124,8 +130,37 @@ function CampaignScreen({ state, refresh, table }: { state: CampaignState; refre
   const campaignId = state.campaign?.id ?? "";
   const mayPrep = state.campaign?.status === "active" && Boolean(state.caps?.steersStory);
   const prepOpen = mayPrep && query.get("view") === "prep";
-  const openPrep = useCallback(() => pushView(`/campaigns/${campaignId}?view=prep`), [campaignId]);
-  const closePrep = useCallback(() => replaceView(`/campaigns/${campaignId}`), [campaignId]);
+  // A couch-mode lead on the host screens (?host=1) stays on them through
+  // prep and back; without it the address would send them to the TV.
+  const hostParam = query.get("host") === "1";
+  const openPrep = useCallback(
+    () => pushView(`/campaigns/${campaignId}?view=prep${hostParam ? "&host=1" : ""}`),
+    [campaignId, hostParam],
+  );
+  const closePrep = useCallback(
+    () => replaceView(`/campaigns/${campaignId}${hostParam ? "?host=1" : ""}`),
+    [campaignId, hostParam],
+  );
+  // Couch mode (docs/couch-mode-spec.md): the lead's account is the room's
+  // TV and every other member holds a phone with one simple screen. Any
+  // other campaign goes on below exactly as before.
+  const couchView = state.campaign && state.me
+    ? couchSeatView({
+        couchMode: state.campaign.gameSettings?.couchMode === true,
+        isLead: state.campaign.leadUserId === state.me.id,
+        hostParam,
+        status: state.campaign.status,
+      })
+    : "normal";
+  if (couchView === "tv") {
+    return <CouchTvRedirect campaignId={campaignId} />;
+  }
+  if (couchView === "phone-lobby") {
+    return <CouchPhoneLobby state={state} refresh={refresh} />;
+  }
+  if (couchView === "phone-play") {
+    return <CouchPhoneView state={state} refresh={refresh} refreshWhispers={table.refreshWhispers} />;
+  }
   if (state.campaign?.status === "lobby") {
     return <Lobby state={state} refresh={refresh} />;
   }

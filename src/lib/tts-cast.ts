@@ -9,6 +9,13 @@ import { textKey } from "@/lib/language/text-logic";
 
 export type VoiceGender = "f" | "m" | "";
 
+// What a server says about a voice beyond its id. ElevenLabs ids are opaque
+// ("JBFqnCBsd6RMkjVDRZzb"), so its voice list's labels are the only way to
+// cast a woman in a woman's voice; `preferred` marks the voices made for
+// characters and stories, which are cast before the podcast and advert
+// voices an account also holds.
+export type VoiceTraits = { gender: VoiceGender; language: string; preferred: boolean };
+
 // OpenAI's voices do not say what they sound like in their names.
 const OPENAI_GENDER: Record<string, VoiceGender> = {
   ash: "m",
@@ -25,7 +32,15 @@ const OPENAI_GENDER: Record<string, VoiceGender> = {
 // Kokoro ids are <language><f|m>_<name>: af_heart, bm_george.
 const KOKORO_ID = /^([a-z])([fm])_[a-z0-9]+$/;
 
-export function voiceGender(voiceId: string): VoiceGender {
+export function isKokoroVoiceId(voiceId: string): boolean {
+  return KOKORO_ID.test(voiceId);
+}
+
+export function voiceGender(voiceId: string, traits?: ReadonlyMap<string, VoiceTraits>): VoiceGender {
+  const listed = traits?.get(voiceId);
+  if (listed) {
+    return listed.gender;
+  }
   const kokoro = KOKORO_ID.exec(voiceId);
   if (kokoro) {
     return kokoro[2] as VoiceGender;
@@ -39,8 +54,15 @@ const ENGLISH = new Set(["a", "b"]);
 // takes and novelty voices a Kokoro server still lists, and on a Kokoro
 // server only voices in the narrator's language (an English passage read by
 // a Japanese voice is not a character, it is a fault). The shipped, named
-// voices come first: they are the ones known to sound good.
-export function castingPool(serverVoices: string[], narratorVoice: string): string[] {
+// voices come first: they are the ones known to sound good. A server that
+// describes its voices (traits) is cast from those in the narrator's
+// language whose gender it names: ElevenLabs accounts hold experiments and
+// voices in many languages, and an unlabelled one is as likely to be a
+// Spanish advert as a character.
+export function castingPool(serverVoices: string[], narratorVoice: string, traits?: ReadonlyMap<string, VoiceTraits>): string[] {
+  if (traits?.size) {
+    return describedPool(serverVoices, narratorVoice, traits);
+  }
   const narratorLanguage = KOKORO_ID.exec(narratorVoice)?.[1] ?? "a";
   const sameLanguage = (letter: string) =>
     ENGLISH.has(narratorLanguage) ? ENGLISH.has(letter) : letter === narratorLanguage;
@@ -56,6 +78,16 @@ export function castingPool(serverVoices: string[], narratorVoice: string): stri
   return [...pool].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
 }
 
+function describedPool(serverVoices: string[], narratorVoice: string, traits: ReadonlyMap<string, VoiceTraits>): string[] {
+  const language = traits.get(narratorVoice)?.language || "en";
+  const others = serverVoices.filter((id) => id !== narratorVoice);
+  const gendered = others.filter((id) => traits.get(id)?.gender);
+  const spoken = gendered.filter((id) => traits.get(id)?.language === language);
+  const pool = spoken.length ? spoken : gendered.length ? gendered : others;
+  const rank = (id: string) => (traits.get(id)?.preferred ? 0 : 1);
+  return [...pool].sort((a, b) => rank(a) - rank(b));
+}
+
 function hash(text: string): number {
   let value = 2166136261;
   for (let index = 0; index < text.length; index += 1) {
@@ -68,17 +100,23 @@ function hash(text: string): number {
 // fewest others at the table already have, a named voice before an unnamed
 // one, and among equals the speaker's own name decides, so two tables do not
 // cast everyone in the same order. "" when the server offers nothing.
-export function pickVoice(name: string, gender: VoiceGender, pool: string[], taken: string[]): string {
+export function pickVoice(
+  name: string,
+  gender: VoiceGender,
+  pool: string[],
+  taken: string[],
+  traits?: ReadonlyMap<string, VoiceTraits>,
+): string {
   if (!pool.length) {
     return "";
   }
-  const suited = gender ? pool.filter((id) => voiceGender(id) === gender) : [];
+  const suited = gender ? pool.filter((id) => voiceGender(id, traits) === gender) : [];
   const candidates = suited.length ? suited : pool;
   const uses = (id: string) => taken.filter((entry) => entry === id).length;
   const fewest = Math.min(...candidates.map(uses));
   const free = candidates.filter((id) => uses(id) === fewest);
   const curated = new Set<string>(TTS_VOICES.map((voice) => voice.id));
-  const named = free.filter((id) => curated.has(id));
+  const named = free.filter((id) => (traits?.size ? traits.get(id)?.preferred === true : curated.has(id)));
   const from = named.length ? named : free;
   return from[hash(textKey(name)) % from.length];
 }

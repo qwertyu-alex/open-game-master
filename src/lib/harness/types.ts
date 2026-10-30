@@ -157,8 +157,10 @@ export type HarnessStartOptions = {
 };
 
 export type HarnessSession = {
-  // Sends one user message. The first call starts the turn.
-  send(text: string): void;
+  // Sends one user message. The first call starts the turn. `pictures` are
+  // absolute paths attached to the message (a picture run's references),
+  // only by an adapter that says it attachesPictures; others never get any.
+  send(text: string, pictures?: readonly string[]): void;
   // Ends the program and releases everything it holds.
   close(): void;
 };
@@ -175,6 +177,10 @@ export type HarnessAdapter = {
   lockdown: Lockdown;
   // Whether the program has its own image tool.
   paints: boolean;
+  // Whether a picture run can be handed reference pictures with its message
+  // (Codex's localImage input), so the faces it paints are the crew's own.
+  // Without it the words of the prompt carry each look alone.
+  attachesPictures?: boolean;
   // Whether the older transcript may join the system prompt in whole chunks
   // (src/lib/harness/render.ts renderTurn): only a program that reads its
   // system prompt from a file and caches it in blocks gains by it, and only

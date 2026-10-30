@@ -60,6 +60,23 @@ test("a saved public URL is only offered while it can be true", () => {
   assert.equal(livePublicUrl("not a url", interfaces), "");
 });
 
+test("the current launcher's tunnel replaces stale saved invite and return addresses", () => {
+  const saved = "https://old-tunnel.example.org";
+  const tunnel = "https://current-tunnel.example.org/";
+  assert.equal(livePublicUrl(saved, interfaces, tunnel), "https://current-tunnel.example.org");
+  assert.equal(livePublicUrl(saved, interfaces, "  "), saved);
+  assert.equal(livePublicUrl(saved, interfaces), saved, "stopping the launcher restores the saved choice");
+  assert.equal(requestPublicOrigin({
+    savedPublicUrl: saved,
+    envPublicUrl: "https://configured.example.org",
+    tunnelPublicUrl: tunnel,
+    interfaces,
+    forwardedHost: "proxy.example.org",
+    forwardedProto: "https",
+    requestUrl: "http://127.0.0.1:3005/api/auth/discord/start",
+  }), "https://current-tunnel.example.org");
+});
+
 test("isLoopbackOrigin recognises the local names", () => {
   assert.ok(isLoopbackOrigin("http://localhost:3000"));
   assert.ok(isLoopbackOrigin("http://127.0.0.1:3005"));

@@ -196,6 +196,11 @@ function asText(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+// Pure, so scripts/test-picture-references.mjs can pin the input items.
+export function pictureInputs(pictures: readonly string[]): Array<{ type: "localImage"; path: string }> {
+  return pictures.map((file) => ({ type: "localImage", path: file }));
+}
+
 // `codex debug models` took ~0.5 s in each fresh run home (measured
 // 2026-10-17, Codex 0.162.1), and every agent turn starts one. Its answer
 // depends on the binary and the sign-in, so it is kept for a few minutes per
@@ -445,11 +450,15 @@ async function start(options: HarnessStartOptions) {
   options.onEvent({ type: "ready", tools: [] });
 
   return {
-    send(text: string) {
+    send(text: string, pictures: readonly string[] = []) {
       peer
         .request("turn/start", {
           threadId,
-          input: [{ type: "text", text }],
+          // A picture run's references go first, in the order its text
+          // numbers them. Codex reads each file itself and attaches it to
+          // the message (`localImage`, app-server protocol 0.165.0): no tool
+          // of its own runs, so the image viewer stays off.
+          input: [...pictureInputs(pictures), { type: "text", text }],
           approvalPolicy: "never",
           sandboxPolicy: { type: "readOnly" },
           ...(options.model ? { model: options.model } : {}),
@@ -587,6 +596,7 @@ export const codexAdapter: HarnessAdapter = {
   signInHint: "codex login",
   lockdown: "contained",
   paints: true,
+  attachesPictures: true,
   async probe(binary, env) {
     const version = await runProgram(binary, ["--version"], env, 15_000);
     const installed = version.code === 0;

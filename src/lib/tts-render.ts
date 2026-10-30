@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { synthesizeSpeech, type TtsBackend } from "@/lib/tts-backend";
+import { synthesizeSpeech, type StandIn, type TtsBackend } from "@/lib/tts-backend";
 import type { SpeechRequest } from "@/lib/tts-segments";
 
 // How a passage's speech requests are run (issue 97). A passage with voices
@@ -108,11 +108,17 @@ function renderClip(request: SpeechRequest, backend: TtsBackend, limit: number, 
 // Every request's audio, in order. `onClip` is called with each clip as soon
 // as it and all the clips before it exist. The first failure stops the
 // passage: nothing new is started, and the error is the caller's.
+//
+// `standIn` is asked, once per passage, about the first failure: a server
+// it names (Kokoro, when ElevenLabs is out of credits) reads that clip and
+// every later one, each voice swapped for one of its own, so the table hears
+// the rest of the scene instead of silence. Its clips are cached under its
+// own address, so they are never served as the first server's later.
 export async function renderSpeech(
   requests: SpeechRequest[],
   backend: TtsBackend,
   onClip: (audio: Buffer, index: number) => void = () => undefined,
-  options: { concurrency?: number; synthesize?: Synthesize } = {},
+  options: { concurrency?: number; synthesize?: Synthesize; standIn?: (error: unknown) => Promise<StandIn | null> } = {},
 ): Promise<Buffer[]> {
   const limit = options.concurrency ?? speechConcurrency();
   const synthesize = options.synthesize ?? synthesizeSpeech;
@@ -130,15 +136,33 @@ export async function renderSpeech(
   });
   let next = 0;
   let failed = false;
+  let asked: Promise<StandIn | null> | null = null;
+  let current: StandIn | null = null;
+  const render = (index: number, using: StandIn | null) =>
+    using
+      ? renderClip({ ...requests[index], voice: using.voice(requests[index].voice) }, using.backend, limit, synthesize)
+      : renderClip(requests[index], backend, limit, synthesize);
   const worker = async () => {
     while (!failed && next < requests.length) {
       const index = next;
       next += 1;
+      const using = current;
       try {
-        settled[index].resolve(await renderClip(requests[index], backend, limit, synthesize));
+        settled[index].resolve(await render(index, using));
       } catch (error) {
-        failed = true;
-        settled[index].reject(error);
+        const spare = !using && options.standIn ? await (asked ??= options.standIn(error).catch(() => null)) : null;
+        if (!spare) {
+          failed = true;
+          settled[index].reject(error);
+          continue;
+        }
+        current = spare;
+        try {
+          settled[index].resolve(await render(index, spare));
+        } catch (again) {
+          failed = true;
+          settled[index].reject(again);
+        }
       }
     }
   };

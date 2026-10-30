@@ -39,7 +39,7 @@ export type MaskedConfig = {
     hasOpenaiApiKey: boolean;
   };
   speech: {
-    ttsProvider: "" | "kokoro" | "openai" | "off";
+    ttsProvider: "" | "kokoro" | "openai" | "elevenlabs" | "off";
     kokoroUrl: string;
     ttsBaseUrl: string;
     ttsModel: string;
@@ -79,6 +79,8 @@ export type EnvDefaults = {
   ttsBaseUrl: string;
   ttsModel: string;
   hasTtsApiKey: boolean;
+  // ELEVENLABS_API_KEY is set (absent from an older server).
+  hasElevenLabsApiKey?: boolean;
   sttUrl: string;
   sttModel: string;
   sttOpenaiModel: string;

@@ -87,9 +87,13 @@ export function PendingRollCard({
 
   const mine = pending.userId === meUserId;
   // Held without real dice: no faces to type, the whole roll is digital
-  // and released by the roller (a shake here, a tap anywhere).
+  // and released by the roller (a shake here, a tap anywhere). The roll's
+  // own reason wins over the roller's settings: a couch table holds every
+  // roll whatever they chose, and the route refuses typed faces for it.
   const roller = members.find((member) => member.userId === pending.userId);
-  const heldOnly = Boolean(roller?.holdRolls && !roller?.useRealDice);
+  const heldOnly =
+    pending.parkedFor === "held" ||
+    (pending.parkedFor !== "real_dice" && Boolean(roller?.holdRolls && !roller?.useRealDice));
   const shakeOn = useShakeToRoll();
   const [canShake] = useState(() => supportsShake());
   const shakeActive = mine && shakeOn && canShake;
@@ -364,7 +368,7 @@ export function PendingRollCard({
             >
               {busy ? <Loader2 className="size-4 animate-spin" /> : "Roll now"}
             </button>
-            {!shakeActive ? (
+            {!shakeActive && roller?.holdRolls ? (
               <button
                 type="button"
                 disabled={busy}

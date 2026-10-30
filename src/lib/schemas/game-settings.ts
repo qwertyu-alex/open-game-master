@@ -36,6 +36,12 @@ export const gameSettingsSchema = z.object({
   // parts the DM delegates. The seat itself (which member is the DM) lives
   // on the campaign row; this is only the mode.
   dmMode: z.enum(DM_MODES).default("ai"),
+  // Couch mode (docs/couch-mode-spec.md): one room, one TV, every player on
+  // a phone. Chosen once when the one-shot is forged, never toggled in play:
+  // it decides how the crew is made (by the AI, with secret agendas), what
+  // the phone and TV views show, and that every GM turn paints a scene. The
+  // campaign's lead is the TV's own account and plays no character.
+  couchMode: z.boolean().default(false),
   // What "assisted" actually hands over, one capability at a time. Read
   // through delegated() in src/lib/dm/delegation.ts, which ignores all three
   // outside assisted mode, so a table that switches to "human" gets a silent

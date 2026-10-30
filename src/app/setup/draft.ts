@@ -41,7 +41,9 @@ export type Draft = {
   comfy: { url: string; checkpoint: string; preset: string };
   picturesKey: string;
   picturesModel: string;
-  narration: "kokoro" | "openai" | "off" | "";
+  // "elevenlabs" is only ever the saved answer kept: ElevenLabs is set up in
+  // Admin > Speech, and the wizard writes nothing over it.
+  narration: "kokoro" | "openai" | "elevenlabs" | "off" | "";
   kokoro: { url: string; voice: string };
   narrationKey: string;
   narrationModel: string;
@@ -121,7 +123,9 @@ export function draftFromConfig(config: MaskedConfig, firstRun: boolean): Draft 
         ? "kokoro"
         : config.speech.ttsProvider === "openai"
           ? "openai"
-          : config.speech.ttsProvider === "off"
+          : config.speech.ttsProvider === "elevenlabs"
+            ? "elevenlabs"
+            : config.speech.ttsProvider === "off"
             ? "off"
             : "",
     kokoro: { url: config.speech.kokoroUrl, voice: config.speech.ttsVoice },

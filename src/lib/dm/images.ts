@@ -14,6 +14,10 @@ import { enqueueMediaJob } from "@/lib/media-queue";
 import { toEnglishForImage } from "@/lib/image-english";
 import { artDirection, scenePrompt, typedStyle } from "@/lib/art-direction";
 import { presetFor } from "@/lib/worlds/preset";
+import { heuristicShot, wantsSceneShot } from "@/lib/dm/scene-shot-logic";
+import { planScenePicture, portraitReferences } from "@/lib/dm/scene-shot";
+import type { PictureShot } from "@/lib/dm/scene-shot-logic";
+import type { PictureReference } from "@/lib/harness/picture-prompt-logic";
 import type { AspectPreset, GeneratedImage, ImageRequest, StorySettings } from "@/lib/types";
 import type { ToolResult } from "@/lib/dm/tool-errors";
 
@@ -48,6 +52,22 @@ export function pictureFailureReason(error: unknown): string {
   return reason ? (reason.length > 240 ? `${reason.slice(0, 239)}…` : reason) : "The picture backend did not answer.";
 }
 
+// What a picture is painted from beyond its request: the words, and the
+// faces it keeps (src/lib/harness/picture-prompt-logic.ts). A planned scene
+// shot also says its framing, kept with the picture, and an insert its own
+// shape.
+export type PictureSubject = { prompt: string; references: PictureReference[]; aspect?: AspectPreset; shot?: PictureShot };
+
+export type MessageImageOptions = {
+  // The media queue's name for the job: a newer job of the same name takes
+  // a waiting one's place (src/lib/media-queue.ts). One per message unless
+  // said otherwise.
+  label?: string;
+  // Decided when the job runs rather than when it is queued (couch mode's
+  // shot planner), so a job replaced while it waited never asks a model.
+  subject?: (campaign: Campaign) => Promise<PictureSubject>;
+};
+
 // Fulfill a DM message's image request on the serial media queue. Called
 // fire-and-forget after the DM turn persists, so narration never waits on
 // the GPU. The client already renders message.generatedImage and handles
@@ -57,13 +77,14 @@ export function fulfillMessageImage(
   messageId: string,
   request: ImageRequest,
   settings: StorySettings,
+  options: MessageImageOptions = {},
 ) {
   const prompt = request.prompt;
   if (!prompt) {
     return Promise.resolve();
   }
   publishMediaStatus(campaignId, "image", messageId, "queued");
-  return enqueueMediaJob(`image ${messageId}`, async () => {
+  return enqueueMediaJob(options.label ?? `image ${messageId}`, async () => {
     publishMediaStatus(campaignId, "image", messageId, "generating");
     try {
       const campaign = getCampaignById(campaignId);
@@ -77,18 +98,26 @@ export function fulfillMessageImage(
       // the subject the DM wrote. A typed style may need English too.
       const look = artDirection(campaign.settings, presetFor(campaign.gameSettings));
       const typed = typedStyle(campaign.settings, "scene");
+      // The characters the narrator named keep their faces where the
+      // backend takes reference pictures; their ids used to be dropped
+      // before they got here (docs/couch-mode-spec.md 2.4).
+      const subject = options.subject
+        ? await options.subject(campaign)
+        : { prompt, references: portraitReferences(campaignId, request.characterIds) };
       // The AI DM writes its prompt in English, a human DM may not.
-      const english = await toEnglishForImage(campaign, { prompt, style: typed });
+      const english = await toEnglishForImage(campaign, { prompt: subject.prompt, style: typed });
       const image = await generateStoryImage(settings, {
         prompt: scenePrompt(typed ? english.style : look.scene, english.prompt),
         mode: request.mode ?? settings.imageMode,
-        aspect: request.aspect ?? settings.aspect,
+        aspect: subject.aspect ?? request.aspect ?? settings.aspect,
         negative: boundaryNegativeTerms(boundaries),
+        references: subject.references,
       });
-      if (!setMessageGeneratedImage(messageId, image)) {
+      const stored = subject.shot ? { ...image, shot: subject.shot } : image;
+      if (!setMessageGeneratedImage(messageId, stored)) {
         return;
       }
-      publishPersisted(campaignId, "image_ready", { messageId, image });
+      publishPersisted(campaignId, "image_ready", { messageId, image: stored });
     } catch (error) {
       const reason = pictureFailureReason(error);
       publishMediaStatus(campaignId, "image", messageId, "failed", reason);
@@ -127,16 +156,76 @@ export async function fulfillAutoImage(
   messageId: string,
   request: ImageRequest,
   settings: StorySettings,
+  options: MessageImageOptions = {},
 ) {
   if (await imagesAvailable(settings)) {
-    return fulfillMessageImage(campaignId, messageId, request, settings);
+    return fulfillMessageImage(campaignId, messageId, request, settings, options);
   }
+  closeImageRequest(campaignId, messageId, request);
+}
+
+// A request nobody will fulfil, marked not needed so its placeholder goes
+// away now and stays away on a reload.
+function closeImageRequest(campaignId: string, messageId: string, request: ImageRequest) {
   if (!setMessageImageRequest(messageId, { ...request, needed: false })) {
     return;
   }
   const updated = getCampaignMessage(messageId);
   if (updated) {
     publishPersisted(campaignId, "message_updated", { message: updated });
+  }
+}
+
+// Couch mode paints every GM turn (docs/couch-mode-spec.md 2.4): the
+// request a finished passage carries, or none when the passage is not a
+// scene (a line or two, table talk) or the table cannot paint. Explicit
+// pictures (the narrator's own, a person's) are not this: the narrator is
+// not offered generate_image in couch mode (src/lib/dm/turn.ts dmTurnTools).
+export function sceneShotRequest(campaign: Pick<Campaign, "settings" | "gameSettings">, content: string): ImageRequest | undefined {
+  const { settings } = campaign;
+  if (
+    !campaign.gameSettings.couchMode ||
+    !settings.imageGenerationEnabled ||
+    !settings.autoImages ||
+    !wantsSceneShot(content) ||
+    !imageProducerReady(settings)
+  ) {
+    return undefined;
+  }
+  return {
+    needed: true,
+    // The passage's own frame, for a retry by hand; the job plans its own.
+    prompt: heuristicShot(content, []).prompt,
+    mode: settings.imageMode,
+    backend: settings.imageBackend,
+    // The picture fills the TV, which is wider than tall.
+    aspect: "landscape",
+    reason: "scene",
+    characterIds: [],
+  };
+}
+
+// One job name per table: when turns come faster than pictures, the newest
+// passage's picture takes the place of one still waiting, and only the
+// picture of the moment the table is in gets painted.
+export function sceneShotLabel(campaignId: string): string {
+  return `scene ${campaignId}`;
+}
+
+export async function fulfillSceneShot(campaignId: string, messageId: string, request: ImageRequest, settings: StorySettings) {
+  await fulfillAutoImage(campaignId, messageId, request, settings, {
+    label: sceneShotLabel(campaignId),
+    // The passage as it stands when its turn comes, a reroll included.
+    subject: (campaign) => {
+      const message = getCampaignMessage(messageId);
+      return planScenePicture(campaign, message?.content ?? request.prompt ?? "", message?.seq);
+    },
+  });
+  // Settled without a picture or a failure: a newer passage's picture took
+  // this one's place in the queue, so its placeholder must stop waiting.
+  const message = getCampaignMessage(messageId);
+  if (message?.imageRequest?.needed && !message.generatedImage) {
+    closeImageRequest(campaignId, messageId, message.imageRequest);
   }
 }
 
@@ -171,7 +260,7 @@ export function handleGenerateImage(
     backend: campaign.settings.imageBackend,
     aspect: campaign.settings.aspect,
     reason: args.reason,
-    characterIds: [],
+    characterIds: args.characterIds ?? [],
   };
   if (!setMessageImageRequest(message.id, request)) {
     return { error: "That passage is no longer there.", retry: true };

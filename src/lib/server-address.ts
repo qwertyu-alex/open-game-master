@@ -31,8 +31,11 @@ const PRIVATE_V4 = /^(10\.|127\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.
 export function livePublicUrl(
   publicUrl: string | null | undefined,
   interfaces: Record<string, InterfaceAddress[] | undefined>,
+  tunnelPublicUrl?: string,
 ): string {
-  const clean = (publicUrl ?? "").trim().replace(/\/+$/, "");
+  // A launcher-owned tunnel lasts for this process only. Prefer it to a
+  // previously saved address without persisting it in the world's settings.
+  const clean = (tunnelPublicUrl?.trim() || publicUrl || "").trim().replace(/\/+$/, "");
   if (!clean) {
     return "";
   }
@@ -66,13 +69,14 @@ export function livePublicUrl(
 export function requestPublicOrigin(input: {
   savedPublicUrl: string | null | undefined;
   envPublicUrl: string | null | undefined;
+  tunnelPublicUrl?: string;
   interfaces: Record<string, InterfaceAddress[] | undefined>;
   forwardedHost: string | null | undefined;
   forwardedProto: string | null | undefined;
   requestUrl: string;
 }): string {
   const configured =
-    livePublicUrl(input.savedPublicUrl, input.interfaces) ||
+    livePublicUrl(input.savedPublicUrl, input.interfaces, input.tunnelPublicUrl) ||
     (input.envPublicUrl ?? "").trim().replace(/\/+$/, "");
   if (configured) {
     return configured;

@@ -5,12 +5,16 @@ import { X } from "lucide-react";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { EmptyState } from "@/components/EmptyState";
 import { ui } from "@/lib/ui";
-import { use } from "react";
+import { Suspense, lazy, use } from "react";
 import { BattleMapPanel } from "@/app/campaigns/[campaignId]/BattleMapPanel";
 import { MapPanel } from "@/app/campaigns/[campaignId]/MapPanel";
 import { useCampaignStream } from "@/app/campaigns/[campaignId]/useCampaignStream";
 import { HandoutStage } from "@/components/HandoutStage";
 import { SceneTitle } from "@/components/SceneTitle";
+
+// Couch mode's TV (src/components/couch/CouchTv.tsx), its own download: a
+// table projected for an ordinary campaign never fetches it.
+const CouchTv = lazy(() => import("@/components/couch/CouchTv").then((module) => ({ default: module.CouchTv })));
 
 // The table view (docs/vtt-parity-implementation-plan.md 13.2): the player
 // projection of the board, the scene art, the sky and the current title
@@ -21,7 +25,7 @@ import { SceneTitle } from "@/components/SceneTitle";
 // as an installed app has no other way out.
 export default function TablePage({ params }: { params: Promise<{ campaignId: string }> }) {
   const { campaignId } = use(params);
-  const { state, refreshBattleMap, markFxPlayed, markCameraDone, markTitleCardShown } = useCampaignStream(campaignId);
+  const { state, refresh, refreshBattleMap, markFxPlayed, markCameraDone, markTitleCardShown } = useCampaignStream(campaignId);
 
   if (state.loading) {
     return (
@@ -41,6 +45,16 @@ export default function TablePage({ params }: { params: Promise<{ campaignId: st
           }
         />
       </main>
+    );
+  }
+  // In couch mode this is the room's shared screen (docs/couch-mode-spec.md
+  // 2.6): the scene, the narration as subtitles, the crew, the lobby's QR,
+  // and the only place the sound plays.
+  if (state.campaign.gameSettings?.couchMode === true) {
+    return (
+      <Suspense fallback={<main className="fixed inset-0 bg-black" />}>
+        <CouchTv state={state} refresh={refresh} markTitleCardShown={markTitleCardShown} />
+      </Suspense>
     );
   }
   return (

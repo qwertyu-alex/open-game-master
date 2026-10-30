@@ -22,6 +22,7 @@ import { latestEventOfType, onlineUserIds, publishEphemeral, publishPersisted } 
 import { tableBreakOn } from "@/lib/dm/table-break";
 import { breakRefusal } from "@/lib/dm/table-break-logic";
 import { runsAiTurns } from "@/lib/workshop/kind";
+import { publishCouchAnswers } from "@/lib/couch/answers";
 import { decideTableWait, type TableSeat, type TableWaitDecision, type TableWaitView } from "./table-wait-logic";
 
 export type { TableWaitView } from "./table-wait-logic";
@@ -228,6 +229,9 @@ export function tableWaitHasAnswers(campaignId: string): boolean {
 // The DM turn is about to read the transcript: everything up to here is
 // answered, and the next window opens after it.
 export function tableWaitTurnStarted(campaignId: string, readSeq: number) {
+  const campaign = getCampaignById(campaignId);
+  const window = campaign?.gameSettings.couchMode ? windowFor(campaignId) : null;
+  if (campaign && window) publishCouchAnswers(campaign, window.since, readSeq);
   const entry = memory(campaignId);
   entry.readSeq = readSeq;
   clearTimer(entry);

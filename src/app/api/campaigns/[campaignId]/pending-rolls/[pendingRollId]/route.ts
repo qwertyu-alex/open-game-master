@@ -19,6 +19,7 @@ import { resolvePendingPcAttack } from "@/lib/dm/pc-attack";
 import { resumeDmTurn } from "@/lib/dm/turn";
 import { resumeHumanTurn } from "@/lib/dm/invoke";
 import { enqueueDmJob } from "@/lib/dm/queue";
+import { announceCouchRollCalls, publishCouchRollFeedback } from "@/lib/couch/roll-feedback";
 import { publishWithSeq } from "@/lib/events";
 
 export const runtime = "nodejs";
@@ -211,6 +212,18 @@ export async function POST(
 
   // A combatant who left the fight during the call takes no turn with them.
   settleTurn(context.campaign, holder);
+
+  // A couch crew member threw this from their phone: the TV throws the same
+  // faces and the narrator reads the result, and a hit's damage roll, parked
+  // just now, is called aloud like any other (src/lib/couch/roll-feedback.ts).
+  // The roll is already stored: a readout that throws must not turn it into
+  // a 500 and leave the turn parked on a roll the player has thrown.
+  try {
+    publishCouchRollFeedback(context.campaign, [roll.id], pending.reason, {}, pendingRollId);
+    announceCouchRollCalls(context.campaign, pending.turnId);
+  } catch (error) {
+    console.error(`[couch] roll readout failed for pending roll ${pendingRollId}:`, error);
+  }
 
   const remaining = listPendingForTurn(pending.turnId).filter(
     (entry) => entry.status === "pending",

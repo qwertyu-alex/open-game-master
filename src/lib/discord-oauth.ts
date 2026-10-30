@@ -24,6 +24,7 @@ export function publicOrigin(request: Request): string {
   return requestPublicOrigin({
     savedPublicUrl: getGlobalConfig().publicUrl,
     envPublicUrl: serverEnv("APP_PUBLIC_URL"),
+    tunnelPublicUrl: process.env.ODM_TUNNEL_PUBLIC_URL,
     interfaces: os.networkInterfaces(),
     forwardedHost: request.headers.get("x-forwarded-host"),
     forwardedProto: request.headers.get("x-forwarded-proto"),

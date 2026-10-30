@@ -7,6 +7,7 @@ import { register } from "node:module";
 register("./lib/register-alias.mjs", import.meta.url);
 
 const { baseCreatureName, chunkSentences, clampSpeed, planSpeech, speechRequests, FIRST_CHUNK_CHARS, CHUNK_CHARS } = await import("../src/lib/tts-segments.ts");
+const { stripAudioTags, carryAudioTags, hasSpokenWords } = await import("../src/lib/tts-tags-logic.ts");
 const { attributeSpeech, linesOf } = await import("../src/lib/dm/speech.ts");
 
 // A passage voiced with the lines the server stores for it: here, a
@@ -114,6 +115,56 @@ test("the stored lines say who speaks, in any language, whatever the words aroun
     [["af_heart", "La porta si apre."], ["bf_emma", "Sei tornato."], ["af_heart", "Sorride."]],
   );
   assert.deepEqual(planSpeech(text, { narratorVoice: "af_heart", cast, lines: [] }).map((part) => part.voice), ["af_heart"], "no stored line, no cut");
+});
+
+// Audio tags (docs/couch-mode-spec.md 2.5): ElevenLabs reads [whispers] as
+// a direction, every other server would say it aloud.
+test("a tag is cut cleanly for a server that would read it aloud, and nothing else is", () => {
+  assert.equal(stripAudioTags("[whispers] Get down."), "Get down.");
+  assert.equal(stripAudioTags("The lights die. [long pause] The door opens."), "The lights die. The door opens.");
+  assert.equal(stripAudioTags("He waits [sighs]."), "He waits.");
+  assert.equal(stripAudioTags("[breathing heavily]"), "");
+  assert.equal(stripAudioTags("[laughs softly, then coughs] Fine."), "Fine.");
+  assert.equal(stripAudioTags("Kara [Captain] stands. [roll:abc] [Whispers] stay"), "Kara [Captain] stands. [roll:abc] [Whispers] stay", "names, markers and capitals are not tags");
+  assert.equal(stripAudioTags("No tags at all."), "No tags at all.");
+  assert.equal(hasSpokenWords("[screams]"), false);
+  assert.equal(hasSpokenWords("[screams] No!"), true);
+});
+
+test("a tag stays with the words it directs, and no clip is only a tag", () => {
+  const part = (text, speaker = null) => ({ text, voice: speaker ? "bf_emma" : "af_heart", speed: 1, speaker });
+  assert.deepEqual(
+    carryAudioTags([part("The lights die. [whispers]"), part("Don't move,", "Marla"), part("says Marla. [sighs]")]).map((entry) => entry.text),
+    ["The lights die.", "[whispers] Don't move,", "says Marla."],
+    "a tag ending the narration directs the line after it; one at the very end directs nothing",
+  );
+  assert.deepEqual(
+    carryAudioTags([part("Run!", "Marla"), part("[screams]"), part("Now!", "Marla")]).map((entry) => [entry.speaker, entry.text]),
+    [["Marla", "Run!"], ["Marla", "[screams] Now!"]],
+    "a part that is only a tag gives it to the next",
+  );
+
+  const text = 'The lights die. [whispers] "Don\'t move," says Marla. [breathing heavily] Something scrapes the hull.';
+  const plan = voiced(text, { narratorVoice: "af_heart", cast });
+  const eleven = speechRequests(plan, { audioTags: true });
+  assert.deepEqual(eleven.map((request) => [request.voice, request.text]), [
+    ["af_heart", "The lights die."],
+    ["bf_emma", "[whispers] Don't move,"],
+    ["af_heart", "says Marla. [breathing heavily] Something scrapes the hull."],
+  ]);
+  const kokoro = speechRequests(plan);
+  assert.deepEqual(kokoro.map((request) => request.text), ["The lights die.", "Don't move,", "says Marla. Something scrapes the hull."], "Kokoro hears the words alone");
+  assert.ok(speechRequests([part("[screams]")], { audioTags: true }).length === 0, "a lone tag is never sent");
+  assert.ok(speechRequests([part("[screams]")]).length === 0);
+});
+
+test("a tag after a sentence opens the next one when a long run is cut", () => {
+  const sentence = "The corridor hums with a sound that does not belong to the ship at all. ";
+  const long = `${sentence.repeat(4)}[whispers] Something is in the vents. ${sentence.repeat(30)}`.trim();
+  const requests = speechRequests([{ text: long, voice: "af_heart", speed: 1, speaker: null }], { audioTags: true });
+  assert.ok(requests.every((request) => !/\[[a-z ]+\]$/.test(request.text)), "no clip ends on a tag");
+  assert.ok(requests.some((request) => request.text.includes("[whispers] Something is in the vents.")), "the tag keeps its sentence");
+  assert.equal(requests.map((request) => request.text).join(" "), long, "and nothing is lost");
 });
 
 console.log(`test-tts-segments: ${passed} passed`);

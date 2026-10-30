@@ -70,6 +70,23 @@ export type DeathSaves = z.infer<typeof deathSavesSchema>;
 // second backstory, since the GM reads every player's each turn.
 export const HOPES_MAX = 500;
 
+// A couch-mode crew member's secret mission (docs/couch-mode-spec.md 2.2):
+// one personal agenda per act, written by the scenario forge to pull the
+// crew apart. Private like the hopes: only the owner and a DM seat read it
+// (src/lib/dm/sheet-view.ts), and the GM reads every one each turn.
+export const sheetAgendaSchema = z
+  .object({
+    // Agenda per act, in order; `act` is the index of the one in force.
+    acts: z.array(z.string().trim().min(1).max(400)).min(1).max(3),
+    act: z.number().int().min(0).max(2).default(0),
+    // "" for an ordinary crew member; otherwise who they secretly are
+    // (a synthetic, a Company plant). At most one per crew.
+    hiddenRole: z.string().trim().max(300).default(""),
+    storyPoints: z.number().int().min(0).max(10).default(0),
+  })
+  .nullable();
+export type SheetAgenda = z.infer<typeof sheetAgendaSchema>;
+
 // The longest language, tool, and armor or weapon name a sheet holds.
 export const LANGUAGE_NAME_MAX = 40;
 export const TOOL_NAME_MAX = 60;
@@ -495,6 +512,11 @@ export const createSheetSchema = z.object({
   // the owner and a DM seat read it, src/lib/dm/sheet-view.ts); the GM reads
   // it every turn and steers toward it (src/lib/dm/prompt.ts describeSheet).
   hopes: z.string().trim().max(HOPES_MAX).default(""),
+  agenda: sheetAgendaSchema.optional(),
+  // Couch mode's public one-liner for who this crew member is ("Colonial
+  // Marine, the ship's sergeant"), shown on the TV and phones in place of
+  // race and class, which stay the engine's business.
+  crewRole: z.string().trim().max(120).optional(),
 });
 export type CreateSheetInput = z.infer<typeof createSheetSchema>;
 
@@ -791,6 +813,15 @@ export type CharacterSheet = {
   // notes for anyone but the owner and a DM seat; optional only for test
   // doubles, every stored sheet reads one.
   hopes?: string;
+  // Couch mode's secret agenda (sheetAgendaSchema). Null for anyone but the
+  // owner and a DM seat, and on every sheet outside couch mode.
+  agenda?: SheetAgenda;
+  // Couch mode's public crew line (createSheetSchema); "" or absent elsewhere.
+  crewRole?: string;
+  // What they look like, as the sheet they were made from said it
+  // (createSheetSchema appearance): the words every picture of them is
+  // painted from. Absent on a sheet made before campaign sheets kept it.
+  appearance?: string;
   // AI companion party member: the sheet belongs to an unloginable bot user
   // and the DM drives it (src/lib/dm/companion-tools.ts). 'party' travels
   // with the party until dismissed; 'guest' is a scene-scoped ally.

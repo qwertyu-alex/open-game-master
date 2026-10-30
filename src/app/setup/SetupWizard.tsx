@@ -174,7 +174,8 @@ export function SetupWizard({ config: initialConfig, env, info }: { config: Mask
       return picturesPatch({ kind: "none" });
     }
     if (key === "voice") {
-      // Unanswered narration writes nothing, like unanswered pictures.
+      // Unanswered narration writes nothing, like unanswered pictures, and
+      // neither does a kept ElevenLabs setup: it is Admin > Speech's.
       const narration =
         draft.narration === "kokoro"
           ? narrationPatch({ kind: "kokoro", url: draft.kokoro.url, voice: draft.kokoro.voice })
@@ -402,6 +403,7 @@ export function SetupWizard({ config: initialConfig, env, info }: { config: Mask
           env={env}
           suggestion={narrationSuggestion}
           onRescan={rescan}
+          elevenLabsSaved={config.speech.ttsProvider === "elevenlabs"}
         />
       ),
       blocker: voiceBlocker,

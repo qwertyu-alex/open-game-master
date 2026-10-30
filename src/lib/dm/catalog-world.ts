@@ -703,6 +703,22 @@ export const STORY_ADJUDICATIONS: CatalogEntry[] = [
 // party cannot act on it, and not the story, because it says nothing about
 // what happened; it is the DM reaching for the volume knob.
 export const TABLE_ADJUDICATIONS: CatalogEntry[] = [
+  // A couch one-shot's levers (src/lib/dm/couch-tools.ts); refused at any
+  // other table.
+  {
+    name: "advance_act",
+    label: "Next act",
+    category: "story",
+    summary: "Turns a couch one-shot to its next act: each player's phone gets their next secret agenda.",
+    fields: [{ name: "title", label: "Under the act number", kind: "text", placeholder: "The Hold Opens" }],
+  },
+  {
+    name: "award_story_point",
+    label: "Story point",
+    category: "story",
+    summary: "One story point to a crew member for chasing their secret agenda.",
+    fields: [{ name: "characterId", label: "Crew member", kind: "character", required: true }],
+  },
   {
     name: "set_ambience",
     label: "Set the sound",

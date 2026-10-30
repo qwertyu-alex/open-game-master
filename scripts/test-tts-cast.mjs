@@ -64,4 +64,58 @@ test("a voice is cast for whoever the stored lines say spoke, or the one the pas
   assert.deepEqual([...unvoicedSpeakers([], roster, { kind: "monster", id: "e2", name: "Goblin 2" })], ["monster:goblin"]);
 });
 
+// ElevenLabs ids say nothing about the voice; its labels do.
+const { elevenLabsTraits } = await import("../src/lib/tts-elevenlabs-logic.ts");
+const { voiceFits } = await import("../src/lib/tts-backend.ts");
+const described = (id, gender, language, useCase) => ({ id, name: id, category: "professional", own: false, gender, genderLabel: "", language, accent: "", age: "", descriptive: "", useCase });
+const NARRATOR = "Narrator000000000000";
+const ELEVEN = [
+  described(NARRATOR, "m", "en", "narrative_story"),
+  described("WomanStory0000000000", "f", "en", "narrative_story"),
+  described("WomanAdvert000000000", "f", "en", "advertisement"),
+  described("ManCharacter00000000", "m", "en", "characters_animation"),
+  described("ManPodcast0000000000", "m", "en", "conversational"),
+  described("ManSpanish0000000000", "m", "es", "narrative_story"),
+  described("Experiment0000000000", "", "en", ""),
+  { ...described("WomanCute00000000000", "f", "en", "characters_animation"), descriptive: "cute" },
+];
+const ids = ELEVEN.map((voice) => voice.id);
+const traits = elevenLabsTraits(ELEVEN);
+
+test("an ElevenLabs table is cast from labelled voices in the narrator's language, character voices first", () => {
+  const pool = castingPool(ids, NARRATOR, traits);
+  assert.ok(!pool.includes(NARRATOR), "nobody shares the narrator's voice");
+  assert.ok(!pool.includes("ManSpanish0000000000"), "an English table is not cast in Spanish");
+  assert.ok(!pool.includes("Experiment0000000000"), "a voice that does not say what it is is left out");
+  assert.deepEqual(pool.slice(0, 2).sort(), ["ManCharacter00000000", "WomanStory0000000000"]);
+  assert.equal(voiceGender("WomanAdvert000000000", traits), "f");
+  assert.equal(voiceGender("WomanAdvert000000000"), "", "without the labels the id says nothing");
+});
+
+test("an ElevenLabs pick suits the speaker and prefers a voice made for characters", () => {
+  const pool = castingPool(ids, NARRATOR, traits);
+  assert.equal(pickVoice("Captain Reyes", "f", pool, [], traits), "WomanStory0000000000");
+  const next = pickVoice("Captain Reyes", "f", pool, ["WomanStory0000000000"], traits);
+  assert.ok(next !== "WomanStory0000000000" && voiceGender(next, traits) === "f", "another woman when the first is taken");
+  assert.equal(pickVoice("Dawes", "m", pool, [], traits), "ManCharacter00000000");
+  assert.equal(traits.get("WomanCute00000000000").preferred, false, "a bubbly cartoon voice is not cast first");
+  assert.ok(pool.indexOf("WomanCute00000000000") > pool.indexOf("WomanStory0000000000"));
+});
+
+test("a voice saved on another kind of server is no voice, and its speaker is cast again", () => {
+  assert.equal(voiceFits("af_heart", "elevenlabs"), false);
+  assert.equal(voiceFits("JBFqnCBsd6RMkjVDRZzb", "elevenlabs"), true);
+  assert.equal(voiceFits("JBFqnCBsd6RMkjVDRZzb", "kokoro"), false);
+  assert.equal(voiceFits("af_heart(30)+af_bella(70)", "kokoro"), true);
+  assert.equal(voiceFits("anything at all", "openai"), true);
+  const entry = (key, name, voiceId) => ({ key, kind: "npc", name, aliases: [], portraitUrl: "", ownerUserId: "", gender: "", voice: voiceId ? { voiceId, speed: 1 } : null });
+  const roster = [entry("npc:marla", "Marla", "bf_emma"), entry("npc:pike", "Old Pike", "JBFqnCBsd6RMkjVDRZzb")];
+  const lines = [
+    { line: "We go,", speaker: { kind: "npc", id: "marla", name: "Marla" } },
+    { line: "Fine.", speaker: { kind: "npc", id: "pike", name: "Old Pike" } },
+  ];
+  assert.deepEqual([...unvoicedSpeakers(lines, roster, null)], [], "by default a saved voice is a voice");
+  assert.deepEqual([...unvoicedSpeakers(lines, roster, null, (voiceId) => voiceFits(voiceId, "elevenlabs"))], ["npc:marla"]);
+});
+
 console.log(`test-tts-cast: ${passed} passed`);

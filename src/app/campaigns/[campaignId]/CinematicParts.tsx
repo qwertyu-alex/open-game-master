@@ -1,6 +1,7 @@
 "use client";
 
 import { isOocAnswer } from "@/lib/dm/ooc-question";
+import { sceneComposition } from "@/lib/dm/scene-shot-logic";
 import { extraTurnTag, litOrderRows, pointerOrderIndex } from "@/lib/battlemap/initiative-rows";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { EyeOff } from "lucide-react";
@@ -36,8 +37,11 @@ import { textLength } from "@/lib/text-limits";
 // ---- the painting behind the table ----
 
 // The newest scene art the DM painted, the campaign's cover otherwise, the
-// genre plate when there is neither. Two layers so a new painting fades in
-// over the old; the outgoing layer is dropped once the fade has run.
+// genre plate when there is neither. A thing found (an insert, couch mode's
+// close picture of a detail) is not a place to stand in: it stays under its
+// passage, and the place it was found in stays behind the table. Two layers
+// so a new painting fades in over the old; the outgoing layer is dropped
+// once the fade has run.
 export function SceneBackdrop({
   messages,
   cover,
@@ -52,13 +56,7 @@ export function SceneBackdrop({
   // Night in the story darkens the scrim a shade.
   dark?: boolean;
 }) {
-  const painted = useMemo(() => {
-    for (let index = messages.length - 1; index >= 0; index -= 1) {
-      const url = messages[index]?.generatedImage?.url;
-      if (url) return url;
-    }
-    return null;
-  }, [messages]);
+  const painted = useMemo(() => sceneComposition(messages).stage?.url ?? null, [messages]);
   const url = painted || cover?.url || campaignPlaceholder(genre, seed);
   const [layers, setLayers] = useState<string[]>([url]);
   // State from props during render (React's "adjusting state when a prop

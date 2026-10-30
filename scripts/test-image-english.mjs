@@ -240,6 +240,8 @@ const IMAGE_CALLS = {
   "src/lib/portrait.ts": { story: 2, fixed: 1 },
   // The agent program's test picture: a fixed English prompt.
   "src/lib/harness/picture-test.ts": { story: 0, fixed: 1 },
+  // A couch crew member's portrait, from the look the forge wrote.
+  "src/lib/couch/forge.ts": { story: 1, fixed: 0 },
 };
 
 await test("every image call site is classified, and each built from story text rewrites it first", () => {

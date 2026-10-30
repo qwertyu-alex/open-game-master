@@ -157,7 +157,9 @@ export default function TopoBackground() {
 
     function tick(nowMs: number) {
       raf = window.requestAnimationFrame(tick);
-      if (nowMs - lastDraw < FRAME_MS) {
+      // A screen that covers the backdrop whole (the couch phone) turns it
+      // off: redrawn unseen under its pinned bars, it made iPhones flicker.
+      if (nowMs - lastDraw < FRAME_MS || document.documentElement.dataset.backdrop === "off") {
         return;
       }
       lastDraw = nowMs;
@@ -177,6 +179,11 @@ export default function TopoBackground() {
     function onResize() {
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => {
+        // Each resize reallocates the canvas; an iPhone's toolbars resize
+        // the page all through a scroll, so not while it is turned off.
+        if (document.documentElement.dataset.backdrop === "off") {
+          return;
+        }
         resize();
         draw(performance.now());
       }, 150);
@@ -203,7 +210,7 @@ export default function TopoBackground() {
     <canvas
       ref={canvasRef}
       aria-hidden
-      className="pointer-events-none fixed inset-0 -z-10 h-full w-full"
+      className="topo-backdrop pointer-events-none fixed inset-0 -z-10 h-full w-full"
     />
   );
 }

@@ -17,7 +17,7 @@ import type { Campaign } from "@/lib/db/campaigns";
 import { createDmTurn, getDmTurn, saveDmTurn, type DmTurn } from "@/lib/db/dm-turns";
 import { getCampaignById, listMembers } from "@/lib/db/campaigns";
 import { listSheets } from "@/lib/db/sheets";
-import { heldRollUserIds } from "@/lib/dice/held-rolls";
+import { rollHolderIds } from "@/lib/dice/held-rolls";
 import { listOpenPendingRolls } from "@/lib/db/dm-turns";
 import { adjudication, checkArgs, type CatalogEntry } from "@/lib/dm/invoke-catalog";
 import { dispatchAdjudication } from "@/lib/dm/invoke-dispatch";
@@ -217,11 +217,11 @@ export function normalizeArgs(
   return out;
 }
 
-// Players who roll physical dice at the table. Their rolls park for them to
-// enter rather than being rolled by the server, for a human DM exactly as
-// for the AI one.
+// Players who roll physical dice at the table, or hold their rolls. Their
+// rolls park for them to enter rather than being rolled by the server, for
+// a human DM exactly as for the AI one.
 function realDiceUsers(campaign: Campaign): Set<string> {
-  return heldRollUserIds(campaign.gameSettings.dicePolicy, listMembers(campaign.id));
+  return rollHolderIds(campaign.gameSettings, listMembers(campaign.id));
 }
 
 // The turn a human DM's adjudications hang on. Rolls need a turn to belong

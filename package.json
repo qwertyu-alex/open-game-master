@@ -9,10 +9,10 @@
   },
   "scripts": {
     "dev": "next dev",
-    "dev:lan": "next dev -H 0.0.0.0 -p 3005",
+    "dev:lan": "node scripts/start-local.mjs dev",
     "build": "next build",
     "start": "next start",
-    "start:lan": "next start -H 0.0.0.0 -p 3005",
+    "start:lan": "node scripts/start-local.mjs start",
     "lint": "eslint",
     "audit:check": "node scripts/check-audit.mjs",
     "dead-code": "tsc --noEmit --incremental false --noUnusedLocals --noUnusedParameters --allowUnreachableCode false && knip",

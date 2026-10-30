@@ -71,6 +71,7 @@ const TOOL_SOURCES = [
   "src/lib/dm/effect-tools.ts",
   "src/lib/dm/scene-tools.ts",
   "src/lib/dm/ambience-tools.ts",
+  "src/lib/dm/couch-tools.ts",
   "src/lib/dm/mount-tools.ts",
   "src/lib/dm/gear-tool.ts",
   "src/lib/dm/resource-tools.ts",

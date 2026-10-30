@@ -9,7 +9,8 @@
 // from that table is sent to nobody.
 //
 //   a sheet is stored and sent without its notes (or its player's hopes for
-//   the story); the owner and the DM seats are sent the sheet whole;
+//   the story, or a couch crew member's secret agenda); the owner and the DM
+//   seats are sent the sheet whole;
 //   a roll made for the DM alone ("dm") or for one player ("self") is sent
 //   to the seats that may read it, with its number, and to nobody else, not
 //   even redacted. That is what the snapshot already did
@@ -40,7 +41,7 @@ import { audienceOf, type SeatRight } from "@/lib/event-audience";
 import { offerVisibleTo, publicItemProposal, readProposal } from "@/lib/dm/proposal-view";
 
 type Payload = Record<string, unknown>;
-type SheetLike = { id: string; userId: string; notes?: string; hopes?: string; openToAdvances?: boolean; openToPacts?: boolean };
+type SheetLike = { id: string; userId: string; notes?: string; hopes?: string; openToAdvances?: boolean; openToPacts?: boolean; agenda?: unknown };
 type RollLike = RollView & { id?: string; total?: number | null };
 type AuditLike = { id?: string; characterId: string; delta: Record<string, unknown> };
 type EffectLike = { visible?: boolean; targetId?: string };
@@ -261,9 +262,10 @@ export function payloadForViewer(
     }
     const whole = sheetOf(type, original) ?? getSheetById(sheet.id);
     // The notes, the player's hopes for the story, the advances opt-in
-    // (issue 501) and the pacts opt-in (issue 503) are the fields the table's
-    // copy blanks; the owner and a DM seat get them back.
-    return whole?.notes || whole?.hopes || whole?.openToAdvances || whole?.openToPacts
+    // (issue 501), the pacts opt-in (issue 503) and a couch crew member's
+    // agenda are the fields the table's copy blanks; the owner and a DM seat
+    // get them back.
+    return whole?.notes || whole?.hopes || whole?.openToAdvances || whole?.openToPacts || whole?.agenda
       ? {
           ...(stored as Payload),
           sheet: {
@@ -272,6 +274,7 @@ export function payloadForViewer(
             hopes: whole.hopes ?? "",
             openToAdvances: Boolean(whole.openToAdvances),
             openToPacts: Boolean(whole.openToPacts),
+            ...(whole.agenda ? { agenda: whole.agenda } : {}),
           },
         }
       : stored;

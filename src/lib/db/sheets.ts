@@ -19,9 +19,11 @@ import { featsAsRun } from "@/lib/srd/feat-effects";
 import { serverSpeciesRules } from "@/lib/characters/species-rules";
 import {
   keyedFeatChoices,
+  sheetAgendaSchema,
   type CharacterSheet,
   type CreateSheetInput,
   type FullPatchSheetInput,
+  type SheetAgenda,
 } from "@/lib/schemas/sheet";
 import { textKey } from "@/lib/language/text-logic";
 import { noteDominationShift } from "@/lib/db/side-watch";
@@ -80,6 +82,9 @@ type SheetRow = {
   notes: string;
   backstory: string | null;
   hopes?: string | null;
+  agenda_json?: string | null;
+  crew_role?: string | null;
+  appearance?: string | null;
   is_companion: number | null;
   companion_kind: string | null;
   commanded_by?: string | null;
@@ -176,6 +181,10 @@ function mapSheet(row: SheetRow): CharacterSheet {
     notes: row.notes,
     backstory: row.backstory ?? "",
     hopes: row.hopes ?? "",
+    // Only on a couch crew sheet, so every other sheet reads as it did.
+    ...agendaOf(row.agenda_json),
+    ...(row.crew_role ? { crewRole: row.crew_role } : {}),
+    ...(row.appearance ? { appearance: row.appearance } : {}),
     isCompanion: row.is_companion === 1,
     companionKind:
       row.companion_kind === "party" || row.companion_kind === "guest"
@@ -188,6 +197,29 @@ function mapSheet(row: SheetRow): CharacterSheet {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+// A couch crew member's secret agenda, read whole or not at all: a row a
+// hand edit broke reads as no agenda rather than half of one.
+function agendaOf(json: string | null | undefined): { agenda?: SheetAgenda } {
+  if (!json) {
+    return {};
+  }
+  const parsed = sheetAgendaSchema.safeParse(parseJson(json, null));
+  return parsed.success && parsed.data ? { agenda: parsed.data } : {};
+}
+
+const agendaJson = (agenda: SheetAgenda | undefined): string => (agenda ? JSON.stringify(agenda) : "");
+
+// Moves a couch crew member's agenda (the act changes and story points of
+// src/lib/couch/play.ts), or clears it. Kept out of patchSheet like the
+// companion mark: no sheet edit route, the owner's included, can rewrite the
+// mission the forge gave them.
+export function setSheetAgenda(sheetId: string, agenda: SheetAgenda): CharacterSheet | null {
+  getDatabase()
+    .prepare(`UPDATE character_sheets SET agenda_json = ?, updated_at = ? WHERE id = ?`)
+    .run(agendaJson(agenda), nowIso(), sheetId);
+  return getSheetById(sheetId);
 }
 
 // Present only once its player has arranged the Hand, so a sheet that never
@@ -226,7 +258,7 @@ const SHEET_COLUMNS = `
   proficiencies_json, equipment_json, gold, copper, feats_json, features_json,
   spellcasting_json, conditions_json, condition_meta_json, resources_json, wild_shape_json, pets_json, summon_json, exhaustion, death_saves_json, concentrating_on, concentration_rounds,
   portrait_json, notes, backstory, hopes, is_companion, companion_kind, commanded_by, personality, hand_layout_json, feat_choices_json,
-  attraction_json, open_to_advances, open_to_pacts, created_at, updated_at
+  attraction_json, open_to_advances, open_to_pacts, agenda_json, crew_role, appearance, created_at, updated_at
 `;
 
 // The owner's answer to "Open to advances from NPCs" (issue 501), for this
@@ -433,9 +465,9 @@ export function createSheet(
         level, xp, abilities_json, max_hp, current_hp, temp_hp, ac, ac_override, speed,
         hit_dice_json, classes_json, hit_dice_pools_json, proficiencies_json, equipment_json, gold, copper, feats_json,
         features_json, resources_json, spellcasting_json, conditions_json, portrait_json,
-        notes, backstory, hopes, feat_choices_json, attraction_json, created_at, updated_at
+        notes, backstory, hopes, feat_choices_json, attraction_json, agenda_json, crew_role, appearance, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
   ).run(
     id,
@@ -486,6 +518,11 @@ export function createSheet(
     featChoicesJson(input.featChoices),
     // Older library sheet_json blobs and companion drafts predate the field.
     attractionJson(input.attraction),
+    // Only the scenario forge's crew carry these (src/lib/couch/forge.ts).
+    agendaJson(input.agenda),
+    input.crewRole ?? "",
+    // Older library sheet_json blobs and companion drafts predate the field.
+    input.appearance ?? "",
     now,
     now,
   );

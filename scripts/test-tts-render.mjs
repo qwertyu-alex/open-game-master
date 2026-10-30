@@ -74,6 +74,44 @@ await test("the first failure stops the passage and is the caller's", async () =
   assert.equal(asked.length, 2, "nothing is started after the failure");
 });
 
+// ElevenLabs out of credits mid-passage (docs/couch-mode-spec.md 2.5): the
+// stand-in (Kokoro) reads the clip that failed and every one after it.
+await test("a stand-in reads the rest of a passage the first server turned away", async () => {
+  const eleven = { provider: "elevenlabs", v1: "https://api.elevenlabs.io/v1", model: "eleven-model", apiKey: "k", defaultVoice: "Narrator000000000000" };
+  const kokoro = { ...backend, v1: "http://kokoro/v1" };
+  const requests = [fresh("first"), fresh("second"), fresh("third")].map((request) => ({ ...request, voice: "Narrator000000000000" }));
+  const asked = [];
+  let standInsAsked = 0;
+  const synthesize = async (text, voice, speed, server) => {
+    asked.push([server.provider, voice, text]);
+    if (server.provider === "elevenlabs" && !text.startsWith("first")) {
+      throw Object.assign(new Error("quota"), { status: 401, code: "quota_exceeded" });
+    }
+    return Buffer.from(`${server.provider}:${text}`);
+  };
+  const standIn = async () => {
+    standInsAsked += 1;
+    return { backend: kokoro, voice: () => "am_michael" };
+  };
+  const clips = await renderSpeech(requests, eleven, undefined, { concurrency: 1, synthesize, standIn });
+  assert.deepEqual(clips.map((clip) => clip.toString().split(":")[0]), ["elevenlabs", "kokoro", "kokoro"]);
+  assert.equal(standInsAsked, 1, "asked once per passage");
+  assert.deepEqual(asked.filter(([provider]) => provider === "kokoro").map(([, voice]) => voice), ["am_michael", "am_michael"], "in the stand-in's own voices");
+  assert.equal(asked.filter(([provider]) => provider === "elevenlabs").length, 2, "the first server is not asked again after it refused");
+
+  // The stand-in's audio is cached as its own: once ElevenLabs answers again
+  // the same line is asked of ElevenLabs, not served from Kokoro's take.
+  asked.length = 0;
+  const again = await renderSpeech([requests[1]], eleven, undefined, { synthesize: async (text, voice, speed, server) => Buffer.from(`${server.provider}:${text}`) });
+  assert.equal(again[0].toString().split(":")[0], "elevenlabs");
+
+  await assert.rejects(
+    renderSpeech([fresh("refused")], eleven, undefined, { synthesize, standIn: async () => null }),
+    /quota/,
+    "with no stand-in the passage fails as before",
+  );
+});
+
 await test("a passage is heard while it is still being made", async () => {
   const live = openLiveNarration("camp", "msg");
   assert.equal(liveNarrationStream("other-camp", "msg"), null, "another table's passage is not this one");

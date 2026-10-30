@@ -237,6 +237,9 @@ const CLASSIFIED = {
   // The AI-drafted pregens: names, concepts and backstories the players read,
   // in a JSON shape the engine reads (src/lib/dm/pregen-draft.ts).
   "src/lib/dm/pregen-draft.ts": { prose: 1, machine: 0 },
+  // The couch night's forge: the briefing, the crew's backstories and
+  // agendas the players read, in a JSON shape the engine reads.
+  "src/lib/couch/forge.ts": { prose: 1, machine: 0 },
   "src/lib/dm/world-arc.ts": { prose: 1, machine: 0 },
   // WorldForge's forge, ask and draft, through one helper.
   "src/lib/dm/world-ai.ts": { prose: 1, machine: 0 },
@@ -244,6 +247,9 @@ const CLASSIFIED = {
   // step numbers.
   "src/lib/dm/claims.ts": { prose: 0, machine: 1 },
   "src/lib/dm/waypoint-tick.ts": { prose: 0, machine: 1 },
+  // Couch mode's shot planner: a JSON frame for the image model, which reads
+  // English, never the table's language.
+  "src/lib/dm/scene-shot.ts": { prose: 0, machine: 1 },
   // The image rewrite: English for an image model, never the table's language.
   "src/lib/image-english.ts": { prose: 0, machine: 1 },
   // The rules desk has no campaign, so no table language.
