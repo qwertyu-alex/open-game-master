@@ -1,5 +1,8 @@
 import { emptyTurnLine, type EmptyTurnPlayer } from "@/lib/dm/empty-turn";
-import { couchMoveRefusal, couchNavigation, publishCouchNavigation } from "@/lib/couch/navigation";
+import { markSceneSeen, tagMessage } from "@/lib/couch/whereabouts";
+import { couchSiteMap, recordSiteMove, siteMoveCheck, siteTools, siteZone, SITE_TOOL_NAMES } from "@/lib/couch/site";
+import { couchMove, couchNavigation, couchSpotlight, couchWhereaboutsPrompt, placeCouchMovers, publishCouchNavigation, type CouchMove } from "@/lib/couch/navigation";
+import { handleCouchGroupCheck, takeCouchGroupAnswers } from "@/lib/couch/group-check";
 import { legendaryLairLines } from "@/lib/dm/legendary-tools";
 import { defaultSide } from "@/lib/dm/combat-sides-logic";
 import { combatantsOf } from "@/lib/dm/combatant";
@@ -113,7 +116,7 @@ import {
   withoutRepeatedSentences,
   withoutToolTalk,
 } from "@/lib/dm/narration-tidy-logic";
-import { liveStateFor, readAsides, readReply, readTurnEndInWords, registeringNames, ruledFor, turnOverFor } from "@/lib/dm/claims";
+import { leftMoveOpen, liveStateFor, readAsides, readReply, readTurnEndInWords, registeringNames, ruledFor, turnOverFor } from "@/lib/dm/claims";
 import { modelTextLines } from "@/lib/dm/speech-lines";
 import type { SpokenLine } from "@/lib/dm/speech";
 import type { ToolResult } from "@/lib/dm/tool-errors";
@@ -230,6 +233,7 @@ import {
   ENCOUNTER_TOOL_NAMES,
   encounterTools,
   ensureInitiativeProgress,
+  startStalledFight,
   resolveTurnFromNarration,
 } from "@/lib/dm/encounter-tools";
 import { handleRequestRoll } from "@/lib/dm/invoke-roll";
@@ -254,6 +258,9 @@ import { PARTY_TOOL_NAMES, partyTools } from "@/lib/dm/party-tools";
 import { SCENE_TOOL_NAMES, sceneTools } from "@/lib/dm/scene-tools";
 import { AMBIENCE_TOOL_NAMES, ambienceTools, followSceneAmbience } from "@/lib/dm/ambience-tools";
 import { COUCH_TOOL_NAMES, couchTools } from "@/lib/dm/couch-tools";
+import { noteCouchMoodTool, settleCouchMood } from "@/lib/couch/mood";
+import { couchFoePicks } from "@/lib/couch/foes-logic";
+import { couchPacingPrompt } from "@/lib/couch/pacing";
 import { MOUNT_TOOL_NAMES, mountTools } from "@/lib/dm/mount-tools";
 import { describeGround, GEAR_TOOL_NAMES, handleItemTool } from "@/lib/dm/gear-tool";
 import { effectTools, EFFECT_TOOL_NAMES } from "@/lib/dm/effect-tools";
@@ -299,6 +306,7 @@ const WORLD_RUN_NAMES = new Set<string>([
   ...GEAR_TOOL_NAMES,
   ...AMBIENCE_TOOL_NAMES,
   ...COUCH_TOOL_NAMES,
+  ...SITE_TOOL_NAMES,
   ...BINDER_TOOL_NAMES,
   ...FACTION_TOOL_NAMES,
   ...SHOP_TOOL_NAMES,
@@ -403,6 +411,9 @@ function resolvesOutcome(toolCall: { name: string }): boolean {
 // with check_notice), so the result that follows withheld text says so, as
 // ROLL_RESULT_NOTE does for a roll, and the follow-up tells the scene too.
 const UNSEEN_CHECKS = new Set(["group_check", "check_notice", "social_check", "npc_reaction"]);
+// Calls that are no crew member's action on a couch night, where a ruling
+// ends the turn in a fight: a walk into reach still leaves the action.
+const COUCH_NO_RULING = ["move_token", "set_movement"];
 const UNSEEN_CHECK_NOTE =
   "The table has seen nothing you wrote beside this check: narrate the moment and what the result decides together.";
 
@@ -798,11 +809,14 @@ async function openTurn(
       members: listMembers(campaignId),
       sheets: context.sheets,
       encounter: encounterNow,
-      enemySuggestions: suggestEnemies(
-        campaign.gameSettings,
-        context.sheets.map((sheet) => sheet.level),
-        10,
-      ),
+      // A couch night fights from its own sci-fi menu (src/lib/couch/foes-logic.ts).
+      enemySuggestions: campaign.gameSettings.couchMode
+        ? couchFoePicks(context.sheets.map((sheet) => sheet.level))
+        : suggestEnemies(
+            campaign.gameSettings,
+            context.sheets.map((sheet) => sheet.level),
+            10,
+          ),
       // A storyteller-secret roll (a pact's, issue 503) stays out of the
       // part of the prompt the lead of an AI table reads in the Context tab.
       recentRolls: listRecentRolls(campaignId, 8).filter((roll) => roll.visibility !== "secret").slice(-5),
@@ -841,6 +855,8 @@ async function openTurn(
         .map((location) => location.name)
         .slice(0, 15),
       couchNavigation: couchNavigation(campaign),
+      couchWhereabouts: couchWhereaboutsPrompt(campaign),
+      couchPacing: couchPacingPrompt(campaign, Boolean(encounterNow)),
       recentEventsByCharacter: new Map(
         [...listRecentEventsForCampaign(campaignId, 3)].map(([characterId, events]) => [
           characterId,
@@ -1019,6 +1035,8 @@ export async function resumeDmTurn(campaignId: string, turnId: string) {
     return;
   }
 
+  // A couch group check's rolls answer its one call together.
+  const grouped = campaign.gameSettings.couchMode ? takeCouchGroupAnswers(campaignId, turnId) : null;
   // Answer each parked tool call with the roll the player entered (or the
   // digital fallback), in creation order.
   for (const pending of pendings) {
@@ -1028,6 +1046,9 @@ export async function resumeDmTurn(campaignId: string, turnId: string) {
     }
     if (!turn.rollIds.includes(roll.id)) {
       turn.rollIds.push(roll.id);
+    }
+    if (grouped?.pendingIds.has(pending.id)) {
+      continue;
     }
     turn.conversation.push({
       role: "tool",
@@ -1043,6 +1064,14 @@ export async function resumeDmTurn(campaignId: string, turnId: string) {
         // damage applied); the model must narrate from it, not repeat it.
         ...(pending.combatNote ? { combat: pending.combatNote } : {}),
       }),
+    });
+  }
+
+  for (const answer of grouped?.answers ?? []) {
+    turn.conversation.push({
+      role: "tool",
+      ...(answer.toolCallId ? { tool_call_id: answer.toolCallId } : {}),
+      content: answer.content,
     });
   }
 
@@ -1232,7 +1261,11 @@ function allTurnTools(
     // than left to the handler to refuse.
     ...(campaign.gameSettings.ambienceEnabled ? ambienceTools : []),
     // A couch one-shot's acts and story points (src/lib/dm/couch-tools.ts).
-    ...(campaign.gameSettings.couchMode ? couchTools : []),
+    // A truce is only offered in a fight (src/lib/couch/truce.ts).
+    ...(campaign.gameSettings.couchMode ? couchTools.filter((tool) => inEncounter || tool.function.name !== "offer_truce") : []),
+    // A night played on a map: its doors, foes, finds and the motion
+    // tracker (src/lib/couch/site.ts).
+    ...(couchSiteMap(campaign) ? siteTools : []),
     // Mounting and dismounting cost half a turn's movement in a fight
     // (mount-tools.ts), so a rider who is up can get down mid-round; a table
     // with nobody mounted carries neither tool into a fight (issue #424).
@@ -2027,7 +2060,10 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // fight: the initiative order owns the floor there, and a spotlight
     // would block the player whose turn it is (issue 17).
     if (inputCalls.length && !spotlightSet && !fightOwnsFloor(campaignId)) {
-      const floorUserIds = parseSpotlightUserIds(inputCalls[0].rawArguments, sheets, sheetsById);
+      // A split couch crew is asked where the scene is, and a question to
+      // someone off scene cuts the scene to them (src/lib/couch/navigation.ts).
+      const parsedSpotlight = parseSpotlightUserIds(inputCalls[0].rawArguments, sheets, sheetsById);
+      const floorUserIds = parsedSpotlight && campaign.gameSettings.couchMode ? couchSpotlight(campaign, parsedSpotlight) : parsedSpotlight;
       if (floorUserIds) {
         const floor = {
           mode: "spotlight" as const,
@@ -2402,10 +2438,23 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     } else {
       // The player's own words ended it ("...then I end my turn") and the
       // DM ruled on what they did, but nothing ended it: it ends now too.
+      // On a couch night a crew member's turn in a fight is the one thing
+      // they said (docs/couch-mode-spec.md 2.11): nobody on a phone knows to
+      // say the turn is over, and there is no End Turn button, so a ruling
+      // ends it. Without this a crew member's thrown attack left the turn
+      // with them, the creature never acted, and their next attack was
+      // refused as a second one. A walk alone is no ruling there: the GM
+      // that only moved them into reach asks what they do. Words alone are
+      // an action there too (a plea, a threat, an offer of peace): a turn
+      // that neither walked them nor asked them for more is spent.
+      const couch = campaign.gameSettings.couchMode;
       const waiting = turnOverFor(campaignId, turn);
       const walker = waiting ? sheets.find((sheet) => sheet.id === waiting) : undefined;
-      if (waiting && walker && ruledFor(turn.conversation, walker) && (await readTurnEndInWords(campaign, sheets, turn, waiting))) {
-        console.warn(`[dm-turn] turn ${turn.id}: the player ended the turn in words and nothing ended it; it ends after the narration.`);
+      const ruled = walker
+        ? ruledFor(turn.conversation, walker, couch ? COUCH_NO_RULING : []) || (couch && !leftMoveOpen(turn.conversation, COUCH_NO_RULING))
+        : false;
+      if (waiting && walker && ruled && (couch || (await readTurnEndInWords(campaign, sheets, turn, waiting)))) {
+        console.warn(`[dm-turn] turn ${turn.id}: ${couch ? "a couch crew member's action was ruled on" : "the player ended the turn in words"} and nothing ended it; it ends after the narration.`);
         resolveTurnFromNarration(turn, waiting);
       }
     }
@@ -2429,6 +2478,14 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // NPC advances (issue 501) count AI turns whether or not world
     // simulation is on, and roll beside the world tick, not inside it.
     tickAdvances(context.campaign, bumpAiTurns(campaignId), turn.narrationParts.join("\n\n"));
+    // A couch mood the tools raised settles back once it has played a while.
+    if (context.campaign.gameSettings.couchMode) {
+      try {
+        settleCouchMood(context.campaign);
+      } catch (error) {
+        console.error(`[couch] mood failed for turn ${turn.id}:`, error);
+      }
+    }
   }
 }
 
@@ -2469,6 +2526,20 @@ async function resolveModelCall(
       announceCouchRollCalls(context.campaign, turn.id);
     } catch (error) {
       console.error(`[couch] roll readout failed for turn ${turn.id}:`, error);
+    }
+    // An item used in the open is shown beside the scene (src/lib/couch/item-show.ts).
+    try {
+      const { publishCouchItemUse } = await import("@/lib/couch/item-show");
+      publishCouchItemUse(context.campaign, turn.id, toolCall.name, toolCall.rawArguments, outcome);
+    } catch (error) {
+      console.error(`[couch] item show failed for turn ${turn.id}:`, error);
+    }
+    // The TV's music hears a fight in the tools that fought it
+    // (src/lib/couch/mood.ts), and like the readout it never stops the turn.
+    try {
+      noteCouchMoodTool(context.campaign, toolCall.name, toolCall.rawArguments, outcome);
+    } catch (error) {
+      console.error(`[couch] mood failed for turn ${turn.id}:`, error);
     }
   }
   return outcome;
@@ -2552,6 +2623,16 @@ async function resolveModelCallInner(
       turn.mutationCount += 1;
     }
     return result;
+  }
+  // A couch crew throws a group check together from their phones
+  // (src/lib/couch/group-check.ts); the turn waits for the last die.
+  if (name === "group_check" && campaign.gameSettings.couchMode) {
+    const gated = gate();
+    if ("result" in gated) {
+      return gated.result;
+    }
+    const result = handleCouchGroupCheck(campaign, turn, gated.args, sheets, sheetsById, realDiceUserIds, toolCall.id ?? null);
+    return result.parked ? { [PARKED]: true } : result;
   }
   // One request_roll for both callers (src/lib/dm/invoke-roll.ts); the
   // model's parks remember the call they answer. Held to the gate here, as
@@ -3047,19 +3128,30 @@ export function handleLocationCall(
   const madeIds: string[] = [];
   let setOutFrom: string | null = null;
   let split = "";
+  let couchMovers: CouchMove | null = null;
   if (toolName === "move_party") {
     const name = typeof args.name === "string" ? args.name.trim() : "";
     if (!name) {
       return { error: "move_party needs a location name.", retry: true };
     }
     const previous = getCurrentLocation(campaign.id);
-    const refused = couchMoveRefusal(campaign, args.characterIds);
-    if (refused) return refused;
-    const onRecord = getLocationByName(campaign.id, name);
+    // On a night played on a map the place is one of its zones, walked to
+    // within a stealth turn (src/lib/couch/site.ts), checked first so a
+    // refused move writes nothing.
+    const site = siteMoveCheck(campaign, name, Array.isArray(args.characterIds) ? args.characterIds.map(String) : null);
+    if (site && "refused" in site) return site.refused;
+    const zone = site ? siteZone(campaign, site.zone) : null;
+    // A couch crew can split up (src/lib/couch/whereabouts.ts): who goes is
+    // checked before anything is written.
+    const couch = couchMove(campaign, zone?.name ?? name, args.characterIds);
+    if (couch && "error" in couch) return couch;
+    couchMovers = couch && "movers" in couch ? (couch as CouchMove) : null;
+    if (site) recordSiteMove(campaign, site.path);
+    const onRecord = getLocationByName(campaign.id, zone?.name ?? name);
     location = upsertCurrentLocation({
       campaignId: campaign.id,
-      name,
-      layoutDescription,
+      name: zone?.name ?? name,
+      layoutDescription: layoutDescription ?? (onRecord ? undefined : zone?.look),
       connections,
     });
     if (!onRecord) {
@@ -3092,8 +3184,10 @@ export function handleLocationCall(
     }
     setCampaignScene(campaign.id, location.name);
     // Some of the party went and the rest stayed (issue 563): a moment a
-    // companion may slip away.
-    split = partySplit(campaign, args.characterIds, location.name);
+    // companion may slip away. A couch crew keeps where each one stands.
+    split = couchMovers
+      ? placeCouchMovers(campaign, couchMovers, location.id, location.name)
+      : partySplit(campaign, args.characterIds, location.name);
   } else {
     previousLayout = getCurrentLocation(campaign.id)?.layoutDescription ?? "";
     location = updateCurrentLocationDetails(campaign.id, { layoutDescription, connections });
@@ -3367,6 +3461,15 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string, spoken: re
   // landed, so the server's next-turn note follows it in the transcript.
   // Runs before the hold below so a hold wraps the NEW turn's floor.
   advanceAfterTurn(context.campaign, turn);
+  // A couch fight opened this turn with nobody asked for initiative starts
+  // now rather than waiting on a phone with nothing to throw.
+  if (context.campaign.gameSettings.couchMode) {
+    startStalledFight(context.campaign);
+    // A split crew's passage belongs to the group in the scene, who have
+    // now been seen (src/lib/couch/whereabouts.ts).
+    tagMessage(context.campaign, message.id, null);
+    markSceneSeen(context.campaign, message.seq);
+  }
 
   // Held responses: after a successful narration the table is locked for
   // discussion until the lead releases. A spotlight set this turn becomes

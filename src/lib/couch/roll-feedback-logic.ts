@@ -1,5 +1,6 @@
 import type { StoredRoll } from "@/lib/db/rolls";
 import { rollExpression } from "@/lib/dice";
+import type { CouchItemPicture } from "@/lib/couch/item-show-logic";
 import { rollToastLead, ROLL_KIND_LABELS } from "@/lib/roll-labels";
 
 export type CouchRollFeedback = {
@@ -15,6 +16,11 @@ export type CouchRollFeedback = {
   // The parked roll a crew member threw from their phone: its call was
   // already read aloud, so the TV goes straight to the dice.
   pendingId?: string;
+  // The group check this throw is one crew member's part of: the TV shows
+  // it in the group's card (src/components/couch/CouchTvGroupCheck.tsx).
+  groupId?: string;
+  // The carried weapon an attack or its damage swings, with its picture.
+  item?: CouchItemPicture;
 };
 
 export type CouchAttackRuling = { hit: boolean; crit?: boolean; target?: number };
@@ -34,6 +40,16 @@ export function couchAttackRulings(rolls: readonly StoredRoll[], outcome: Record
     ...(typeof outcome.vsAc === "number" ? { target: outcome.vsAc } : {}),
   }));
   return rulings;
+}
+
+// A to-hit roll thrown from a phone is judged by the engine's own note on it
+// (pc-attack-parked.ts: "... rolled 21 vs AC 12: HIT"), read here as the
+// outcome couchAttackRulings takes, so the TV says Hit or Miss rather than
+// "Result" for every crew member's attack. {} when the note says neither.
+export function parkedAttackOutcome(note: string | null, rolled: number): Record<string, unknown> {
+  const ruled = note ? /vs AC (\d+): (HIT|MISS)\b/.exec(note) : null;
+  if (!ruled) return {};
+  return { rolled, hit: ruled[2] === "HIT", vsAc: Number(ruled[1]), ...(/\(CRITICAL/.test(note ?? "") ? { crit: true } : {}) };
 }
 
 // "call" is read for a parked roll, keyed by the pending roll, before

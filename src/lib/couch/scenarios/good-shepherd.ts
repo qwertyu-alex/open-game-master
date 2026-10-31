@@ -1,0 +1,245 @@
+import type { WrittenScenario } from "@/lib/couch/scenarios/types";
+
+// SPOILERS. The whole of a ready-made couch night: the truth, the threat,
+// every crew member's secret agenda and the hidden role. If you mean to play
+// it, stop reading here; the home screen shows its spoiler-free card
+// (src/lib/couch/scenario-cards.ts).
+
+export const GOOD_SHEPHERD: WrittenScenario = {
+  id: "good-shepherd",
+  reply: {
+    scenario: {
+      title: "The Good Shepherd",
+      logline: "A stranded tug crew is rescued by a hospital ship whose patients and staff are all perfectly content, and would very much like the crew to stay.",
+      briefing:
+        "Day nineteen adrift. The Mule Seven's drive coupling cracked between the colonies, eleven days from anywhere, and your air was down to a week. Then your distress call was answered: the hospital ship Good Shepherd, four hundred beds, Halvorsen Medical Trust, a ship nobody has heard from in eight months. She has taken the tug into her docking bay. The airlock is cycling. Through the porthole you can see a nurse in pastel scrubs with a tray of tea, smiling and waving you in. Her chief medical officer has promised you hot showers, a check-up, and a replacement coupling by tomorrow.",
+      setting:
+        "The hospital ship Good Shepherd, drifting dark in the deep space between frontier colonies, 2191. Run by the Halvorsen Medical Trust, a subsidiary of the Concord Combine.",
+      truth:
+        "Eight months ago the Good Shepherd evacuated the colony of Veridian Reach during an outbreak of the Lull, a neural parasite carried in warm, damp air. Hosts lose fear, pain and grief, then slowly lose themselves into one gentle, shared routine, and hunger to admit newcomers. The Concord Combine ordered the ship to stay dark and drift as a field study, and its observation vessel Lantern watches from a distance. The Mule Seven's drive did not fail by accident: the Combine paid to deliver a fresh, healthy crew to the study. The staff's tea, the humidifiers and the warm wards all carry the Lull.",
+      threat:
+        "The Lull: a microscopic parasite riding warm moisture into the brain. Early hosts feel wonderful, calm and warm, and forget their worries. Later hosts hum one lullaby together, blink rarely, remember nothing clearly from before the ship, and gently, insistently gather newcomers. The oldest hosts fuse into a pale, rooted mass among the plants of hydroponics, the Garden, which mists the air with more of it. Dry air, hard ultraviolet and high fever kill it; a host it dies in feels every fear it held back, all at once. Tells: condensation on every surface, everyone humming the same tune, nobody remembering yesterday.",
+      acts: [
+        {
+          title: "Admitted",
+          goal: "Get aboard, get looked after, and get the replacement coupling for the Mule Seven.",
+          setPieces: [
+            "A warm welcome from Dr. Arnaud and smiling staff in a reception bay of floral wallpaper and sun lamps.",
+            "Supper in the mess hall where four hundred patients hum the same lullaby between bites.",
+            "A sealed quarantine wing, its door scrawled with a handwritten warning: DON'T DRINK THE TEA.",
+          ],
+          escalation: "One of the crew wakes after a night aboard feeling wonderfully, unnaturally calm.",
+          clock: "The coupling is always ready tomorrow; the tug's air cannot carry them back out for long.",
+          twist: "The Good Shepherd's comms log shows she changed course toward the Mule Seven eleven hours before the tug's distress call went out. The crew were not rescued; they were expected.",
+        },
+        {
+          title: "Visiting Hours",
+          goal: "Find out what happened to the Veridian evacuees and the ship's original crew, and get the coupling anyway.",
+          setPieces: [
+            "The records office: patient logs ending eight months ago and a Combine observation file still being written.",
+            "Hollis Brandt, strapped down in the fever ward, burning himself with heat packs to stay himself.",
+            "The Garden: grow lights, mist, and pale shapes among the plants that turn, together, to look.",
+          ],
+          escalation: "The staff notice the crew are not settling and become kinder and more insistent, then a crowd in the corridor.",
+          clock: "The humidifiers come on every shift change; each exposure takes another crew member a step further.",
+          twist: "The ship's master, Captain Anders Lund, listed dead eight months ago, is alive in the dry, cold engine spaces where the Lull cannot reach him, and he has rigged the drive to burn the Good Shepherd: Garden, patients and guests alike.",
+        },
+        {
+          title: "Discharge",
+          goal: "Leave: fix the tug, steal the ambulance shuttle, or burn the Garden, and decide what the Combine learns.",
+          setPieces: [
+            "A run through the warm wards as the whole ship begins to sing.",
+            "The ultraviolet sterilisation bay turned into a weapon, or a cure.",
+            "The Combine's director on the comms, offering the crew a very good deal to stay put.",
+          ],
+          escalation: "The Garden wakes and the Lantern closes in to collect its study's results.",
+          clock: "The Lantern docks in one hour; the shuttle's launch window closes with it.",
+          twist: "The Lantern's team is not coming to rescue anyone: they board in sealed suits to harvest the Garden and take Mira for study, and Director Marsh has already reported the Mule Seven lost with all hands.",
+        },
+      ],
+      cast: [
+        {
+          name: "Dr. Celeste Arnaud",
+          role: "Chief Medical Officer",
+          look: "White woman in her fifties, silver bob, spotless white coat, pearl earrings, always holding a warm mug.",
+          voice: "Soft French accent, endlessly reassuring.",
+          agenda: "Every newcomer admitted, settled and well.",
+          secret: "She is the oldest host, and somewhere inside she remembers writing the warning on the quarantine door.",
+        },
+        {
+          name: "Tomas Bello",
+          role: "Orderly",
+          look: "Huge gentle Brazilian man, shaved head, pastel blue scrubs, forever carrying a tray of steaming tea.",
+          voice: "Deep, slow, Brazilian Portuguese accent.",
+          agenda: "Look after you, every hour, whether you want it or not.",
+          secret: "He is the one who brews the tea, and he knows why it matters.",
+        },
+        {
+          name: "Hollis Brandt",
+          role: "Veridian evacuee, still lucid",
+          look: "Emaciated white man in his forties, sweat-soaked hospital gown, wrists strapped, arms blistered from heat packs.",
+          voice: "Hoarse American Midwest, frantic, whispering.",
+          agenda: "Get out, and make someone believe him.",
+          secret: "He keeps himself feverish on purpose; it is the only thing keeping him himself.",
+        },
+        {
+          name: "Mira",
+          role: "Veridian child, seven",
+          look: "Small girl with brown skin and two puffs of curly hair, a hospital gown and wool socks, dragging a grey stuffed rabbit.",
+          voice: "Small, sing-song, curious.",
+          agenda: "Make friends, and show them the Garden where the grown-ups go.",
+          secret: "Children resist the Lull longest; she is only partly taken, and knows the way to the shuttle bay.",
+        },
+        {
+          name: "Director Elena Marsh",
+          role: "Concord Combine study director, aboard the Lantern",
+          look: "Sharp white woman in her forties seen only on screens, black suit, perfect posture, a Combine pin.",
+          voice: "Crisp Received Pronunciation, pleasant and cold.",
+          agenda: "The study continues, and its fresh subjects stay aboard.",
+          secret: "She paid for the Mule Seven's breakdown.",
+        },
+        {
+          name: "Captain Anders Lund",
+          role: "Master of the Good Shepherd, listed dead",
+          look: "Gaunt Norwegian man in his sixties, wild white beard, cracked dry skin, a captain's greatcoat over a thermal suit, goggles on his brow, a flare gun in his belt.",
+          voice: "Rasping, Norwegian, quick and paranoid.",
+          agenda: "Burn the Good Shepherd and its Garden before the Lantern can collect its study, with or without the crew aboard.",
+          secret: "He obeyed the Combine's order to go dark, and steered his own patients into eight months of drift.",
+        },
+      ],
+      foes: [
+        { name: "Smiling orderly", what: "Lull-calm staff in pastel scrubs who never stop smiling and feel no pain; they hold you with soft, strong hands and a sedative syringe, apologising the whole time.", act: 1 },
+        { name: "Ceiling-rail nurse unit", what: "A white enamel robot arm gliding on a ceiling track through the wards, hypodermic fingers and a misting nozzle; it sedates and mists anyone out of bed after lights out.", act: 2 },
+        { name: "Humming patient crowd", what: "Dozens of Veridian evacuees in gowns and wool socks humming one lullaby, shuffling together to lift newcomers and carry them to the Garden; weak alone, a tide together.", act: 2 },
+        { name: "Garden sleeper", what: "A pale, half-fused host tearing itself loose from the Garden's roots, mist pouring from its mouth, slow and clinging; ultraviolet light and dry heat make it shrivel.", act: 3 },
+        { name: "Lantern retrieval trooper", what: "Concord Combine trooper in a sealed white hazard suit, an ultraviolet lamp under the rifle barrel, shock baton and net gun; shoots hosts and bags healthy subjects.", act: 3 },
+      ],
+      locations: [
+        { name: "Reception bay", look: "A bright white airlock lobby with floral wallpaper, sun lamps and potted ferns, condensation running down the walls." },
+        { name: "The mess hall", look: "Long tables of patients in gowns, steaming tea urns, fogged windows onto the stars." },
+        { name: "Quarantine wing", look: "A corridor sealed with sagging plastic sheeting and tape, warnings scrawled in marker." },
+        { name: "Records office", look: "Grey filing cabinets, a green-screen terminal, paper charts stacked to the ceiling." },
+        { name: "The Garden", look: "Hydroponics under violet grow lights and drifting mist, pale fused human shapes rooted among the plants." },
+        { name: "The Mule Seven", look: "A cramped, greasy tug cockpit of toggle switches and taped-up screens, docked in a vast clean bay." },
+      ],
+    },
+    styleLock:
+      "late-1970s science fiction film still, 35mm film grain, soft clinical fluorescent light and warm sun-lamp glow, humid hospital interiors with condensation, pastel scrubs against grimy tug metal",
+    hiddenRole: {
+      crewMember: "Roz Achterberg",
+      role: "A Concord Combine plant. She was paid to cripple the Mule Seven's drive near the Good Shepherd and deliver the crew to the study, and she carries one dose of an inhibitor that keeps the Lull out of her.",
+    },
+    crew: [
+      {
+        name: "Roz Achterberg",
+        gender: "Female",
+        career: "Officer",
+        crewRole: "First mate and acting captain of the tug Mule Seven",
+        look: "Dutch woman in her fifties, weathered tan skin, iron-grey hair in a severe bun, reading glasses on a chain, a rust-brown tug officer's jacket with a Mule Seven patch, a battered datapad.",
+        personality: "Dry, competent, quietly motherly; flaw: money worries she never mentions.",
+        backstory: "Twenty years on hauling tugs, captain in all but name since the old skipper retired. She hires the crew, feeds them and keeps them out of trouble. The Mule Seven is mortgaged to the hilt.",
+        relationships: [
+          { to: "Kwame Asante", line: "Her oldest hand aboard, and the one she trusts with the medicine." },
+          { to: "Benny Kowalczyk", line: "Has carried him through two bad years and a drinking problem." },
+          { to: "Pip Oyelaran-Shaw", line: "Her ward since Pip's mother died; she would do anything for Pip." },
+          { to: "Silas Wren", line: "The insurer's man she let ride along, and resents every day." },
+        ],
+        signatureItem: "A tin of hard peppermints",
+        voice: "Dutch woman, fifties, dry and husky.",
+        agenda: [
+          "Get the whole crew aboard the Good Shepherd and stop anyone going back to fix the tug themselves.",
+          "Your contact promised double if the crew is still aboard when the observation ship Lantern arrives. Keep them away from the shuttle bay, and take your inhibitor where nobody sees.",
+          "Get off this ship alive with your money, or, if you cannot live with what you did, find a way to make the Combine pay instead.",
+        ],
+      },
+      {
+        name: "Kwame Asante",
+        gender: "Male",
+        career: "Medic",
+        crewRole: "The tug's medic and cook",
+        look: "Ghanaian man in his forties, dark skin, greying beard, round belly, a stained apron over a blue medic's tunic, a battered steel medkit.",
+        personality: "Warm, patient, observant; flaw: wants so badly to believe people are good.",
+        backstory: "A ship's doctor who lost his licence over a mistake and found a home on the Mule Seven cooking stew and stitching cuts. He has served with Roz for twelve years.",
+        relationships: [
+          { to: "Roz Achterberg", line: "His captain and the closest thing he has to family." },
+          { to: "Benny Kowalczyk", line: "Got him sober and keeps him that way." },
+          { to: "Pip Oyelaran-Shaw", line: "Taught Pip to cook and to lie badly." },
+          { to: "Silas Wren", line: "Patches him up and does not like him." },
+        ],
+        signatureItem: "A battered steel medkit",
+        voice: "Ghanaian man, forties, deep, gentle, a big laugh.",
+        agenda: [
+          "Find out what is wrong with these people before anyone else gets sick: examine a patient without the staff watching.",
+          "You have started to feel calm in a way you do not trust. Hide it from Roz while you look for a cure in the fever ward.",
+          "Take Hollis or a cure out with you: the Veridian evacuees deserve to go home.",
+        ],
+      },
+      {
+        name: "Benny Kowalczyk",
+        gender: "Male",
+        career: "Roughneck",
+        crewRole: "The Mule Seven's engineer",
+        look: "Polish-American man in his thirties, pale skin, thick neck, buzzed blond hair, oil-black hands, grey coveralls rolled to the elbows, a multitool on his chest.",
+        personality: "Loyal, stubborn, plain-spoken; flaw: a temper he is ashamed of.",
+        backstory: "He keeps the old tug flying with tape and swearing. Two years sober, thanks to Kwame and Roz. He knows every bolt on the Mule Seven.",
+        relationships: [
+          { to: "Roz Achterberg", line: "Owes her his job and probably his life." },
+          { to: "Kwame Asante", line: "His sponsor and best friend." },
+          { to: "Pip Oyelaran-Shaw", line: "His apprentice in the engine room, and a pest." },
+          { to: "Silas Wren", line: "Caught him poking round the engine room twice." },
+        ],
+        signatureItem: "A chest-strapped multitool",
+        voice: "Chicago-Polish man, thirties, gruff and blunt.",
+        agenda: [
+          "Get a replacement drive coupling out of the Good Shepherd's stores, whatever the staff say about tomorrow.",
+          "The Mule Seven's coupling did not crack; it was cut. Find out which of the crew did it without tipping them off.",
+          "Fly the Mule Seven home, and leave the saboteur behind.",
+        ],
+      },
+      {
+        name: "Pip Oyelaran-Shaw",
+        gender: "Nonbinary",
+        career: "Kid",
+        crewRole: "Sixteen-year-old deckhand, the acting captain's ward",
+        look: "Sixteen-year-old with brown skin and a shaggy dyed-green mop of hair, gangly, an oversized hand-me-down flight jacket covered in patches, a scuffed handheld game console.",
+        personality: "Curious, mouthy, braver than sense; flaw: does the exact thing they were told not to.",
+        backstory: "Raised on tugs since their mother died, with Roz as guardian and the crew as aunts and uncles. They have never been on a ship this big, or met another kid in a year.",
+        relationships: [
+          { to: "Roz Achterberg", line: "Guardian, boss, and the person who never lets them do anything." },
+          { to: "Kwame Asante", line: "Favourite uncle and the only one who listens." },
+          { to: "Benny Kowalczyk", line: "Engine-room boss who swears creatively." },
+          { to: "Silas Wren", line: "Thinks he is boring; has been reading his files anyway." },
+        ],
+        signatureItem: "A scuffed handheld game console",
+        voice: "Teenager, sixteen, London accent, fast and cheeky.",
+        agenda: [
+          "Make friends with Mira and find out where the other children are kept.",
+          "Mira says the Garden is where the grown-ups go. Get inside it and see for yourself, and do not tell Roz.",
+          "Take Mira with you when you leave, whatever the adults decide.",
+        ],
+      },
+      {
+        name: "Silas Wren",
+        gender: "Male",
+        career: "Company Agent",
+        crewRole: "Insurance assessor riding along to audit the tug",
+        look: "White man in his thirties, slicked-back dark hair, thin moustache, an expensive charcoal suit gone shabby after nineteen days, a briefcase chained to his wrist.",
+        personality: "Smooth, nervous, clever with numbers; flaw: a coward who knows it.",
+        backstory: "He works for the firm that insures half the Concord Combine's ships, sent to audit the Mule Seven's loan. He has been sick with fear since the drive failed and hides it with paperwork.",
+        relationships: [
+          { to: "Roz Achterberg", line: "Holds the papers on her tug's loan, and she knows it." },
+          { to: "Kwame Asante", line: "The only one aboard who has been kind to him." },
+          { to: "Benny Kowalczyk", line: "Afraid of him." },
+          { to: "Pip Oyelaran-Shaw", line: "Caught the kid reading his files, and said nothing." },
+        ],
+        signatureItem: "A briefcase chained to his wrist",
+        voice: "Englishman, thirties, smooth and quick, voice rising when scared.",
+        agenda: [
+          "Your firm insures the Good Shepherd. Get her patient logs: they decide who pays for all this.",
+          "The logs prove the Combine let the evacuees rot. Use them as leverage to get Roz or Benny to fly you out first.",
+          "Get the logs off this ship. A copy of them is worth more than anyone aboard, Mira included.",
+        ],
+      },
+    ],
+  },
+};

@@ -102,7 +102,9 @@ import { textKey } from "@/lib/language/text-logic";
 import { conversationNote, type Conversation } from "@/lib/dm/conversation-logic";
 import { ADVANTAGE_SOURCES } from "@/lib/dm/pc-attack-options";
 import { PLACE_DIRECTIONS, PLACE_DISTANCES } from "@/lib/overworld/places";
-import { COUCH_RULES, couchAgendaBlock } from "@/lib/couch/prompt-logic";
+import { COUCH_FIGHT_RULES, COUCH_RULES, couchAgendaBlock, couchDeathRule } from "@/lib/couch/prompt-logic";
+import { moodPromptLine } from "@/lib/couch/mood-logic";
+import { getCouchMood } from "@/lib/couch/store";
 import { navigationPrompt, type CouchNavigation } from "@/lib/couch/navigation-logic";
 
 export { DM_SYSTEM, dmSystemText, ENCOUNTER_RULES, encounterRulesText } from "@/lib/dm/prompt-rules";
@@ -259,6 +261,10 @@ export type DmGameState = {
   } | null;
   visitedLocationNames?: string[];
   couchNavigation?: CouchNavigation | null;
+  // Who stands where once the crew can split (src/lib/couch/whereabouts.ts).
+  couchWhereabouts?: string;
+  // The act clock and the crew's objective (src/lib/couch/pacing.ts).
+  couchPacing?: string;
   // Recent lasting milestones per campaign character id.
   recentEventsByCharacter?: Map<string, string[]>;
   // Afflictions, lifestyle and downtime per character id
@@ -973,6 +979,7 @@ export function buildGameStateBlock(state: DmGameState): string {
         ambience.held.length ? " The table is holding this; leave it unless they ask." : ""
       }`,
     );
+    if (campaign.gameSettings.couchMode) sections.push(moodPromptLine(getCouchMood(campaign.id)));
   }
   // Lasting effects riding on anyone, and who is mounted. Both are state the
   // model would otherwise narrate around: a blessed character rolling +2 and
@@ -1033,7 +1040,7 @@ export function buildGameStateBlock(state: DmGameState): string {
     }
     sections.push(lines.join("\n"));
   }
-  if (campaign.gameSettings?.couchMode) sections.push(navigationPrompt(state.couchNavigation ?? null));
+  if (campaign.gameSettings?.couchMode) sections.push(navigationPrompt(state.couchNavigation ?? null, state.couchWhereabouts));
   if (state.encounter) {
     const encounter = state.encounter;
     const lines: string[] = [];
@@ -1336,6 +1343,17 @@ export function buildGameStateBlock(state: DmGameState): string {
     if (agendas) {
       sections.push(agendas);
     }
+  }
+  // A crew member down or dead: what the GM does then, only while it is so.
+  if (campaign.gameSettings?.couchMode) {
+    const fallen = couchDeathRule(sheets);
+    if (fallen) {
+      sections.push(fallen);
+    }
+  }
+  // The night's pace changes every turn, so it rides in the moment.
+  if (campaign.gameSettings?.couchMode && state.couchPacing) {
+    moment.push(state.couchPacing);
   }
   if (rollLines.length) {
     moment.push(`Recent rolls:\n${rollLines.join("\n")}`);
@@ -1657,14 +1675,24 @@ export const firstMovePartyTool = {
   },
 } as const;
 
-// The cabin's shared route never offers a way to name only part of the crew.
+// A couch crew splits up and comes back together (src/lib/couch/
+// whereabouts-logic.ts): who goes is said in its own words, since leaving
+// the names out moves only the group in the scene.
 export const couchMovePartyTool = {
   ...movePartyTool,
   function: {
     ...movePartyTool.function,
     parameters: {
       ...movePartyTool.function.parameters,
-      properties: Object.fromEntries(Object.entries(movePartyTool.function.parameters.properties).filter(([key]) => key !== "characterIds")),
+      properties: {
+        ...movePartyTool.function.parameters.properties,
+        characterIds: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Omit to move everyone in the scene. Name some of them to split the crew (the rest stay); name someone off scene only to bring them into the scene's place.",
+        },
+      },
     },
   },
 } as const;
@@ -1833,7 +1861,11 @@ function turnRuleParts(state: TurnRuleState): {
     rulesCarrySecret = Boolean(secretRules);
   }
   const dmSystem = buildDmSystem(state.campaign, settingsRules, state.ruleContext ?? null);
-  const fightRules = state.encounter ? encounterRulesText(tracksAmmunition(state.campaign), state.ruleContext ?? null) : "";
+  // A couch night's own fight rules ride with the engine's, paid for only
+  // while a fight runs (src/lib/couch/prompt-logic.ts).
+  const fightRules = state.encounter
+    ? [encounterRulesText(tracksAmmunition(state.campaign), state.ruleContext ?? null), state.campaign.gameSettings?.couchMode ? COUCH_FIGHT_RULES : ""].filter(Boolean).join("\n\n")
+    : "";
   return { dmSystem, fightRules, secretRules, rulesCarrySecret };
 }
 

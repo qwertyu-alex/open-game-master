@@ -4,6 +4,7 @@ import { listMessagesInSeqRange } from "@/lib/db/messages";
 import { listSheets } from "@/lib/db/sheets";
 import { latestEventOfType, publishPersisted } from "@/lib/events";
 import { enqueueNarrationAudio } from "@/lib/tts";
+import { inSceneIds } from "./whereabouts";
 import { couchAnswersSpeech, couchRoundAnswers, type CouchAnswers } from "./answers-logic";
 
 export function latestCouchAnswers(campaignId: string): CouchAnswers | null {
@@ -19,8 +20,11 @@ export function publishCouchAnswers(campaign: Campaign, since: number, through: 
     `SELECT json_extract(payload_json, '$.userId') AS userId, seq FROM campaign_events
      WHERE campaign_id = ? AND type = 'table_pass' AND seq > ? AND seq <= ? ORDER BY seq`,
   ).all(campaign.id, since, through) as Array<{ userId: string; seq: number }>;
+  // A split crew's round is the scene's: a move from off scene waits for
+  // its own cut (src/lib/couch/whereabouts.ts).
+  const scene = inSceneIds(campaign);
   const round = couchRoundAnswers(
-    listMessagesInSeqRange(campaign.id, since + 1, through),
+    listMessagesInSeqRange(campaign.id, since + 1, through).filter((message) => !scene || !message.characterId || scene.has(message.characterId)),
     listSheets(campaign.id).filter((sheet) => !sheet.isCompanion).map((sheet) => ({
       userId: sheet.userId, characterId: sheet.id, name: sheet.name,
     })),

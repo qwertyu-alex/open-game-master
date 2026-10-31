@@ -8,10 +8,13 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { couchTurn, listNames, passageParts, rollWhat, privateThread, privateCapped } = await import(
+const { couchTurn, listNames, passageParts, rollWhat, privateExchanges, privateCapped } = await import(
   "../src/components/couch/phone-logic.ts"
 );
-const { couchCharacter, signed } = await import("../src/components/couch/character-logic.ts");
+const { couchCharacter, signed, itemKeys, sectionOnEntry, newGearKeys, aboutParts } = await import(
+  "../src/components/couch/character-logic.ts"
+);
+const { itemTitle, itemMoveLine, paintedItemIcon, itemArtPrompt } = await import("../src/lib/couch/item-art-logic.ts");
 const { couchRollCall } = await import("../src/lib/couch/roll-feedback-logic.ts");
 
 let passed = 0;
@@ -134,18 +137,45 @@ const whisper = (id, direction, minute, extra = {}) => ({
   ...extra,
 });
 
-test("the private line shows the latest exchange and every unread secret, however old", () => {
-  const thread = [
-    whisper("w4", "to_dm", 4),
-    whisper("w1", "to_player", 1, { read: false }),
-    whisper("w2", "to_player", 2),
-    whisper("w3", "to_player", 3),
-  ];
-  const { shown, hidden } = privateThread(thread, false);
-  assert.deepEqual(shown.map((entry) => entry.id), ["w1", "w3", "w4"]);
-  assert.equal(hidden, 1);
-  assert.deepEqual(privateThread(thread, true).shown.map((entry) => entry.id), ["w1", "w2", "w3", "w4"]);
-  assert.equal(privateThread(thread, true).hidden, 0);
+const beat = (id, minute) => ({ id, createdAt: `2026-10-30T10:${String(minute).padStart(2, "0")}:00.000Z` });
+
+test("a private question stands in the story where it was asked, and the GM's answer joins it there", () => {
+  const story = [beat("m1", 1), beat("m2", 5), beat("m3", 8)];
+  const exchanges = privateExchanges(
+    [whisper("q1", "to_dm", 2), whisper("q2", "to_dm", 3), whisper("a1", "to_player", 6, { read: false })],
+    story,
+  );
+  assert.equal(exchanges.length, 1, "a follow-up before the story moves on, and the answer a turn later, are one exchange");
+  assert.equal(exchanges[0].anchorId, "m1");
+  assert.deepEqual(exchanges[0].whispers.map((entry) => entry.id), ["q1", "q2", "a1"]);
+  assert.equal(exchanges[0].unread, true);
+  assert.equal(exchanges[0].open, true, "an unread answer never folds away, however far the story has moved");
+});
+
+test("a read exchange folds once the story moves past it; a fresh or waiting one stays open", () => {
+  const story = [beat("m1", 1), beat("m2", 5)];
+  const [settled] = privateExchanges([whisper("q1", "to_dm", 2), whisper("a1", "to_player", 3)], story);
+  assert.equal(settled.settled, true);
+  assert.equal(settled.open, false);
+  const [fresh] = privateExchanges([whisper("q1", "to_dm", 6), whisper("a1", "to_player", 7)], story);
+  assert.equal(fresh.anchorId, "m2");
+  assert.equal(fresh.open, true, "the latest thing said stays open until the story moves on");
+  const [waiting] = privateExchanges([whisper("q1", "to_dm", 2, { answered: false })], story);
+  assert.equal(waiting.waiting, true);
+  assert.equal(waiting.open, true);
+});
+
+test("a GM whisper nobody asked for, or a question after the answer, starts its own exchange", () => {
+  const story = [beat("m1", 1), beat("m2", 5), beat("m3", 9)];
+  const exchanges = privateExchanges(
+    [whisper("q1", "to_dm", 2), whisper("a1", "to_player", 4), whisper("g1", "to_player", 6), whisper("q2", "to_dm", 10, { answered: false })],
+    story,
+  );
+  assert.deepEqual(
+    exchanges.map((exchange) => [exchange.anchorId, exchange.whispers.map((entry) => entry.id)]),
+    [["m1", ["q1", "a1"]], ["m2", ["g1"]], ["m3", ["q2"]]],
+  );
+  assert.equal(privateExchanges([whisper("g0", "to_player", 0)], story)[0].anchorId, null, "before the first passage");
 });
 
 test("two unanswered messages to the GM hold a third", () => {
@@ -214,6 +244,88 @@ test("the Character view gives each ability its modifier and save, and the weapo
   assert.deepEqual(view.gear.map((item) => item.name), ["Arrows", "Thieves' Tools"]);
   assert.equal(view.gear[0].qty, 20);
   assert.equal(view.initiative, 3);
+});
+
+// Renn as the forge leaves her: the signature item first in the pack and
+// named in the notes, armour and the burglar's pack behind it.
+const forged = {
+  ...renn,
+  notes: "Career: Salvage auditor. Reads the fine print.\nPersonality: Patient, dry; never lets a debt go.\nSignature item: A hollow blue ceramic transit token, worn on a cord; its cracked edge can hide a",
+  equipment: [
+    { name: "A hollow blue ceramic transit token, worn on a cord; its cracked edge can hide a", qty: 1 },
+    ...renn.equipment,
+    { name: "Leather", qty: 1 },
+    { name: "Rope, Hempen (50 feet)", qty: 1 },
+    { name: "Lantern, Hooded", qty: 1 },
+    { name: "Backpack", qty: 1 },
+  ],
+};
+
+test("the Gear section holds the signature item apart, then weapons, what is worn and the pack", () => {
+  const view = couchCharacter(forged);
+  assert.equal(view.signature.title, "Hollow blue ceramic transit token", "named by its first clause, without the article");
+  assert.match(view.signature.full, /cracked edge/, "the whole line is kept for its card");
+  assert.equal(view.signature.icon, null, "the story's own thing is the night's to paint");
+  assert.deepEqual(view.worn.map((item) => item.name), ["Leather"]);
+  assert.ok(!view.gear.some((item) => item.name === "Leather" || item.key === view.signature.key), "neither is in the pack");
+  assert.deepEqual(
+    view.gear.map((item) => item.title),
+    ["Arrows", "Thieves' Tools", "Hempen rope (50 feet)", "Hooded lantern", "Backpack"],
+  );
+  assert.equal(itemKeys(view).length, 1 + 4 + 1 + 5);
+});
+
+test("an item's picture is the painted icon set's when it has one, else the night paints it", () => {
+  assert.equal(paintedItemIcon("Rapier"), "/assets/icons/item/rapier.webp");
+  assert.equal(paintedItemIcon("Leather"), "/assets/icons/item/leather.webp");
+  assert.equal(paintedItemIcon("Rope, Hempen (50 feet)"), "/assets/icons/action/gear-rope.webp");
+  assert.equal(paintedItemIcon("Lantern, Hooded"), "/assets/icons/action/gear-hooded-lantern.webp");
+  assert.equal(paintedItemIcon("Oil (flask)"), "/assets/icons/action/gear-oil.webp");
+  assert.equal(paintedItemIcon("Backpack"), null);
+  assert.equal(paintedItemIcon("Level 3 keycard"), null);
+  const prompt = itemArtPrompt("Level 3 keycard", "1970s film still");
+  assert.ok(prompt.startsWith("1970s film still"), "the night's look comes first");
+  assert.match(prompt, /keycard/);
+  assert.match(prompt, /no text/);
+});
+
+test("names read forwards on a tile, and Use starts a sentence with the thing", () => {
+  assert.deepEqual(itemTitle("Clothes, Fine"), { title: "Fine clothes", full: "", rest: "" });
+  assert.deepEqual(itemTitle("Ball Bearings (bag of 1000)"), { title: "Ball Bearings (bag of 1000)", full: "", rest: "" });
+  assert.deepEqual(itemTitle("A tin of hard peppermints"), { title: "Tin of hard peppermints", full: "", rest: "" });
+  assert.equal(itemTitle("A cracked blue transit token, worn on a cord").rest, "Worn on a cord");
+  assert.equal(itemMoveLine("Rope, Hempen (50 feet)"), "I use my hempen rope to ");
+  assert.equal(itemMoveLine("Thieves' Tools"), "I use my thieves' tools to ");
+  assert.equal(itemMoveLine("Rapier"), "I use my rapier to ");
+  assert.equal(itemMoveLine("EVA suit"), "I use my EVA suit to ");
+});
+
+test("the Character tab opens where something waits, else on who you are until you have moved", () => {
+  const quiet = { agendaFresh: false, newGear: false, acted: false };
+  assert.equal(sectionOnEntry(null, quiet), "about", "a player who has not moved yet is still learning who they are");
+  assert.equal(sectionOnEntry(null, { ...quiet, acted: true }), "gear");
+  assert.equal(sectionOnEntry("skills", { ...quiet, acted: true }), "skills", "the section left last stays");
+  assert.equal(sectionOnEntry("skills", { ...quiet, acted: true, newGear: true }), "gear", "a thing just picked up");
+  assert.equal(sectionOnEntry("gear", { ...quiet, acted: true, newGear: true, agendaFresh: true }), "about", "a new act's agenda first");
+});
+
+test("what is new is what was picked up since the last look; the starting kit never is", () => {
+  assert.deepEqual(newGearKeys(null, ["rapier", "rope"]), []);
+  assert.deepEqual(newGearKeys(["rapier", "rope"], ["rapier", "keycard"]), ["keycard"]);
+});
+
+test("About reads the story, a face for each tie, and the personality from the notes", () => {
+  const about = aboutParts(
+    "Renn grew up in a Company furnace habitat.\n\nTies: Mara Voss, owes her a favour; Jonas Pike, a rival from the yards.",
+    forged.notes,
+  );
+  assert.deepEqual(about.story, ["Renn grew up in a Company furnace habitat."]);
+  assert.deepEqual(about.ties, [
+    { to: "Mara Voss", line: "Owes her a favour" },
+    { to: "Jonas Pike", line: "A rival from the yards" },
+  ]);
+  assert.equal(about.personality, "Patient, dry; never lets a debt go.");
+  assert.deepEqual(aboutParts("Just a story.", "").ties, []);
 });
 
 test("features carry what they do, where the rules know it", () => {

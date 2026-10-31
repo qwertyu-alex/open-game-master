@@ -46,6 +46,16 @@ export async function register() {
         console.error("[dm] could not recover what the restart interrupted", error);
       }
 
+      // A couch turn's scene picture the restart took from the media queue
+      // (src/lib/couch/scene-recovery.ts).
+      try {
+        const { resumeSceneShotsAfterRestart } = await import("@/lib/couch/scene-recovery");
+        const resumed = resumeSceneShotsAfterRestart();
+        if (resumed) console.log(`[couch] after the restart: ${resumed} scene picture(s) queued again`);
+      } catch (error) {
+        console.error("[couch] could not queue the scene pictures the restart dropped", error);
+      }
+
       // Tables waiting for everyone lost their timers with the process
       // (src/lib/dm/table-wait.ts). The loop is loaded first so a deadline
       // that passed while the server was down can wake the DM.

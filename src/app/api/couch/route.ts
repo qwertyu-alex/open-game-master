@@ -3,6 +3,7 @@ import { currentUser, unauthorized } from "@/lib/auth";
 import { NO_STORYTELLER_MESSAGE, storytellerConfigured } from "@/lib/capabilities";
 import { createCouchNight } from "@/lib/couch/forge";
 import { OFF_LIMITS_MAX, PLAYERS_MAX, SEED_MAX } from "@/lib/couch/limits";
+import { scenarioCard, scenarioSeats } from "@/lib/couch/scenario-cards";
 import { harnessOfferFor } from "@/lib/harness/policy";
 import { configuredDefaultStorySettings } from "@/lib/runtime-defaults";
 import { campaignCreationRefusal, canCreateCampaigns } from "@/lib/shared-host";
@@ -18,6 +19,9 @@ const couchSchema = z.object({
   seed: z.string().trim().max(SEED_MAX).default(""),
   players: z.number().int().min(1).max(PLAYERS_MAX).default(3),
   offLimits: z.string().trim().max(OFF_LIMITS_MAX).default(""),
+  // A ready-made story's id (src/lib/couch/scenario-cards.ts), or "" for one
+  // the AI writes from the seed. With one, the seed is not read.
+  scenario: z.string().trim().max(60).default(""),
 });
 
 // Creates the night with the caller as its TV (the party lead, playing no
@@ -42,7 +46,16 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  // The AI writes the story and runs it: no storyteller, no night.
+  const { seed, players, offLimits, scenario } = parsed.data;
+  const card = scenario ? scenarioCard(scenario) : undefined;
+  if (scenario && !card) {
+    return Response.json({ error: "That ready-made story is not on this server. Pick another, or write a new one." }, { status: 400 });
+  }
+  if (card && !scenarioSeats(card, players)) {
+    return Response.json({ error: `"${card.title}" is written for ${card.players.min} to ${card.players.max} players.` }, { status: 400 });
+  }
+  // The AI runs the story even when it did not write it: no storyteller, no
+  // night.
   if (!(await storytellerConfigured())) {
     return Response.json({ error: NO_STORYTELLER_MESSAGE, reason: "no_storyteller" }, { status: 409 });
   }
@@ -55,6 +68,6 @@ export async function POST(request: Request) {
       return Response.json({ error: offer.reason ?? "The server's agent is not available to this account.", reason: "no_storyteller" }, { status: 409 });
     }
   }
-  const campaign = createCouchNight(user.id, parsed.data);
+  const campaign = createCouchNight(user.id, { seed: card ? "" : seed, players, offLimits, scenarioId: card?.id ?? "" });
   return Response.json({ campaignId: campaign.id }, { status: 201 });
 }

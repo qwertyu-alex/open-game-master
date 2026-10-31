@@ -25,7 +25,13 @@ import type { PublicEncounter } from "@/lib/db/encounter-view";
 import type { CampaignMessage } from "@/lib/db/messages";
 import type { CouchAnswers } from "@/lib/couch/answers-logic";
 import type { CouchNavigation } from "@/lib/couch/navigation-logic";
+import type { SiteView } from "@/lib/couch/site-map-logic";
+import type { CouchSceneTag } from "@/lib/couch/whereabouts-logic";
 import type { CouchRollFeedback } from "@/lib/couch/roll-feedback-logic";
+import type { CouchGroupCheck } from "@/lib/couch/group-check-logic";
+import type { CouchTruce } from "@/lib/couch/truce-logic";
+import type { CouchItemShow } from "@/lib/couch/item-show-logic";
+import type { CouchObjective } from "@/lib/couch/pacing-logic";
 import type { DmBeat } from "@/lib/db/dm-beats";
 import type { Note } from "@/lib/db/notes";
 import type { StoredRoll } from "@/lib/db/rolls";
@@ -189,7 +195,22 @@ export type CampaignState = {
   tableWait: TableWaitView | null;
   couchAnswers: (CouchAnswers & { live?: boolean }) | null;
   couchNavigation: CouchNavigation | null;
+  // A night played on a map, under the fog (src/lib/couch/site.ts).
+  couchSite: SiteView | null;
   couchRolls: Array<CouchRollFeedback & { seq: number }>;
+  // The couch group check the crew is throwing, or last threw
+  // (src/lib/couch/group-check.ts).
+  couchGroup: (CouchGroupCheck & { seq: number }) | null;
+  // A truce offered in a couch fight, and how the crew answered it
+  // (src/lib/couch/truce.ts); null when none is open.
+  couchTruce: CouchTruce | null;
+  // What a couch crew must do now, on the TV and every phone
+  // (src/lib/couch/pacing.ts); null when the act has none yet.
+  couchObjective: CouchObjective | null;
+  // Items used in the open on a couch night, for the TV (src/lib/couch/item-show.ts).
+  couchItems: Array<CouchItemShow & { seq: number }>;
+  // The group each message of a split crew belongs to (src/lib/couch/whereabouts.ts).
+  couchSceneTags: CouchSceneTag[];
     // The table holds a story arc AI Story Setup has not built on yet (the
   // lobby's warning, issue 249); false for anyone who does not steer.
   prepArc: boolean;
@@ -369,7 +390,13 @@ const initialState: CampaignState = {
   tableWait: null,
   couchAnswers: null,
   couchNavigation: null,
+  couchSite: null,
+  couchSceneTags: [],
   couchRolls: [],
+  couchGroup: null,
+  couchTruce: null,
+  couchObjective: null,
+  couchItems: [],
   // A plain player until the snapshot says otherwise: the safe default is
   // the one that shows the fewest controls and no secrets.
   caps: capsForRole("player", "ai"),
@@ -498,7 +525,13 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
         ...state, ...action.payload, loading: false, error: "",
         couchAnswers: action.payload.couchAnswers ? { ...action.payload.couchAnswers, live: false } : null,
         couchNavigation: action.payload.couchNavigation ?? null,
+        couchSite: action.payload.couchSite ?? null,
+        couchSceneTags: action.payload.couchSceneTags ?? [],
         couchRolls: [],
+        couchGroup: action.payload.couchGroup ? { ...action.payload.couchGroup, seq: action.payload.lastSeq ?? 0 } : null,
+        couchTruce: action.payload.couchTruce ?? null,
+        couchObjective: action.payload.couchObjective ?? null,
+        couchItems: [],
       };
     case "notes":
       return { ...state, notes: action.notes };
@@ -1001,8 +1034,28 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
         case "couch_navigation":
           next.couchNavigation = (payload.navigation as CouchNavigation | null) ?? null;
           return next;
+        case "couch_site":
+          next.couchSite = (payload.site as SiteView | null) ?? null;
+          return next;
         case "couch_roll":
           next.couchRolls = [...state.couchRolls, { ...(payload as unknown as CouchRollFeedback), seq: action.seq ?? 0 }].slice(-50);
+          return next;
+        case "couch_group":
+          next.couchGroup = payload.group ? { ...(payload.group as CouchGroupCheck), seq: action.seq ?? 0 } : null;
+          return next;
+        case "couch_truce":
+          next.couchTruce = (payload.truce as CouchTruce | undefined) ?? null;
+          return next;
+        case "couch_objective":
+          next.couchObjective = (payload.objective as CouchObjective | null | undefined) ?? null;
+          return next;
+        case "couch_scene_tag": {
+          const tag = payload.tag as CouchSceneTag | undefined;
+          if (tag) next.couchSceneTags = [...state.couchSceneTags.filter((entry) => entry.messageId !== tag.messageId), tag];
+          return next;
+        }
+        case "couch_item":
+          next.couchItems = [...state.couchItems, { ...(payload as unknown as CouchItemShow), seq: action.seq ?? 0 }].slice(-10);
           return next;
         case "floor_changed":
           next.campaign = state.campaign
@@ -1100,7 +1153,13 @@ const PERSISTED_EVENTS = [
   "message_updated",
   "roll_result",
   "couch_roll",
+  "couch_group",
+  "couch_truce",
+  "couch_objective",
+  "couch_item",
+  "couch_scene_tag",
   "couch_navigation",
+  "couch_site",
   "roll_pending",
   "member_joined",
   "member_ready",
@@ -1356,6 +1415,11 @@ export function useCampaignStream(campaignId: string) {
           tableWait: (data.tableWait as TableWaitView | null) ?? null,
           couchAnswers: data.couchAnswers ?? null,
           couchNavigation: data.couchNavigation ?? null,
+          couchSite: data.couchSite ?? null,
+          couchSceneTags: data.couchSceneTags ?? [],
+          couchGroup: data.couchGroup ?? null,
+          couchTruce: data.couchTruce ?? null,
+          couchObjective: data.couchObjective ?? null,
           caps: data.caps ?? capsForRole("player", "ai"),
           me: data.me,
           members: data.members,

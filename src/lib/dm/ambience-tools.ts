@@ -246,10 +246,22 @@ export function followWeatherAmbience(campaign: Campaign, weather: Weather) {
 // and comes off at the end; the bed is left alone, because the cave they are
 // fighting in is still a cave.
 export function followCombatAmbience(campaign: Campaign, fighting: boolean, deadly = false) {
-  if (!enabled(campaign) || !campaign.gameSettings.ambienceAuto) {
+  // A couch night's music follows its mood (src/lib/couch/mood.ts), which
+  // already counts a fight; this one would silence it when the fight ends.
+  if (!enabled(campaign) || !campaign.gameSettings.ambienceAuto || campaign.gameSettings.couchMode) {
     return;
   }
   const music = fighting ? (deadly ? "boss" : "battle") : null;
+  const { state, changed } = applyAuto(getAmbience(campaign.id), { music });
+  commit(campaign.id, state, changed);
+}
+
+// A couch night's mood turned (src/lib/couch/mood.ts): its music cue, unless
+// the table is holding the music.
+export function followMoodAmbience(campaign: Campaign, music: string) {
+  if (!enabled(campaign) || !campaign.gameSettings.ambienceAuto) {
+    return;
+  }
   const { state, changed } = applyAuto(getAmbience(campaign.id), { music });
   commit(campaign.id, state, changed);
 }

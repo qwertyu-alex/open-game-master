@@ -10,6 +10,7 @@ import {
   setPendingCombatNote,
 } from "@/lib/db/dm-turns";
 import { insertRoll } from "@/lib/db/rolls";
+import { checkSuccess } from "@/lib/couch/check-logic";
 import { defaultRng, expressionDice, rollExpression, rollExpressionWithDice } from "@/lib/dice";
 import { mayTypeFaces } from "@/lib/dice/held-rolls";
 import { recordInitiativeRoll, settleTurn, turnHolder } from "@/lib/dm/encounter-tools";
@@ -20,6 +21,7 @@ import { resumeDmTurn } from "@/lib/dm/turn";
 import { resumeHumanTurn } from "@/lib/dm/invoke";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { announceCouchRollCalls, publishCouchRollFeedback } from "@/lib/couch/roll-feedback";
+import { parkedAttackOutcome } from "@/lib/couch/roll-feedback-logic";
 import { publishWithSeq } from "@/lib/events";
 
 export const runtime = "nodejs";
@@ -150,6 +152,7 @@ export async function POST(
         : `${pending.detail || pending.kind} (physical)`.trim(),
     advantage: pending.advantage,
     dc: pending.dc,
+    success: checkSuccess(context.campaign.gameSettings, pending.kind, pending.dc, outcome),
     result: outcome,
     // A parked pc_attack roll (to-hit or damage) is the PC's own; any other
     // parked roll is a roll tool's free text about its sheet.
@@ -180,6 +183,8 @@ export async function POST(
   });
 
   const holder = turnHolder(campaignId);
+  // What the engine ruled on a thrown attack, for the TV's Hit or Miss.
+  let attackOutcome: Record<string, unknown> = {};
   // Combat initiative submitted from a physical table: record it; the last
   // one locks the order. The note rides pending_rolls.combat_note so the
   // resumed DM turn narrates what actually happened.
@@ -201,6 +206,7 @@ export async function POST(
     if (note) {
       setPendingCombatNote(pendingRollId, note);
     }
+    attackOutcome = parkedAttackOutcome(note, roll.total);
   } else if (pending.kind === "damage" && pending.targetEnemyId) {
     // Targeted damage applies server-side the moment the dice land; the
     // enemy card updates now, not when the model gets around to it.
@@ -219,7 +225,7 @@ export async function POST(
   // The roll is already stored: a readout that throws must not turn it into
   // a 500 and leave the turn parked on a roll the player has thrown.
   try {
-    publishCouchRollFeedback(context.campaign, [roll.id], pending.reason, {}, pendingRollId);
+    publishCouchRollFeedback(context.campaign, [roll.id], pending.reason, attackOutcome, pendingRollId);
     announceCouchRollCalls(context.campaign, pending.turnId);
   } catch (error) {
     console.error(`[couch] roll readout failed for pending roll ${pendingRollId}:`, error);

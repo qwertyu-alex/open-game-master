@@ -100,6 +100,7 @@ export type ToolGroupId =
   | "scenes"
   | "sound"
   | "couch"
+  | "site"
   | "mounts"
   | "gear"
   | "pets"
@@ -136,7 +137,8 @@ export const TOOL_GROUPS: Record<ToolGroupId, { summary: string; tools: readonly
   effects: { summary: "a lasting blessing, curse or boon that is not a condition", tools: ["set_effect", "clear_effect"] },
   scenes: { summary: "structured scenes: chases, heists, skill challenges", tools: ["start_scene", "scene_check", "end_scene"] },
   sound: { summary: "the table's music and sound stings", tools: ["set_ambience", "play_sting"] },
-  couch: { summary: "a couch one-shot's acts and story points", tools: ["advance_act", "award_story_point"] },
+  couch: { summary: "a couch one-shot's acts, the crew's objective, story points, place pictures, mood, cuts between a split crew and truces", tools: ["advance_act", "set_objective", "award_story_point", "repaint_place", "set_mood", "cut_to", "offer_truce"] },
+  site: { summary: "a night played on a map: doors, moving foes in secret, finds, picking up items, the motion tracker", tools: ["set_border", "move_foe", "reveal", "take_item", "track"] },
   mounts: { summary: "mounting and dismounting", tools: ["mount_up", "dismount"] },
   gear: { summary: "donning a shield, drawing a weapon, dropping, picking up or handing over an item", tools: ["handle_item"] },
   // A pet's damage is apply_damage's (issue #471), which a table with pets
@@ -245,6 +247,8 @@ export function autoGroups(signals: ProfileSignals): Set<ToolGroupId> {
   if (signals.caster) groups.add("spells");
   if (signals.advanceReady) groups.add("relationships");
   if (signals.couch) groups.add("couch");
+  // Offered only on a night played on a map; elsewhere the group is empty.
+  if (signals.couch) groups.add("site");
   const text = signals.englishPlayerText ?? "";
   for (const [group, pattern] of ENGLISH_INTENT) {
     if (pattern.test(text)) groups.add(group);

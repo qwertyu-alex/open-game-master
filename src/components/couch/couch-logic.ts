@@ -7,6 +7,7 @@
 import { stripToolText, withoutRollMarkers } from "@/lib/dm/tool-text";
 import { isOocAnswer } from "@/lib/dm/ooc-question";
 import { sceneComposition } from "@/lib/dm/scene-shot-logic";
+import type { PlacePicture } from "@/lib/couch/place-shots-logic";
 import { recapParagraphs } from "@/lib/recap";
 import type { CampaignMessage } from "@/lib/db/messages";
 import { haltedTurnPrefix } from "@/lib/campaign-types";
@@ -34,6 +35,26 @@ export function couchSeatView(input: {
     return input.hostParam ? "normal" : "tv";
   }
   return input.status === "lobby" ? "phone-lobby" : "phone-play";
+}
+
+// ---- whose turn, on the TV ----
+
+// Who the room is waiting on, for the TV's crew strip and its "Waiting on"
+// line: the crew members the GM asked (a spotlight) who have not answered,
+// or on the open floor the seats the table still waits for. Nobody while
+// the GM writes; a fight marks its own turn.
+export function tvTurnSeats(input: {
+  floor: { mode: string; userIds?: readonly string[]; respondedUserIds?: readonly string[] };
+  gmIdle: boolean;
+  waitingOn: ReadonlyArray<{ userId: string; name: string }>;
+  names: Readonly<Record<string, string>>;
+}): Array<{ userId: string; name: string }> {
+  if (!input.gmIdle) return [];
+  if (input.floor.mode === "spotlight") {
+    const answered = new Set(input.floor.respondedUserIds ?? []);
+    return (input.floor.userIds ?? []).filter((id) => !answered.has(id)).map((userId) => ({ userId, name: input.names[userId] || "A player" }));
+  }
+  return input.floor.mode === "open" ? [...input.waitingOn] : [];
 }
 
 // ---- what the GM wrote, as the couch reads it ----
@@ -83,6 +104,8 @@ export type StoryEntry = {
   // The picture is an insert (scene-shot-logic.ts): a square close-up of a
   // thing found, not the place.
   imageInsert: boolean;
+  // When it was said, so a private exchange can stand where it was asked.
+  createdAt: string;
 };
 
 // The newest GM passage stays open, with what the players said after it
@@ -90,9 +113,19 @@ export type StoryEntry = {
 // "Earlier", the last `earlierLimit` entries of it. Table talk and system
 // lines stay off the couch: talk happens out loud, and the host fixes a
 // stuck turn from the host screen.
+//
+// With a `viewerId`, the open beat shows only that player's own posts: the
+// crew answer the GM blind, and everyone's moves come out together when the
+// round closes (the TV reads them, then the GM's passage files them under
+// Earlier). A move sent from off scene while the crew is split (`shown`, by
+// message id) is no answer to this beat, so it shows to everyone at once.
 export function storyBeats(
-  messages: ReadonlyArray<Pick<CampaignMessage, "id" | "authorType" | "content" | "characterId" | "userId" | "generatedImage">>,
+  messages: ReadonlyArray<
+    Pick<CampaignMessage, "id" | "authorType" | "content" | "characterId" | "userId" | "generatedImage" | "createdAt">
+  >,
   earlierLimit = 8,
+  viewerId?: string,
+  shown?: ReadonlySet<string>,
 ): { earlier: StoryEntry[]; latest: StoryEntry | null; after: StoryEntry[] } {
   const entries: StoryEntry[] = [];
   for (const message of messages) {
@@ -107,6 +140,7 @@ export function storyBeats(
       userId: message.userId,
       imageUrl: message.generatedImage?.url ?? null,
       imageInsert: message.generatedImage?.shot?.kind === "insert",
+      createdAt: message.createdAt,
     });
   }
   let at = -1;
@@ -116,13 +150,14 @@ export function storyBeats(
       break;
     }
   }
+  const open = entries.slice(at + 1).filter((entry) => viewerId === undefined || entry.userId === viewerId || shown?.has(entry.id));
   if (at < 0) {
-    return { earlier: [], latest: null, after: entries };
+    return { earlier: [], latest: null, after: open };
   }
   return {
     earlier: entries.slice(Math.max(0, at - earlierLimit), at),
     latest: entries[at],
-    after: entries.slice(at + 1),
+    after: open,
   };
 }
 
@@ -143,8 +178,18 @@ export function latestNarration(
 // place lands, and a thing found there beside it while that is the newest
 // picture (scene-shot-logic.ts sceneComposition). With no place painted
 // yet, the caller's cover stands in for it.
-export function tvPictures(messages: ReadonlyArray<Pick<CampaignMessage, "generatedImage">>): { scene: string | null; insert: string | null } {
+//
+// Back in a place the crew has seen, its establishing shot (`here`, from the
+// map) goes straight back up while the turn's own picture paints, rather
+// than the place they just left staying on screen.
+export function tvPictures(
+  messages: ReadonlyArray<Pick<CampaignMessage, "generatedImage">>,
+  here: PlacePicture | null = null,
+): { scene: string | null; insert: string | null } {
   const { stage, insert } = sceneComposition(messages);
+  if (here && stage?.shot?.placeId !== here.placeId) {
+    return { scene: here.url, insert: null };
+  }
   return { scene: stage?.url ?? null, insert: insert?.url ?? null };
 }
 
@@ -159,7 +204,9 @@ const SPACES = /\s+/u;
 // A passage as subtitle pages: whole sentences gathered up to `maxChars`, a
 // paragraph always starting a fresh page, and a sentence longer than a page
 // broken between words. Plain text: emphasis markers and dice markers gone.
-export function subtitlePages(content: string, maxChars = SUBTITLE_PAGE_CHARS): string[] {
+// One sentence a page (`perSentence`) where the words share the screen with
+// a map and only the line being spoken should show.
+export function subtitlePages(content: string, maxChars = SUBTITLE_PAGE_CHARS, perSentence = false): string[] {
   const pages: string[] = [];
   for (const paragraph of recapParagraphs(couchPassage(content))) {
     let page = "";
@@ -180,7 +227,7 @@ export function subtitlePages(content: string, maxChars = SUBTITLE_PAGE_CHARS): 
         }
         continue;
       }
-      if (page && page.length + 1 + sentence.length > maxChars) {
+      if (page && (perSentence || page.length + 1 + sentence.length > maxChars)) {
         flush();
       }
       page = page ? `${page} ${sentence}` : sentence;
@@ -212,17 +259,35 @@ export function previousSubtitlePages(
   return earlier;
 }
 
-// How long a page stays up. Read aloud it follows the narrator's pace
-// (about fourteen characters a second); read silently, a little quicker,
-// with a beat to find the line. The last page never turns.
-export const VOICE_CHARS_PER_SECOND = 14;
+// How long a page stays up when it is read silently: a reading pace, with a
+// beat to find the line. The last page never turns.
 export const READ_CHARS_PER_SECOND = 17;
 
-export function subtitlePageMs(page: string, voiced: boolean): number {
-  const ms = voiced
-    ? (page.length / VOICE_CHARS_PER_SECOND) * 1000
-    : (page.length / READ_CHARS_PER_SECOND) * 1000 + 1200;
-  return Math.round(Math.min(16000, Math.max(voiced ? 2500 : 3500, ms)));
+export function subtitlePageMs(page: string): number {
+  const ms = (page.length / READ_CHARS_PER_SECOND) * 1000 + 1200;
+  return Math.round(Math.min(16000, Math.max(3500, ms)));
+}
+
+// Read aloud, a page follows the voice itself rather than a timer: a timer
+// started when the clip did ran ahead of a slow narrator and never caught a
+// pause for breath or a buffering stream. A finished file knows its length,
+// so each page holds its share of the clip by length of text. A live stream
+// does not yet, so the clock is set against an ordinary narrator's pace
+// (about fourteen characters a second) until the length is known.
+export const VOICE_CHARS_PER_SECOND = 14;
+
+export function voicedSubtitlePage(pages: readonly string[], seconds: number, duration: number): number {
+  const total = pages.reduce((sum, page) => sum + page.length, 0);
+  if (!total) return 0;
+  const reached = Number.isFinite(duration) && duration > 0
+    ? (seconds / duration) * total
+    : seconds * VOICE_CHARS_PER_SECOND;
+  let end = 0;
+  for (let index = 0; index < pages.length; index += 1) {
+    end += pages[index].length;
+    if (reached < end) return index;
+  }
+  return pages.length - 1;
 }
 
 // ---- secrets on a phone ----
@@ -249,6 +314,36 @@ export function healthView(current: number, max: number): { pct: number; tone: "
   const safeMax = Math.max(1, max);
   const pct = Math.max(0, Math.min(100, Math.round((Math.max(0, current) / safeMax) * 100)));
   return { pct, tone: current <= 0 ? "down" : pct <= 34 ? "hurt" : "ok" };
+}
+
+// ---- death and playing on (docs/couch-mode-spec.md 2.12) ----
+
+type Life = { id: string; userId: string; isCompanion: boolean; deathSaves?: { dead: boolean } | null };
+
+export function isDead(sheet: Pick<Life, "deathSaves">): boolean {
+  return sheet.deathSaves?.dead === true;
+}
+
+// The phone's character: the one the seat has selected while it lives,
+// else the player's newest living one (the person they took over after a
+// death), else the dead one, whose phone then offers the takeover.
+export function couchSheetFor<T extends Life>(sheets: readonly T[], userId: string, selectedId = ""): T | null {
+  const own = sheets.filter((sheet) => sheet.userId === userId && !sheet.isCompanion);
+  const selected = own.find((sheet) => sheet.id === selectedId);
+  if (selected && !isDead(selected)) return selected;
+  const living = own.filter((sheet) => !isDead(sheet));
+  return living[living.length - 1] ?? selected ?? own[own.length - 1] ?? null;
+}
+
+// The crew along the bottom of the TV: everyone but the TV's own seat, the
+// dead included until their player plays on as someone else, then only
+// the one they play now.
+export function tvCrew<T extends Life>(sheets: readonly T[], leadUserId: string | undefined): T[] {
+  const crew = sheets.filter((sheet) => !sheet.isCompanion && sheet.userId !== leadUserId);
+  const playsOn = new Set(crew.filter((sheet) => !isDead(sheet)).map((sheet) => sheet.userId));
+  // A player who died twice is shown once: their latest.
+  const lastDead = new Map(crew.filter(isDead).map((sheet) => [sheet.userId, sheet.id]));
+  return crew.filter((sheet) => !isDead(sheet) || (!playsOn.has(sheet.userId) && lastDead.get(sheet.userId) === sheet.id));
 }
 
 // ---- joining from the room ----
@@ -293,6 +388,9 @@ export type CouchCrewCard = {
   name: string;
   crewRole: string;
   backstory: string;
+  personality: string;
+  signatureItem: string;
+  ties: Array<{ to: string; line: string }>;
   portraitUrl: string | null;
   claimedBy: { userId: string; name: string } | null;
 };
@@ -301,6 +399,10 @@ export type CouchRoster = {
   status: "forging" | "ready" | "failed";
   error: string;
   scenario: { title: string; logline: string; briefing: string } | null;
+  // The TV's introductions (src/lib/couch/intro-logic.ts): step 0 is the
+  // briefing, step i the crew card at i - 1, and the cards open once step
+  // reaches total.
+  intro: { step: number; total: number; key: string };
   crew: CouchCrewCard[];
 };
 
@@ -314,12 +416,17 @@ export function normalizeRoster(raw: unknown): CouchRoster {
   const status = body.status === "ready" || body.status === "failed" ? body.status : "forging";
   const scenarioRaw = body.scenario && typeof body.scenario === "object" ? (body.scenario as Record<string, unknown>) : null;
   const crew = Array.isArray(body.crew) ? body.crew : [];
+  const introRaw = body.intro && typeof body.intro === "object" ? (body.intro as Record<string, unknown>) : {};
+  const count = (value: unknown): number => (typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : 0);
+  // A server from before the introductions sends none: its cards are open.
+  const total = count(introRaw.total);
   return {
     status,
     error: text(body.error),
     scenario: scenarioRaw
       ? { title: text(scenarioRaw.title), logline: text(scenarioRaw.logline), briefing: text(scenarioRaw.briefing) }
       : null,
+    intro: { step: Math.min(count(introRaw.step), total), total, key: text(introRaw.key) },
     crew: crew.flatMap((entry): CouchCrewCard[] => {
       const card = (entry && typeof entry === "object" ? entry : {}) as Record<string, unknown>;
       const id = text(card.id);
@@ -333,12 +440,29 @@ export function normalizeRoster(raw: unknown): CouchRoster {
           name: text(card.name),
           crewRole: text(card.crewRole),
           backstory: text(card.backstory),
+          personality: text(card.personality),
+          signatureItem: text(card.signatureItem),
+          ties: (Array.isArray(card.ties) ? card.ties : []).flatMap((tie) => {
+            const entry = (tie && typeof tie === "object" ? tie : {}) as Record<string, unknown>;
+            return text(entry.to) && text(entry.line) ? [{ to: text(entry.to), line: text(entry.line) }] : [];
+          }),
           portraitUrl: text(card.portraitUrl) || null,
           claimedBy: claimed && text(claimed.userId) ? { userId: text(claimed.userId), name: text(claimed.name) } : null,
         },
       ];
     }),
   };
+}
+
+// Whether the TV is still introducing the crew, so the phones wait to pick.
+export function introRunning(roster: Pick<CouchRoster, "status" | "intro"> | null): boolean {
+  return roster?.status === "ready" && roster.intro.step < roster.intro.total;
+}
+
+// The crew card the TV is introducing now, if it is on one (not the
+// briefing, not done).
+export function introducedCard(roster: Pick<CouchRoster, "status" | "intro" | "crew"> | null): CouchCrewCard | null {
+  return introRunning(roster) && roster!.intro.step > 0 ? (roster!.crew[roster!.intro.step - 1] ?? null) : null;
 }
 
 // Whether every crew card has a player, which is when the TV's Begin opens
@@ -353,7 +477,7 @@ export function gmStatusWords(status: DmStatus): string {
   switch (status) {
     case "thinking":
     case "narrating":
-      return "The GM is writing";
+      return "The GM is thinking";
     case "rolling":
       return "Dice are rolling";
     case "awaiting_rolls":
@@ -364,6 +488,14 @@ export function gmStatusWords(status: DmStatus): string {
     default:
       return "";
   }
+}
+
+// The GM is answering the table: the TV dims the scene under a breathing
+// edge and the phones hold Do and Say until it is done. Not awaiting_rolls,
+// where the table owes the GM a roll, and not the chapter notes, which are
+// written after play and hold nobody up.
+export function gmAtWork(status: DmStatus): boolean {
+  return status === "thinking" || status === "narrating" || status === "rolling";
 }
 
 // A GM turn that crashed, while its notice (src/lib/dm/turn-halt.ts) is

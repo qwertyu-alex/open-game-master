@@ -1,5 +1,7 @@
 import { catchUpPortraits, forgeRunning, publishCouchChange } from "@/lib/couch/forge";
+import { couchIntroKey } from "@/lib/couch/intro";
 import { actName } from "@/lib/couch/prompt-logic";
+import { forgedMember, introDone, introTotal } from "@/lib/couch/intro-logic";
 import { publishCouchNavigation } from "@/lib/couch/navigation";
 import {
   failCouchForge,
@@ -30,11 +32,19 @@ export type CouchView = {
   status: CouchStatus;
   error: string;
   scenario: { title: string; logline: string; briefing: string } | null;
+  // The TV's introductions (src/lib/couch/intro-logic.ts): the step it is
+  // on, how many there are, and a key that changes with the words, so a
+  // clip of last story's crew is never played for this one's.
+  intro: { step: number; total: number; key: string };
   crew: Array<{
     id: string;
     name: string;
     crewRole: string;
+    // The public backstory, without the ties, which come apart below.
     backstory: string;
+    personality: string;
+    signatureItem: string;
+    ties: Array<{ to: string; line: string }>;
     portraitUrl: string | null;
     claimedBy: { userId: string; name: string } | null;
   }>;
@@ -56,23 +66,37 @@ export function couchView(campaignId: string): CouchView | null {
     catchUpPortraits(campaignId);
   }
   const names = new Map(listMembers(campaignId).map((member) => [member.userId, member.username]));
-  const scenario = forge.status === "ready" && forge.forge ? forge.forge.scenario : null;
+  const ready = forge.status === "ready" ? forge.forge : null;
+  const scenario = ready ? ready.scenario : null;
+  const cards = ready ? listCouchCrew(campaignId) : [];
+  const total = introTotal(cards.length);
   return {
     status: forge.status,
     error: forge.status === "failed" ? forge.error : "",
     scenario: scenario ? { title: scenario.title, logline: scenario.logline, briefing: scenario.briefing } : null,
-    crew:
-      forge.status === "ready"
-        ? listCouchCrew(campaignId).map((card) => ({
-            id: card.id,
-            name: card.name,
-            crewRole: card.crewRole,
-            backstory: card.backstory,
-            portraitUrl: card.portraitUrl,
-            claimedBy: card.claimedBy ? { userId: card.claimedBy, name: names.get(card.claimedBy) ?? "A player" } : null,
-          }))
-        : [],
+    intro: { step: Math.min(forge.introStep, total), total, key: ready ? couchIntroKey(campaignId) : "" },
+    crew: cards.map((card) => {
+      const member = ready ? forgedMember(ready.crew, card) : null;
+      return {
+        id: card.id,
+        name: card.name,
+        crewRole: card.crewRole,
+        backstory: member?.backstory || card.backstory,
+        personality: member?.personality ?? "",
+        signatureItem: member?.signatureItem ?? "",
+        ties: member?.relationships ?? [],
+        portraitUrl: card.portraitUrl,
+        claimedBy: card.claimedBy ? { userId: card.claimedBy, name: names.get(card.claimedBy) ?? "A player" } : null,
+      };
+    }),
   };
+}
+
+// Whether the phones may take cards yet: not while the TV is still
+// introducing the crew, in the lobby. Once the night has begun, a friend
+// who joins late picks at once.
+export function crewOpen(campaign: Pick<Campaign, "status">, forge: { introStep: number }, crewCount: number): boolean {
+  return campaign.status !== "lobby" || introDone(forge.introStep, introTotal(crewCount));
 }
 
 export type ClaimOutcome = { ok: true; sheet: CharacterSheet } | { ok: false; status: number; error: string };
@@ -102,6 +126,9 @@ export function claimCrew(campaign: Campaign, userId: string, crewId: string): C
   }
   if (getSheetForUser(campaign.id, userId)) {
     return { ok: false, status: 409, error: "You already have a character at this table." };
+  }
+  if (!crewOpen(campaign, forge, listCouchCrew(campaign.id).length)) {
+    return { ok: false, status: 409, error: "The crew is still being introduced on the TV. Choosing opens when it ends." };
   }
   if (!takeCrewCard(campaign.id, crewId, userId)) {
     const now = getCouchCrew(crewId);
@@ -140,9 +167,10 @@ export function claimCrew(campaign: Campaign, userId: string, crewId: string): C
 }
 
 // The crew sheets in play: the claimed cards' sheets that still carry an
-// agenda.
+// agenda, the dead left out (their player plays on as someone else,
+// src/lib/couch/takeover.ts).
 function crewSheets(campaignId: string): CharacterSheet[] {
-  return listSheets(campaignId).filter((sheet) => !sheet.isCompanion && sheet.agenda);
+  return listSheets(campaignId).filter((sheet) => !sheet.isCompanion && sheet.agenda && !sheet.deathSaves?.dead);
 }
 
 // The next act: every crew member's agenda moves on one (never past their
@@ -193,6 +221,9 @@ export function awardStoryPoint(campaignId: string, sheetId: string): { ok: true
   const sheet = getSheetById(sheetId);
   if (!sheet || sheet.campaignId !== campaignId || !sheet.agenda) {
     return { ok: false, error: "That is not a crew member at this table; use a characterId from CREW AGENDAS." };
+  }
+  if (sheet.deathSaves?.dead) {
+    return { ok: false, error: `${sheet.name} is dead; award the crew member their player plays now, from CREW AGENDAS.` };
   }
   const storyPoints = Math.min(STORY_POINTS_MAX, sheet.agenda.storyPoints + 1);
   const updated = setSheetAgenda(sheet.id, { ...sheet.agenda, storyPoints });

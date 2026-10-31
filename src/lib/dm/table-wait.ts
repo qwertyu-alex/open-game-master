@@ -23,6 +23,7 @@ import { tableBreakOn } from "@/lib/dm/table-break";
 import { breakRefusal } from "@/lib/dm/table-break-logic";
 import { runsAiTurns } from "@/lib/workshop/kind";
 import { publishCouchAnswers } from "@/lib/couch/answers";
+import { inSceneIds } from "@/lib/couch/whereabouts";
 import { decideTableWait, type TableSeat, type TableWaitDecision, type TableWaitView } from "./table-wait-logic";
 
 export type { TableWaitView } from "./table-wait-logic";
@@ -58,11 +59,21 @@ export function waitsForTable(campaign: Campaign): boolean {
   return !hasHumanDm(campaignSeats(campaign)) || covering;
 }
 
-// The player seats, one per person, named by their first character.
+// The player seats, one per person, named by their first living
+// character. A player whose every character is dead has nothing to answer
+// with, so nobody waits on them.
+//
+// A split couch crew is waited on only where the scene is
+// (src/lib/couch/whereabouts.ts): the others' moves wait for their cut.
 function playerSeats(campaign: Campaign): TableSeat[] {
   const seats = new Map<string, string>();
-  for (const sheet of listSheets(campaign.id)) {
-    if (sheet.isCompanion || !sheet.userId || sheet.userId === campaign.dmUserId || seats.has(sheet.userId)) {
+  const sheets = listSheets(campaign.id);
+  const scene = campaign.gameSettings.couchMode ? inSceneIds(campaign, sheets) : null;
+  for (const sheet of sheets) {
+    if (sheet.isCompanion || sheet.deathSaves?.dead || !sheet.userId || sheet.userId === campaign.dmUserId || seats.has(sheet.userId)) {
+      continue;
+    }
+    if (scene && !scene.has(sheet.id)) {
       continue;
     }
     seats.set(sheet.userId, sheet.name);
@@ -137,8 +148,23 @@ function decisionFor(campaignId: string, now: number): TableWaitDecision | null 
     .filter((pass) => pass.userId)
     .map((pass) => ({ ...pass, name: names.get(pass.userId) ?? "A player" }));
   const here = new Set([...onlineUserIds(campaignId), ...agentUserIds(campaignId)]);
+  // An off-scene couch move neither answers this beat nor starts its clock.
+  if (campaign.gameSettings.couchMode && inSceneIds(campaign)) {
+    const seated = (answer: { userId: string }) => names.has(answer.userId);
+    return decideTableWait({
+      present: seats,
+      posts: posts.filter(seated),
+      passes: passes.filter(seated),
+      openedAt: window.openedAt,
+      seconds: campaign.gameSettings.waitForTableSeconds,
+      now,
+    });
+  }
   return decideTableWait({
-    present: seats.filter((seat) => here.has(seat.userId)),
+    // A couch night is one room: a phone that locked or slept is still on
+    // the couch, so every crew seat is waited on, and the clock and Pass are
+    // what move a round someone sits out.
+    present: campaign.gameSettings.couchMode ? seats : seats.filter((seat) => here.has(seat.userId)),
     posts,
     passes,
     openedAt: window.openedAt,

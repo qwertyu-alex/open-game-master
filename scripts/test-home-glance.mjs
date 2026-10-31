@@ -22,7 +22,7 @@ const { agoLabel, chapterLine, pickContinue, romanNumeral, seatLine, slotLine } 
 const { createUser } = await import("../src/lib/db/users.ts");
 const { getDatabase } = await import("../src/lib/db/core.ts");
 const { allocateSeq, createCampaign, joinByInviteCode } = await import("../src/lib/db/campaigns.ts");
-const { insertCampaignMessage } = await import("../src/lib/db/messages.ts");
+const { insertCampaignMessage, setMessageGeneratedImage } = await import("../src/lib/db/messages.ts");
 const { createSheet } = await import("../src/lib/db/sheets.ts");
 const { createSheetSchema } = await import("../src/lib/schemas/sheet.ts");
 
@@ -210,6 +210,18 @@ test("the glance carries the last narration that said something, the newest pain
   assert.ok(names.includes("Thane Ordwin"), "the hero has a face");
   assert.ok(!names.includes("Faithful Hound"), "the companion is not");
   assert.ok(glance.faces.every((face) => face.url.length > 0), "every face has a picture");
+});
+
+test("the glance's painting is the place the table was last in, not a thing found there", () => {
+  const painted = (url, kind) => {
+    const message = insertCampaignMessage({ campaignId: campaign.id, seq: allocateSeq(campaign.id), authorType: "dm", content: "A scene.", speech: [] });
+    setMessageGeneratedImage(message.id, { id: url, url, prompt: "", mode: "fast", aspect: kind === "insert" ? "square" : "landscape", width: 0, height: 0, shot: { kind, frame: url } });
+  };
+  painted("/generated/hatch.png", "medium");
+  painted("/generated/collar.png", "insert");
+  assert.equal(homeGlanceFor(campaign.id, []).sceneImage, "/generated/hatch.png", "a square close-up of a collar does not stand for the campaign");
+  painted("/generated/airlock.png", "wide");
+  assert.equal(homeGlanceFor(campaign.id, []).sceneImage, "/generated/airlock.png");
 });
 
 removeTempDir(dir);

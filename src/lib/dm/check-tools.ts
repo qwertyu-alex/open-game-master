@@ -1,3 +1,4 @@
+import { inSceneIds } from "@/lib/couch/whereabouts";
 import { dungeonDelverNotices, hasDungeonDelver } from "@/lib/srd/feat-combat";
 import { CHECK_KEY_PROPERTIES, named, NONE } from "@/lib/dm/roll-about";
 import { CHECK_KEY_FIELDS } from "@/lib/dm/roll-args";
@@ -6,7 +7,7 @@ import { z } from "zod";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getSheetById } from "@/lib/db/sheets";
 import { insertRoll } from "@/lib/db/rolls";
-import type { DmTurn } from "@/lib/db/dm-turns";
+import { createPendingRoll, type DmTurn, type PendingRoll } from "@/lib/db/dm-turns";
 import { rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
 import { computeSheetDerived, SRD_SKILLS } from "@/lib/srd";
@@ -197,6 +198,20 @@ function resolveTargets(
   return resolved;
 }
 
+// A split couch crew checks only where the scene is
+// (src/lib/couch/whereabouts.ts): "the whole party" is the group in it, and
+// someone off scene cannot be named.
+function inScene(
+  campaign: Campaign,
+  sheets: CharacterSheet[],
+  sheetsById: Map<string, CharacterSheet>,
+): [CharacterSheet[], Map<string, CharacterSheet>] {
+  const scene = inSceneIds(campaign, sheets);
+  if (!scene) return [sheets, sheetsById];
+  const here = sheets.filter((sheet) => scene.has(sheet.id) || sheet.isCompanion || sheet.summon);
+  return [here, new Map(here.map((sheet) => [sheet.id, sheet]))];
+}
+
 function publishRoll(campaignId: string, roll: ReturnType<typeof insertRoll>) {
   publishWithSeq(campaignId, allocateSeq(campaignId), "roll_result", { roll, source: "digital" });
 }
@@ -213,12 +228,27 @@ const groupCheckSchema = z.object({
   reason: z.string().optional(),
 });
 
+// A crew member of a group check: a roll thrown here, one parked for their
+// phone, or a failure with no throw (the dead, a paralysed climber).
+export type GroupCheckEntry = {
+  characterId: string;
+  name: string;
+  total: number;
+  success: boolean;
+  rollId: string | null;
+  pending: PendingRoll | null;
+};
+
 export function handleGroupCheck(
   campaign: Campaign,
   turn: DmTurn,
   rawArguments: string,
   sheets: CharacterSheet[],
   sheetsById: Map<string, CharacterSheet>,
+  // A couch night's crew throw their own dice (src/lib/couch/group-check.ts):
+  // the roll of a player in userIds parks for their phone, unpublished, and
+  // the result says what waits instead of who passed.
+  park?: { toolCallId: string | null; userIds: ReadonlySet<string> },
 ): ToolResult {
   let args: z.infer<typeof groupCheckSchema>;
   try {
@@ -238,7 +268,7 @@ export function handleGroupCheck(
   if ("error" in dc) {
     return dc;
   }
-  const targets = resolveTargets(args.characterIds, sheets, sheetsById);
+  const targets = resolveTargets(args.characterIds, ...inScene(campaign, sheets, sheetsById));
   if (!targets.length) {
     return { error: "No valid characters for the group check; use characterIds from GAME STATE.", retry: true };
   }
@@ -258,6 +288,7 @@ export function handleGroupCheck(
   }
 
   const results: Array<{ name: string; total: number; success: boolean }> = [];
+  const entries: GroupCheckEntry[] = [];
   for (const stale of targets) {
     const sheet = getSheetById(stale.id) ?? stale;
     const rollArgs = {
@@ -272,6 +303,7 @@ export function handleGroupCheck(
     // The dead take no part, and count as a failure for the group.
     if (sheet.deathSaves?.dead) {
       results.push({ name: sheet.name, total: 0, success: false });
+      entries.push({ characterId: sheet.id, name: sheet.name, total: 0, success: false, rollId: null, pending: null });
       continue;
     }
     const resolved = resolveRollExpression(
@@ -283,10 +315,28 @@ export function handleGroupCheck(
       // An auto-fail (paralysis) or an unresolvable skill counts as a failed
       // participant rather than aborting the whole group's attempt.
       results.push({ name: sheet.name, total: 0, success: false });
+      entries.push({ characterId: sheet.id, name: sheet.name, total: 0, success: false, rollId: null, pending: null });
       continue;
     }
     // An inspiration die or a held Help is spent by the roll it rides.
     spendRollCarriers(campaign.id, sheet.id, resolved.spendInspiration);
+    if (park?.userIds.has(sheet.userId)) {
+      const pending = createPendingRoll({
+        campaignId: campaign.id,
+        turnId: turn.id,
+        toolCallId: park.toolCallId,
+        userId: sheet.userId,
+        characterId: sheet.id,
+        kind,
+        detail: resolved.detail,
+        expression: resolved.expression,
+        advantage: /^2d20kh1/.test(resolved.expression) ? "advantage" : /^2d20kl1/.test(resolved.expression) ? "disadvantage" : "none",
+        dc: dc.dc,
+        reason: args.reason?.slice(0, 200) ?? "",
+      });
+      entries.push({ characterId: sheet.id, name: sheet.name, total: 0, success: false, rollId: null, pending });
+      continue;
+    }
     const rolled = rollExpression(resolved.expression);
     const roll = insertRoll({
       campaignId: campaign.id,
@@ -300,6 +350,18 @@ export function handleGroupCheck(
     publishRoll(campaign.id, roll);
     turn.rollIds.push(roll.id);
     results.push({ name: sheet.name, total: rolled.total, success: rolled.total >= dc.dc });
+    entries.push({ characterId: sheet.id, name: sheet.name, total: rolled.total, success: rolled.total >= dc.dc, rollId: roll.id, pending: null });
+  }
+  if (entries.some((entry) => entry.pending)) {
+    return {
+      ok: true,
+      parked: true,
+      check: args.skill ?? args.ability,
+      dc: dc.dc,
+      difficulty: dc.label,
+      reason: args.reason?.slice(0, 200) ?? "",
+      entries,
+    };
   }
 
   const successes = results.filter((entry) => entry.success).length;
@@ -396,7 +458,7 @@ export function handleCheckNotice(
     return { error: "Invalid arguments: check_notice needs a difficulty and optionally a sense.", retry: true };
   }
   const sense = args.sense ?? "perception";
-  const targets = resolveTargets(args.characterIds, sheets, sheetsById);
+  const targets = resolveTargets(args.characterIds, ...inScene(campaign, sheets, sheetsById));
   if (!targets.length) {
     return { error: "No valid characters to test; use characterIds from GAME STATE.", retry: true };
   }

@@ -16,6 +16,7 @@ import { artDirection, scenePrompt, typedStyle } from "@/lib/art-direction";
 import { presetFor } from "@/lib/worlds/preset";
 import { heuristicShot, wantsSceneShot } from "@/lib/dm/scene-shot-logic";
 import { planScenePicture, portraitReferences } from "@/lib/dm/scene-shot";
+import { keepEstablishingShot } from "@/lib/couch/place-shots";
 import type { PictureShot } from "@/lib/dm/scene-shot-logic";
 import type { PictureReference } from "@/lib/harness/picture-prompt-logic";
 import type { AspectPreset, GeneratedImage, ImageRequest, StorySettings } from "@/lib/types";
@@ -66,6 +67,9 @@ export type MessageImageOptions = {
   // Decided when the job runs rather than when it is queued (couch mode's
   // shot planner), so a job replaced while it waited never asks a model.
   subject?: (campaign: Campaign) => Promise<PictureSubject>;
+  // Told of the picture once it is the message's (a couch place's
+  // establishing shot is kept with the place).
+  onPainted?: (image: GeneratedImage) => void;
 };
 
 // Fulfill a DM message's image request on the serial media queue. Called
@@ -118,6 +122,7 @@ export function fulfillMessageImage(
         return;
       }
       publishPersisted(campaignId, "image_ready", { messageId, image: stored });
+      options.onPainted?.(stored);
     } catch (error) {
       const reason = pictureFailureReason(error);
       publishMediaStatus(campaignId, "image", messageId, "failed", reason);
@@ -220,6 +225,7 @@ export async function fulfillSceneShot(campaignId: string, messageId: string, re
       const message = getCampaignMessage(messageId);
       return planScenePicture(campaign, message?.content ?? request.prompt ?? "", message?.seq);
     },
+    onPainted: (image) => keepEstablishingShot(campaignId, image),
   });
   // Settled without a picture or a failure: a newer passage's picture took
   // this one's place in the queue, so its placeholder must stop waiting.

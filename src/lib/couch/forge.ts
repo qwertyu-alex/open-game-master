@@ -28,6 +28,9 @@ import {
   setCrewPortrait,
   type CouchCrewRow,
 } from "@/lib/couch/store";
+import { writtenForge } from "@/lib/couch/scenarios";
+import { couchStartingKit } from "@/lib/couch/kit-logic";
+import { prepareIntroAudio } from "@/lib/couch/intro";
 import {
   createCampaign,
   getCampaignById,
@@ -59,7 +62,9 @@ import { bindUsageScope } from "@/lib/usage/scope";
 // spine is written, the art direction is locked and the portraits paint.
 // What is asked and how the answer is read is src/lib/couch/forge-logic.ts.
 
-export type CouchNightInput = { seed: string; players: number; offLimits: string };
+// scenarioId picks a ready-made story (src/lib/couch/scenarios) in place of
+// one written tonight from the seed; "" is the story model's.
+export type CouchNightInput = { seed: string; players: number; offLimits: string; scenarioId?: string };
 
 declare global {
   var __odmCouchForging: Set<string> | undefined;
@@ -87,9 +92,12 @@ export function forgeRunning(campaignId: string): boolean {
 // What changed for a lobby that shows the cards: the TV and the phones
 // re-read GET /api/campaigns/[id]/couch when a campaign_updated carries this
 // key (the campaign's own fields ride beside it when the forge set them).
+// couchStamp moves on every change, so a lobby keyed on it reads again even
+// when the status has not changed: a portrait landing, the introductions
+// moving on a step.
 export function publishCouchChange(campaignId: string, extra: Record<string, unknown> = {}): void {
   const forge = getCouchForge(campaignId);
-  publishPersisted(campaignId, "campaign_updated", { ...extra, couchStatus: forge?.status ?? "forging" });
+  publishPersisted(campaignId, "campaign_updated", { ...extra, couchStatus: forge?.status ?? "forging", couchStamp: Date.now() });
 }
 
 // A couch night: an AI-run one-shot whose creator is the TV's own account
@@ -144,7 +152,7 @@ export function restartForge(campaignId: string): void {
   if (!forge) {
     return;
   }
-  beginCouchForge(campaignId, { players: forge.players, seed: forge.seed, offLimits: forge.offLimits });
+  beginCouchForge(campaignId, { players: forge.players, seed: forge.seed, offLimits: forge.offLimits, scenarioId: forge.scenarioId });
   publishCouchChange(campaignId);
   startForge(campaignId);
 }
@@ -209,6 +217,21 @@ function couchOffered(): DraftOffered {
 
 type Judge = (sheet: CreateSheetInput) => CreateSheetInput | null;
 
+// The table's own door, as a player's character at this table passes it:
+// the forge's crew and anyone a player takes over after a death
+// (src/lib/couch/takeover.ts) are let in by the same rules.
+export function tableJudge(campaign: Campaign): Judge {
+  return (sheet) => {
+    const verdict = admitSheet({ door: "table", level: 1, sheet, userId: campaign.ownerUserId, campaign });
+    if (!verdict.ok) {
+      console.warn(`[couch] ${sheet.name} did not pass the table's rules check: ${verdict.problems[0] ?? "no reason given"}`);
+      return null;
+    }
+    verdict.settle();
+    return verdict.sheet;
+  };
+}
+
 // One crew member as a sheet the table's door admits: built by the
 // quick-build engine from the career's class and background, or, when the
 // engine or the door refuses it, the nearest of the four ready-made heroes
@@ -217,7 +240,9 @@ type Judge = (sheet: CreateSheetInput) => CreateSheetInput | null;
 // a free-text item cannot cost the build.
 export function crewSheet(member: ForgedCrew, judge: Judge, rng: () => number = Math.random): CreateSheetInput | null {
   const fields = crewSheetFields(member);
-  const finish = (sheet: CreateSheetInput): CreateSheetInput => ({ ...sheet, equipment: withSignatureItem(sheet.equipment, member.signatureItem) });
+  // The crew starts light (src/lib/couch/kit-logic.ts): trimmed after the
+  // door, which judged the whole class kit, so no build is refused for it.
+  const finish = (sheet: CreateSheetInput): CreateSheetInput => ({ ...sheet, equipment: withSignatureItem(couchStartingKit(sheet.equipment), member.signatureItem) });
   const built = buildDraft(crewProposal(member), 1, couchOffered(), rng);
   if (built.ok) {
     const admitted = judge({ ...built.draft.sheet, ...fields });
@@ -241,23 +266,16 @@ export async function runForge(campaignId: string, options: { rng?: () => number
   if (!campaign || !row) {
     return;
   }
-  const asked = await askForge(campaign, row.players, row.seed, row.offLimits);
+  // A ready-made story needs no model call: it is read as the model's
+  // reply would be, and everything after this line treats it the same.
+  const asked = row.scenarioId ? writtenForge(row.scenarioId, row.players) : await askForge(campaign, row.players, row.seed, row.offLimits);
   if ("error" in asked) {
     failCouchForge(campaignId, asked.error);
     publishCouchChange(campaignId);
     return;
   }
   const { forge } = asked;
-  // The table's own door, as a player's character at this table passes it.
-  const judge: Judge = (sheet) => {
-    const verdict = admitSheet({ door: "table", level: 1, sheet, userId: campaign.ownerUserId, campaign });
-    if (!verdict.ok) {
-      console.warn(`[couch] ${sheet.name} did not pass the table's rules check: ${verdict.problems[0] ?? "no reason given"}`);
-      return null;
-    }
-    verdict.settle();
-    return verdict.sheet;
-  };
+  const judge = tableJudge(campaign);
   const crew: Parameters<typeof finishCouchForge>[2] = [];
   for (const member of forge.crew) {
     const sheet = crewSheet(member, judge, options.rng);
@@ -294,6 +312,8 @@ export async function runForge(campaignId: string, options: { rng?: () => number
   updateStorySettings(campaignId, { artStyle: "custom", artStyleScene: forge.styleLock, artStyleMap: "" });
   publishCouchChange(campaignId, info);
   paintCrewPortraits(campaignId, forge.styleLock, cards);
+  // The TV opens on the introductions: their voice is read ahead now.
+  prepareIntroAudio(campaignId);
 }
 
 // One portrait per card, on the media queue, while the TV shows the

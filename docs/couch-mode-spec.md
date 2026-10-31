@@ -1,8 +1,10 @@
 # Couch mode: one TV, everyone's phone, an AI-run sci-fi horror one-shot
 
-Status: P0 built 2026-10-29, plus `advance_act` / `award_story_point`, transparent
+Status: P0 built 2026-10-29, plus `advance_act` / `award_story_point` /
+`repaint_place`, transparent
 dice feedback, dice thrown from each player's phone and landed in 3D on the TV
-(2.10), and a trimmed tool set for couch tables. Stress and panic, the finale reveal and
+(2.10), fights with their own TV and phone screens and creature pictures
+(2.11), and a trimmed tool set for couch tables. Stress and panic, the finale reveal and
 name-only join are not built. Decisions: the Codex agent program writes the
 story and paints the pictures (with portraits as references); ElevenLabs
 speaks; 5e stays under the hood; at most one hidden role per crew. Start a
@@ -24,24 +26,28 @@ night at `/couch`.
   picture to picture. The narrator and every character speak in ElevenLabs
   voices.
 
-## Approach: hide behind one mode, don't delete
+## Approach: couch is the product, the upstream app stays hidden
 
-Turning everything below off behind a single **couch mode** gets us the
-stripped-down experience in hours, not days. It also keeps the normal app
-working and keeps merges from upstream painless. Real deletion can come later
-if couch mode turns out to be the only way we play.
+This fork plays couch nights and nothing else (AGENTS.md, "This fork"). Home
+offers only **Start a night** and **Join with a code**, and nothing in the UI
+creates any other kind of campaign. The upstream app is still in the tree,
+reachable only by the host's escape hatch (`?host=1`), so merges from
+upstream stay painless. Removing it outright is a later choice, worth making
+only once no more upstream merges are wanted.
 
-Couch mode is one choice made when the campaign is created. It is not a pile of
-toggles. It implies every removal and addition in this document. That matches
-the repo's rule about settings ("one control per idea", AGENTS.md).
+Couch mode is still one flag on the campaign (`gameSettings.couchMode`), set
+by the couch night's own creator (`/couch`, `POST /api/couch`). It is not a
+pile of toggles. It implies every removal and addition in this document,
+which matches the repo's rule about settings ("one control per idea",
+AGENTS.md).
 
 There are three screens:
 
 | Screen | Who | Route | Shows |
 | --- | --- | --- | --- |
-| **TV** | the laptop | `/campaigns/[id]/tv` (grows out of the existing chrome-free `table/page.tsx`) | the scene image, narration as subtitles, the crew strip, who the GM is waiting on, roll results. Plays all audio. |
+| **TV** | the laptop | `/campaigns/[id]/table` (the chrome-free table page, which renders the couch TV for a couch night) | the scene image, narration as subtitles, the crew strip, who the GM is waiting on, roll results. Plays all audio. |
 | **Phone** | each player | `/campaigns/[id]` (renders the couch phone view when the campaign is in couch mode) | your character, your secret agenda, your action box, roll prompts, private GM messages |
-| **Host setup** | the laptop, before play | the normal UI | create the one-shot, then hand over to the TV view |
+| **Host setup** | the laptop, before play | `/couch`, then the host controls (`/campaigns/[id]?host=1`) | start the one-shot, then hand over to the TV view |
 
 The TV signs in as its own **display seat**. It has no character, the GM never
 waits on it, and it never receives whispers. If the TV used Alex's own account,
@@ -64,7 +70,7 @@ in the code.
 | Board/story toggle and the layout menu | `SessionHeader.tsx:317-331` | There is one layout per screen. |
 | Coffee / break | `SessionHeader.tsx:332-336` | Just say "pause". |
 | Rulebook, help, guided tours | `SessionHeader.tsx:337-352`, `SessionView.tsx:562-566` | The tour would pop up on every friend's phone 1.2 s after they sit down. |
-| Campaign prep, all campaigns, account menu, phone header menu | `SessionHeader.tsx:353-376`, `HeaderPhoneMenu.tsx` | The host reaches these from the normal UI. |
+| Campaign prep, all campaigns, account menu, phone header menu | `SessionHeader.tsx:353-376`, `HeaderPhoneMenu.tsx` | The host reaches these from the host controls (`?host=1`). |
 
 ### Right rail and its tabs
 
@@ -97,7 +103,15 @@ once.
 **Keep:** Do, Say, Pass, and the "GM is waiting on" gate (`TableWaitBanner.tsx`,
 `src/lib/dm/table-wait.ts`). In a room, everyone acting and then the GM
 answering in one go is exactly the right rhythm. The gate moves to the TV as
-"waiting on Kara, Brakk".
+"waiting on Kara, Brakk". Every crew seat is waited on, whether or not its
+phone is connected (a locked phone is still on the couch), and nobody sees
+another player's move until the round closes: the phone's story shows only
+your own posts after the GM's latest passage. The clock (five minutes after
+the latest post) and Pass are what move a round someone sits out. When it
+opens (everyone acted, or the time ran out), the TV fades out the passage still being read and drops what queued
+behind it, so the room goes straight to the answers and the GM's reply
+(`couch_answers` arriving live, `flush` in `useNarrationAudio.ts`). The
+passage stays on screen and in the transcript.
 
 ### Game systems: off for the whole campaign
 
@@ -174,8 +188,22 @@ Afterwards:
    the creature is an original design, not a xenomorph.
 3. **Establishing shots.** One per act-1 location, painted ahead of time so
    turn 1 already has art.
-4. **Claiming.** Players take a crew card on their phone, first come first
-   served. The secret part of the card appears only after it is claimed.
+4. **Introductions, then claiming.** Before anyone picks, the TV reads the
+   briefing aloud and then introduces each crew member in turn over their
+   portrait: role, backstory, temper and flaw, what they carry, and their
+   ties to the others (on screen, not read). The words are the card's public
+   fields (`src/lib/couch/intro-logic.ts`), and the forge is told that the
+   room hears them, so they never give away an agenda or the hidden role.
+   The narrator's clips are rendered as soon as the forge is ready
+   (`src/lib/couch/intro.ts`) and play through the TV's own narration, so
+   mute, volume and ambience ducking hold; with no voice a step stays up for
+   its reading time. The lead's TV moves the step on
+   (`POST /api/campaigns/[id]/couch/intro`, from the step it showed, so a
+   second tab cannot skip one) and has Next and Skip to choosing. Phones
+   read along, the current crew member marked, and the claim route refuses
+   cards until the last introduction ends (`couch_forges.intro_step`).
+   Players then take a crew card on their phone, first come first served.
+   The secret part of the card appears only after it is claimed.
 5. **The GM's spine.** Scenario, acts, truth and agendas are written into the
    GM's secret outline (`setDmOutline`, as the starter one-shot does), so the
    existing arc planner is skipped.
@@ -214,6 +242,41 @@ one has orders to bring back a sample, one is hiding an infection.
   crew member's portrait, then their agendas one act at a time, whether they
   pulled it off, story points, and the hidden role. This is the moment the
   room is waiting for.
+- **A night that keeps moving** (added after "Unto Us", 2026-10-30, where
+  act I took 85 minutes and docking a pod took twenty replies). The couch
+  rules (`src/lib/couch/prompt-logic.ts` COUCH_RULES, "DRIVE THE NIGHT")
+  outrank the core rules on pacing: the world acts on its own every two or
+  three replies, routine steps are skipped, a failed roll lands a
+  complication rather than "time slips by", a stuck table is handed a lead
+  and concrete options, and every act brings people who want something, a
+  fight with the outline's foes and the act's twist. Every turn the GM reads
+  a NIGHT PACE line (`src/lib/couch/pacing-logic.ts`): the act's minutes and
+  replies against its share (40, 55 and 50 minutes), and from "late" on an
+  order to end the act, never during a fight. The clock starts with the act
+  (`couch_forges.act_since`).
+- **The objective on every screen.** `set_objective` (`src/lib/dm/couch-tools.ts`)
+  puts what the crew must do now on the TV, small in the top-right corner
+  (without its clock), and, with its clock, on each phone at the head of the
+  story (`couch_objective` event,
+  `src/lib/couch/pacing.ts`). A new act clears it, and NIGHT PACE asks for
+  one until the GM sets it.
+- **Twists and foes.** The forge asks for a twist per act and four to six
+  fightable foes with the act each comes in (people, machines, the threat's
+  young or victims; the threat itself is still fled or burned), and the
+  outline lists them. The GM fights them from the couch enemy menu
+  (`src/lib/couch/foes-logic.ts`: SRD stat blocks under sci-fi names, within
+  the crew's deadly budget) instead of the fantasy catalog. The ready-made
+  scenarios carry both.
+- **Start light, find the rest.** A crew member starts with their armour,
+  one weapon to hit with, one to shoot or throw with, ten rounds at most and
+  their signature item (`src/lib/couch/kit-logic.ts`), not the class's whole
+  pack; the GM puts a find in reach every scene or two and grants it with
+  `grant_item`.
+- **A short test night.** "Dead Air" (`src/lib/couch/scenarios/dead-air.ts`)
+  runs about 45 minutes for two to four players: `scenario.minutes` scales
+  the act clock (12, 17 and 16 minutes), and every act opens in motion with
+  an objective, a foe and a twist, so one evening shows whether the pace
+  rules hold.
 
 ### 2.3 Stress and panic: a light Year Zero layer
 
@@ -271,6 +334,32 @@ Couch mode makes a picture every GM turn and makes the faces stick.
 6. **Latency budget.** Narration audio should start within about 2 s of the GM
    finishing. The picture arrives some seconds later and fades in. The old
    picture stays up until then, so nobody waits on art.
+7. **Inserts: a find beside the place.** When the narration reveals something
+   found, opened, read or examined in the place already on screen (a
+   mechanism behind a panel, a letter in a drawer), the planner answers
+   `insert` and frames that thing alone. It is told what is on screen
+   (`ON SCREEN NOW`, the place picture's own frame), so it does not repaint
+   the room or fall back on the finder's face. An insert is painted square,
+   with no portraits as references, and the picture keeps its framing
+   (`GeneratedImage.shot`: kind, frame, place id).
+   - The TV splits 60/40: the place moves into the left 60% and keeps
+     drifting, and the insert's square fills the top of the right 40%,
+     fading into the dark foot where the subtitles run. The next picture of a
+     place retires the insert, and a newer insert replaces it
+     (`sceneComposition` in `src/lib/dm/scene-shot-logic.ts`).
+   - Still one picture per turn. An insert needs a picture of this place to
+     sit beside: with none on screen, or after the party has moved to a new
+     place, an insert is painted as a close-up that stands on its own.
+   - The web table's backdrop and the home page's tile keep the place. Phones
+     and the transcript show the insert under its passage, square.
+   - Later: a new place and a find in the same turn (two pictures, twice the
+     wait), and `shot: "insert"` on `generate_image` for the narrator and a
+     human GM.
+8. **Establishing shots.** A place's first picture is a wide, empty shot of
+   it, kept with the place, described for the GM by a model looking at it,
+   and used as the place reference for every later picture there.
+   `repaint_place` has it painted anew. See docs/couch-navigation.md
+   "Pictures of the places".
 
 ### 2.5 ElevenLabs voices
 
@@ -331,22 +420,57 @@ a reminder of when checks happen, and recent public roll results. Narration
 explains the scene consequence after the server's numeric readout. Story points
 remain a progress counter; the briefing does not promise spending or stress.
 
+Implemented item pictures (`src/lib/couch/item-show*.ts`): the TV shows the
+pictures the phones' Gear section uses (painted icons, or the night's own
+paintings). A crew member's attack or damage roll with a weapon they carry
+puts the weapon in a tile on the roll card. The tile lights on a hit and
+dims on a miss. A `use_item` the GM makes in the open (`couch_item`, sent to
+the whole table) takes the find's column beside the scene, with the item's
+name and "Renn uses it on Vasquez · 1 left" under it. It stays up for that
+turn and gives way to the next turn's narration, or to a close-up the same
+turn painted. An item with no picture yet shows nothing, and the TV asks for
+one to be painted so the next use has it. A fight hides the column, so the
+weapon tile is the only item picture during a fight.
+
+Implemented difficulty: the GM picks a check's tier by what resists
+(`COUCH_RULES` in `src/lib/couch/prompt-logic.ts`). A creature resisting
+directly is a contest from its stat block; otherwise very_easy is only the
+surrounding danger, easy (the default) a crew member's ordinary work,
+moderate one real obstacle, hard an expert or stacked obstacles, very_hard
+beyond any professional, and nearly_impossible an insane ask that could just
+work. Circumstances are advantage or disadvantage, never a tier, and each
+obstacle gets one roll. Level-1 bonuses top out near +5, so DC 25 and 30
+could otherwise almost never pass: on a couch night a natural 20 passes a
+very_hard or nearly_impossible check (`src/lib/couch/check-logic.ts`, applied
+where the roll is stored), and the GM names a long shot before the throw.
+
 Extend `src/app/campaigns/[campaignId]/table/page.tsx`. It is already a
 chrome-free TV route, but it shows no story text and plays no sound.
 
-- **Lobby.** Scenario title and logline over the cover art, a large QR code and
-  LAN address (`InviteQr`, `src/lib/server-address.ts`), and the crew cards
-  greying out as they are claimed.
+- **Lobby.** While the forge writes: the title, a large QR code and LAN
+  address (`InviteQr`, `src/lib/server-address.ts`). Then the introductions
+  (2.1 step 4, `CouchTvIntro.tsx`): the briefing over the cover, then each
+  crew member full screen, the crew strip along the foot and a small join
+  code in the corner. Then the choosing: "Choose your character on your
+  phone", the QR, and the crew cards greying out as they are claimed.
 - **Play.**
   - The full-bleed scene image.
   - The newest narration as large subtitles, paced to the audio.
   - A crew strip along the bottom: portrait, name, health, stress, and a glow
     on whoever is speaking.
   - "Waiting on: Kara, Brakk" in a corner.
+  - While the GM answers (thinking, narrating or rolling: `gmAtWork`), the
+    scene dims, the screen's edge breathes and a pill at the top says "The
+    GM is thinking…" or "Dice are rolling…". The dice stay bright.
   - Roll and panic results as big animated cards (`RollToast` exists).
   - Act title cards.
 - **Ambience.** On, automatic and TV-only (`ambienceAuto`). A low drone and
-  ship hum sell the genre.
+  ship hum sell the genre. The music follows the scene's mood
+  (`src/lib/couch/mood.ts`): the GM names it with `set_mood` (calm, relief,
+  uneasy, aftermath, dread, danger, chase, fight), attacks and damage raise
+  it on their own, and each act sets a floor until the GM speaks. It climbs
+  at once and comes down only after 90 seconds, so it never flickers; a
+  last-act fight plays the big one.
 - **Finale.** The agenda reveal sequence (2.2).
 - **Nothing to click** except a hidden exit, as today.
 
@@ -366,28 +490,65 @@ whisper or your turn on Story, an unread agenda on Character.
    where the GM rolled it. What the players said since then appears as chat
    lines, with your own on the right. Everything older folds under "Earlier
    in the story".
-2. **Only you**: GM whispers to you, under the story, shown once there is
-   one. Unread ones never fold away. "Reply privately" opens the action box
-   in Private.
+2. **Only you & the GM**: each private exchange stands in the story where
+   it was asked: your question, and the GM's answer when its next turn
+   brings one, which joins the question there rather than landing further
+   down. It shows open while it is new or waiting, folds to one dashed line
+   once the story moves past it, and never folds while unread (Earlier
+   opens while it holds one). When an unread one is out of sight, "The GM
+   wrote to you privately" above the action box brings it up. "Ask a
+   follow-up" opens the action box in Ask GM.
 3. **The map**, behind a Map button beside the tabs: the deck plan of where
    the crew has been, as a sheet (docs/couch-navigation.md). Nobody votes;
    players say where they go.
 4. **The action box**, pinned to the foot and drawn like a chat app's. At
    rest it is one rounded line with a send button. While you write it is a
-   card with Do / Say / Private beside the send. Above it, one line says
-   whose move it is: "Your turn" with the GM's question, who the GM is
-   waiting on, or what the GM is doing. Pass sits on that line when the GM
-   is waiting on you. You can write while it is someone else's move; only
-   sending waits. Private reaches the GM at any time. A roll the GM asks for
+   card with three toggles beside the send: Do, Say and Ask GM. Ask GM
+   turns the box dashed and says that only the GM sees it; Do or Say goes
+   back to the table. When the iOS keyboard is up the box rides on
+   top of it. At the foot of the story, under the newest passage, one line
+   says whose move it is: "Your turn" with the GM's question, who the GM is
+   waiting on, or what the GM is doing (pinned to the box it took too much
+   of the screen). Pass sits on that line when the GM is waiting on you.
+   You can write while it is someone else's move; only
+   sending waits. While the GM itself answers, Do and Say rest: the box is
+   locked with a light running round its rim, keeping any draft, and the
+   phone's edge breathes like the TV's on every tab, so the story and the
+   sheet stay open to read. Ask GM reaches the GM at any time. A roll the GM asks for
    opens its own sheet over the screen (`CouchRollPrompt.tsx`).
 
-**Character**, everything that is yours: health, armour, initiative and any
-condition; the agenda (press and hold to read, story points beside it); your
-checks, best first, with Trained and Expert marked and all eighteen one tap
-away; the six abilities with their saves; your weapons with to-hit and
-damage; what each feature does; what you carry; who you are; and how to
-play. The numbers come from the helpers the table's own sheet uses, so they
-are the ones the GM rolls with (`character-logic.ts`).
+**Character**, everything that is yours, sorted by when a player reaches
+for it (`CouchCharacter.tsx`). On top, whichever section is open: your
+face, name and role, health, armour, and any condition. Below, three
+sections behind a segmented control:
+
+- **Gear**, what you can use. It changes as things are found and spent, so
+  it is pictures you can scan: your signature item on its own, large; your
+  weapons with to-hit and damage; then what you wear and carry as a grid of
+  pictures with their counts. A thing picked up since you last looked says
+  New, and puts a dot on the Gear section and the Character tab. Tapping a
+  thing opens it as a sheet: the picture large, its whole line, what the
+  rules say it does, and Use, which takes you back to Story with "I use my
+  … to " started in the action box.
+- **Skills**, what you are good at: your best checks first, with Trained and
+  Expert marked and all eighteen one tap away; what each feature does; the
+  six abilities with their saves.
+- **About**, who you are: the agenda (press and hold to read, story points
+  beside it), your story as the crew knows it, your tie to each crewmate
+  beside their face, and how to play you. How to play the game closes it.
+
+The tab opens on About while the agenda is unread and until you have made
+your first move, and on Gear when you have just picked something up;
+otherwise on the section you left (`sectionOnEntry`). The numbers come
+from the helpers the table's own sheet uses, so they are the ones the GM
+rolls with (`character-logic.ts`).
+
+Every item has a picture. The painted icon set's comes first (the SRD's
+weapons, armour, potions and some gear); anything it lacks (the signature
+item, a keycard the GM hands over, a backpack) is painted once per name per
+night in the night's own look, on the media queue beside the portraits
+(`src/lib/couch/item-art.ts`, at most 90 a night). Until it lands, the
+thing's first letter stands in.
 
 The phone turns off the app's animated backdrop while it is up, and its
 pinned bars are painted rather than blurred. A canvas redrawn under
@@ -430,7 +591,9 @@ the line should be the one who throws it.
    member's face and name, what the roll is for, the GM's reason, the dice and
    bonus, the target, and advantage in words (`CouchRolls.tsx`,
    `couchRollCall`). The narrator reads it once
-   (`announceCouchRollCalls`, voice id `couch-roll-<pending>-call`). After
+   (`announceCouchRollCalls`, voice id `couch-roll-<pending>-call`); the
+   throw cuts that reading short, or drops it if it has not started, so the
+   room hears the result instead of the rest of the call. After
    45 s the host's seat offers "Roll for Kara", the digital fallback the
    pending-roll route already allows whoever steers the story, so a flat
    phone never stalls the night.
@@ -454,11 +617,234 @@ the line should be the one who throws it.
 There is no setting: rolling is how couch mode plays. Reduced motion skips the
 3D throw, and a TV without WebGL shows the flat die.
 
+**A group check is thrown together.** When several crew attempt one thing
+(sneak past, climb out, hold the door), the GM calls `group_check` once
+(`COUCH_RULES` says so), never a `request_roll` each, which read the same
+call aloud once per crew member and paused the turn each time.
+
+1. `group_check` parks every named crew member's roll at once
+   (`handleGroupCheck`'s `park` option in `src/lib/dm/check-tools.ts`, branched
+   to from `turn.ts` on a couch table) and `src/lib/couch/group-check.ts` keeps
+   them as one group (`couch_group_checks`), published as `couch_group`
+   before the rolls themselves. The dead fail without a throw.
+2. The narrator reads one call for everyone (`couchGroupCall`, voice id
+   `couch-group-<id>-call`): what, why, the target and how many must make
+   it. The single-roll calls are not read.
+3. Every phone shows its ordinary roll sheet, marked "Group check" with how
+   many must make it; everyone throws whenever they like.
+4. The TV shows one card (`CouchTvGroupCheck.tsx`): a place per crew member
+   that fills as their die lands in the tray, one at a time even when the
+   phones throw together, and a count of who made it. Each throw still
+   publishes its own `couch_roll`, tagged with the `groupId`, so the phone
+   shows its own result, but the TV keeps it in the card and nobody reads it
+   aloud. After 45 s the host's seat offers to roll for every phone still
+   quiet.
+5. When the last die lands the group is settled by group_check's own rule (at
+   least half pass), the card marks whose throw decided it, and the narrator
+   reads the verdict once (`couchGroupResult`). The resumed GM turn reads one
+   answer for its one call (`takeCouchGroupAnswers`), in the shape
+   `group_check` returns when the server throws for everyone.
+
+### 2.11 Fights: the story waits until the fight is over
+
+A fight is the scene until it ends. The engine's own encounter runs it
+(`start_encounter`, initiative, `pc_attack`, `enemy_attack`); the couch adds
+the rules a room of phones needs, its own screens, and pictures of the
+creature.
+
+**Who acts.** The initiative order holds the floor: only the crew member
+whose turn it is can send Do or Say. Everyone else's phone says whose move it
+is and when theirs comes; Ask GM still reaches the GM. A split crew's fight
+is the scene's group's (docs/couch-navigation.md "Splitting up"): the others
+are not in it until they run into the room, when they roll initiative and
+take a place in the order. Their phones keep taking moves meanwhile.
+
+**One action, one turn.** A crew member's turn is the one thing their player
+said. Nobody on a phone knows to say "I end my turn", and there is no End
+Turn button, so once the GM rules on the action (the attack thrown from
+their phone, a check, a spell) the turn ends after the narration, and the
+creatures and the next crew member follow (`turn.ts`, beside
+`readTurnEndInWords`). A walk into reach alone is no ruling: the GM that
+only moved them asks what they do. The GM reads `COUCH_FIGHT_RULES`
+(`src/lib/couch/prompt-logic.ts`) only while a fight runs: describe the
+creature concretely when it appears, resolve the action with its tool and
+stop, never offer movement, bonus actions or ending the turn. Words alone
+are an action too: a turn that neither walked the crew member nor asked
+them for more (`request_player_input`) ends after the narration like a
+ruling (`leftMoveOpen` in `claims.ts`). Before, a plea or an offer of peace
+had no tool, so the turn stayed with the speaker while the GM asked the
+others "do you accept?", and nobody else's phone could answer. A fight the
+GM opens without asking anyone's initiative starts at the end of that turn
+anyway: no phone has a roll to throw, so the server rolls the missing
+initiative itself (`startStalledFight` in `encounter-tools.ts`).
+
+**The story waits.** `advance_act` is refused while a fight runs, and
+`move_party` is not offered in one (`tool-profiles.ts`). It ends when the
+last creature falls, or with `end_encounter` (flight, surrender, a truce).
+
+**A truce** (`src/lib/couch/truce*.ts`, `CouchTruce.tsx`). A crew member
+offers it on their turn, in their own words ("I offer a truce", "everyone
+stand down"); the GM calls `offer_truce` (couch only, offered only in a
+fight), which spends that turn. Every other crew member standing in the
+fight is asked on their phone, out of turn: Accept truce or Fight on, a card
+over the turn line ("It doesn't use your turn"). The TV puts the offer where
+the move banner sits, with each answer filling in, and the narrator reads
+the offer and the verdict. One "fight on" settles it: the table is told who
+refused and the fight goes on. When all accept, any crew who turned stand
+with the others again; with no foe left standing the server ends the fight
+as a truce (the closing card reads "A truce") and wakes the GM to narrate
+the peace. The answers settle in the DM queue, never mid-turn. Creatures
+are never asked: with nobody else on a phone, the GM rules on them and ends
+the fight with `end_encounter`. The phone's "your move" line says "or offer
+a truce", so the room knows it can. POST
+`/api/campaigns/[id]/couch/truce` takes an answer; `couch_truce` streams it.
+
+**Crew against crew.** Players can fight each other (`src/lib/couch/crew-fight*.ts`).
+A fight has two sides, the crew's and the foes' (the engine's
+`combat-sides`), and a crew member who turns on the others fights on the
+foes' side as themselves: the same sheet, still played from their own
+phone. Two ways in: the GM starts a fight naming a crew member as the enemy
+(`start_encounter` or `add_enemies`; a couch night lets the roster name a
+crew member by full name, or by a first name nobody else has), or a crew
+member attacks a crewmate on their own turn mid-fight, and `pc_attack`
+moves the attacker across first instead of refusing an attack on an ally.
+A refused attack (not their turn) moves nobody. A crew member fielded on
+the far side as a fight starts stands beside the crew (`standWithCrew`): the
+engine puts a character joining the foes near the other foes and away from
+the party, which with no creature in the fight left them across the map,
+out of every swing's reach. Rolling someone's initiative is no ruling on
+their action (`claims.ts` `ruledFor`), so the first crew member's turn is
+not ended by the roll that ordered it. The side lasts for that fight; the
+fight ends when either side is down. On the TV the turned crew
+member is a foe card with their own face (then their fight pictures,
+painted from their portrait), red in the turn order and "Fighting the crew"
+in the strip, and the move banner reads "Against the crew". Their phone's
+fight strip lists the crew as the other side ("you against the crew"). The
+closing card names the winners ("Brakk Oduya wins") rather than saying the
+crew won. Both GM rule blocks say how (`COUCH_RULES`, `COUCH_FIGHT_RULES`):
+without the explicit "pc_attack with targetEnemyId set to that crewmate's
+characterId", the GM refused a player's attack on a crewmate as impossible.
+
+**Engine fixes the couch needed.** A to-hit thrown from a phone is recorded
+on the turn like a digital one (`pc-attack-parked.ts`, `noteSwing`). Before,
+the narration guard sent back every hit the GM narrated as "an attack no
+tool rolled", and the GM rewrote it into nothing. The TV reads Hit or Miss
+from the engine's own ruling on the throw (`parkedAttackOutcome`). Surprise
+costs the first turn only: a surprised crew member at the head of the order
+used to lose round 2's turn as well (`encounter-tools.ts` `advancePointer`).
+
+**On the TV** (`CouchTvFight.tsx`, `couch-fight.css`):
+
+- a slow red edge, so the room can tell a fight from the story;
+- the scene picture steps into the space left of the creatures and pulls
+  back from its usual overhang, so none of it sits under a card; its edge
+  feathers into a blurred, darkened copy of the same picture behind the
+  creatures' column (a find shown beside the place gives way meanwhile);
+- the turn order top right: crew faces and the creatures' pictures, the one
+  acting lit, the fallen greyed, and the round;
+- whose move it is over the scene, "Kara's move · say it on your phone ·
+  then Brakk", or the creature's turn in red; it gives way while the GM
+  answers or a roll is called;
+- each creature down the right: its picture, name, health in words
+  (Unhurt, Hurt, Bloodied, Near death, Down) and four pips, never a number;
+  a blow flashes the card, a fall stamps it;
+- the crew strip marks "your move" and "next", and a crew member who is hit
+  flashes red;
+- subtitles, the answers and the dice move left of the creatures, and the
+  answers give way to a roll call rather than sit under it;
+- when the fight ends, a card for 16 seconds: how it ended, how many
+  rounds, what each crew member dealt and took and their natural 20s, over
+  the creature's down picture, stamped.
+
+**On the phone**: a strip over the turn line with the round and each
+creature's health in words and pips; the turn line says "Your move in the
+fight" with "One action: strike, shoot, run, hide, help someone, or offer a truce. Say it.",
+or whose move it is and "You're up next." The story's dice lines name a
+creature's attack by the creature, not by the crew member it hit.
+
+**Pictures of the foe** (`src/lib/couch/fight-art*.ts`, GET
+`/api/campaigns/[id]/couch/fight-art`): three per kind of foe, in the
+night's style lock: whole as it attacks, hurt from bloodied down, and down.
+Anyone can fight anyone, so a foe is drawn as what the story says it is: a
+person stays a person, a droid a droid, a creature a creature. A foe the
+night already knows by name or alias (a forge cast member, an NPC, a crew
+sheet; `knownFoe`) is painted from that fixed look, and from their portrait
+when they have one, so a mechanic who turns on the crew is that mechanic.
+The first ask of the TV starts them; the hurt and down pictures are painted
+from the whole one as their reference, so it stays the same beast. A
+numbered pack ("Hunter 2") is one kind, and the same name in a later fight
+reuses its pictures. On a painter that is not this machine's GPU (the agent
+program, OpenAI) they run on the night's own media lane, beside the turn's
+scene picture rather than behind it. Measured on 2026-10-30 with the agent
+program's painter: the whole picture 23 seconds after the fight started,
+hurt and down at 51 to 53 seconds, before round 1 was over. Until a stage
+is painted the card shows the one before under a red treatment for how
+hurt it is. Every scene picture during a fight takes the creature's current
+picture as a reference (`scene-shot.ts` `sceneShotCast`), so the beast in
+the scene is the one on the card. At most 12 kinds a night, two tries each.
+
+There is no setting: a fight is how a fight plays. The prompt keeps a
+creature an original design, never one from a film, game or book, and never
+turns a person into a monster.
+
+### 2.12 Death, and playing on
+
+Deaths are meant to happen, and they must never send a friend home early. As
+in cinematic sci-fi horror games, a player whose character dies takes over
+someone already in the story and plays on. There is no cost and no wait
+beyond the writing, and no setting.
+
+1. **The death lands.** The death engine marks the sheet dead
+   (`src/lib/dm/death.ts`). The TV shows a card ("Renn Calder is dead",
+   `src/lib/couch/death.ts`), and the crew strip shrinks the card to a
+   dark face marked Dead at the end of the strip, instead of an empty
+   health bar, so the living keep the room. While a crew member is
+   down or dead, the GM reads one more rule (`COUCH_DEATH_RULE`, only
+   then, so the rest of the night does not pay for it): a crew member at
+   0 hit points cannot act, and a dead one gets one beat, with no more
+   blows on the body and no "what does Renn do now?".
+   Nobody waits on a player whose only character is dead
+   (`table-wait.ts` `playerSeats`).
+2. **The phone offers who to play.** Where the action box was, the dead
+   player's Story view lists the people they can play from now on
+   (`CouchTakeover.tsx`, `GET /api/campaigns/[id]/couch/takeover`): the
+   NPCs the crew has met first, then the forge's cast still to turn up,
+   then "Someone new". Out: anyone hostile, fighting the crew or killed in
+   a fight, an NPC who left the story, and anyone already on a sheet or
+   being taken over by another player (`takeover-logic.ts`
+   `takeoverCandidates`). The phone shows a name, role, look and where
+   they were met, never what they want or hide.
+3. **The GM writes them up.** One story-model call turns the person into
+   a crew member, keeping their name, look and voice. What they want and
+   their secret become an agenda for each act left, aimed at the crew's
+   situation; the earlier acts read "Not yet with the crew". A reply that
+   says the story has them dead is passed back to the player to choose
+   again. A model that is down or unreadable never strands a player: the
+   person is built from the forge's cast entry as it stands
+   (`fallbackTakeover`). The sheet passes the table's own door, as the
+   forge's crew does (`forge.ts` `tableJudge`).
+4. **They join.** The new sheet takes the player's seat, and the phone
+   switches to it from the stream. The dead sheet stays, so the GM still
+   reads it as DEAD and the story keeps the body. The NPC row stands behind
+   the new sheet as a companion's does (`companion_sheet_id`), so the GM
+   never plays them twice, and they keep the voice the room knows. The
+   new crew card carries the portrait, or one is painted. A table note
+   ("Renn Calder is gone. Alex plays on as Kade Orr, station steward.")
+   tells the room and the GM, and the TV shows "Kade Orr joins the crew".
+   From then on their agenda is in CREW AGENDAS; the dead character's
+   agenda is not, and act changes and story points skip the dead.
+
+A whole crew dying is the same: every player takes someone over, and the
+story carries on with them.
+
 ---
 
 ## Part 3: one turn, end to end
 
 1. The TV shows the scene and "Waiting on: Kara, Brakk, Sam".
+   With the crew split, it waits only on the group in the scene; the
+   others write their next moves for the GM's cut to them
+   (docs/couch-navigation.md "Splitting up").
 2. Each player types on their phone (Do or Say), or presses Pass. The TV ticks
    names off.
 3. Once everyone has acted or the timer runs out, the GM turn starts. It sees
@@ -517,7 +903,7 @@ There is no setting: rolling is how couch mode plays. Reduced motion skips the
 | Risk | Mitigation |
 | --- | --- |
 | The TV leaks someone's agenda | The TV is its own display seat and never one of the players' accounts. Before guests arrive, test: whisper player A, check the TV and player B's phone. |
-| Turns feel slow | Audio starts before the picture. The lean tool set (P1). `waitForTableSeconds` cut to about 90 s. |
+| Turns feel slow | Audio starts before the picture. The lean tool set (P1). Pass moves a round on; the five-minute clock is only for a phone that died. |
 | Image moderation blocks horror shots | Write shot prompts as implied horror (shadows, aftermath, faces reacting), never gore. Use `moderation: "low"` on the edits call. On refusal, keep the old picture. |
 | ElevenLabs quota runs out mid-game | Three hours is likely 100K+ characters of narration; check the plan's quota first. On quota errors, fall back to Kokoro automatically. |
 | No internet at the cabin | Test the cabin connection. ElevenLabs and OpenAI need it; Kokoro and ComfyUI don't. Keep a local fallback configured. |

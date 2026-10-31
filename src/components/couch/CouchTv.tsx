@@ -1,30 +1,44 @@
 "use client";
 
+import { CouchTvSite } from "@/components/couch/CouchSiteMap";
+import { mapSplit } from "@/lib/couch/navigation-logic";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState, type RefObject } from "react";
 import { HandoutStage } from "@/components/HandoutStage";
 import { SceneTitle } from "@/components/SceneTitle";
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
 import { useTableAudio } from "@/app/campaigns/[campaignId]/useTableAudio";
 import type { NarrationAudio } from "@/app/campaigns/[campaignId]/useNarrationAudio";
+import { useNarrationReplay } from "@/app/campaigns/[campaignId]/NarrationFailureBanner";
 import { effectiveMaxHp } from "@/lib/dm/condition-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { CouchFace, CouchHp } from "@/components/couch/CouchParts";
 import { CouchTvLobby } from "@/components/couch/CouchTvLobby";
 import { TvPictures } from "@/components/couch/CouchTvPictures";
 import { CouchTvJoinButton } from "@/components/couch/CouchTvJoin";
+import { CouchTvDebugButton } from "@/components/couch/CouchTvDebug";
 import { CouchTvAnswers } from "@/components/couch/CouchTvAnswers";
 import { CouchTvHalted } from "@/components/couch/CouchTvHalted";
 import { CouchRolls } from "@/components/couch/CouchRolls";
-import { CouchMapRail } from "@/components/couch/CouchNavigation";
+import { CouchMapRail, CouchPlaceTitle } from "@/components/couch/CouchNavigation";
+import { CouchTvFightHud, CouchTvFightOrder, CouchTvFightOver, useFightArt } from "@/components/couch/CouchTvFight";
+import { useTruceShown } from "@/components/couch/CouchTruce";
+import { couchFight, crewHealthOf, type CouchFight } from "@/lib/couch/fight-logic";
 import { couchAnswersVisible } from "@/lib/couch/answers-logic";
+import type { CouchObjective } from "@/lib/couch/pacing-logic";
+import { itemShowCaption, tvItemShow } from "@/lib/couch/item-show-logic";
 import {
   couchHaltedTurn,
+  gmAtWork,
   gmStatusWords,
   latestNarration,
+  isDead,
   previousSubtitlePages,
   subtitlePageMs,
   subtitlePages,
+  voicedSubtitlePage,
+  tvCrew,
+  tvTurnSeats,
   tvPictures,
 } from "@/components/couch/couch-logic";
 
@@ -51,18 +65,59 @@ export function CouchTv({
   const { narration, ambience } = useTableAudio(state);
   const controls = useRef<HTMLDivElement>(null);
   const awake = useAwake(controls);
+  // Muted by the Mute button on this screen, so the sound gate below does
+  // not jump up to undo it. A mute left from an earlier visit still asks.
+  const [hushed, setHushed] = useState(false);
+  // Counts Replay presses, so the subtitles start over with the voice.
+  const [replays, setReplays] = useState(0);
   const { campaign, me } = state;
+  const replayNarration = useNarrationReplay(campaign?.id ?? "", narration, state.narrationAudio);
+  // What Replay reads: the passage being read, else the newest one.
+  const replayId = useMemo(() => {
+    const spoken = state.messages.find((message) => message.id === narration.playingMessageId && message.authorType === "dm");
+    return spoken?.id ?? latestNarration(state.messages)?.id ?? null;
+  }, [state.messages, narration.playingMessageId]);
+  const lobby = campaign?.status === "lobby";
+  const ttsOn = Boolean(campaign?.gameSettings?.ttsEnabled);
+  const canPause = ttsOn && Boolean(narration.playingMessageId);
+  const canReplay = ttsOn && !lobby && !narration.muted && Boolean(replayId);
+  const togglePause = () => (narration.paused ? narration.resume() : narration.pause());
+  const replay = () => {
+    if (!replayId) return;
+    setReplays((count) => count + 1);
+    void replayNarration(replayId).then((error) => {
+      if (error) console.warn(error);
+    });
+  };
+  // The laptop's keyboard, for whoever sits at it: Space or K pauses and
+  // resumes, R reads the passage again. A focused control keeps its keys.
+  const onKey = useEffectEvent((event: KeyboardEvent) => {
+    if (event.metaKey || event.ctrlKey || event.altKey || event.repeat) return;
+    const target = event.target;
+    if (target instanceof Element && target.closest("button, a, input, textarea, select, [contenteditable]")) return;
+    const key = event.key.toLowerCase();
+    if ((key === " " || key === "k") && canPause) {
+      event.preventDefault();
+      togglePause();
+    } else if (key === "r" && canReplay) {
+      event.preventDefault();
+      replay();
+    }
+  });
+  useEffect(() => {
+    const handle = (event: KeyboardEvent) => onKey(event);
+    window.addEventListener("keydown", handle);
+    return () => window.removeEventListener("keydown", handle);
+  }, []);
   if (!campaign || !me) {
     return null;
   }
-  const lobby = campaign.status === "lobby";
-  const ttsOn = Boolean(campaign.gameSettings?.ttsEnabled);
   const ambienceOn = Boolean(campaign.gameSettings?.ambienceEnabled);
   const askForSound =
-    !narration.unlocked || (ttsOn && (narration.held > 0 || narration.muted)) || (ambienceOn && ambience.waiting);
+    !narration.unlocked || (ttsOn && (narration.held > 0 || (narration.muted && !hushed))) || (ambienceOn && ambience.waiting);
   return (
     <main className="couch couch-tv" aria-label={`${campaign.title}, on the TV`} data-idle={awake ? undefined : ""}>
-      {lobby ? <CouchTvLobby state={state} refresh={refresh} /> : <CouchTvPlay state={state} narration={narration} ttsOn={ttsOn} />}
+      {lobby ? <CouchTvLobby state={state} refresh={refresh} narration={narration} ttsOn={ttsOn} /> : <CouchTvPlay state={state} narration={narration} ttsOn={ttsOn} replays={replays} />}
       <SceneTitle card={state.titleCard} onShown={markTitleCardShown} />
       {!lobby ? (
         <HandoutStage
@@ -112,7 +167,35 @@ export function CouchTv({
         <Link href={`/campaigns/${campaign.id}?host=1`} className="couch-tv-control">
           Host controls
         </Link>
+        <button
+          type="button"
+          className="couch-tv-control"
+          aria-pressed={narration.muted}
+          onClick={() => {
+            const next = !narration.muted;
+            setHushed(next);
+            narration.setMuted(next);
+            ambience.setMuted(next);
+            if (!next) {
+              narration.unlock();
+              ambience.unlock();
+            }
+          }}
+        >
+          {narration.muted ? "Unmute" : "Mute"}
+        </button>
+        {canPause ? (
+          <button type="button" className="couch-tv-control" aria-pressed={narration.paused} onClick={togglePause}>
+            {narration.paused ? "Resume narrator" : "Pause narrator"}
+          </button>
+        ) : null}
+        {canReplay ? (
+          <button type="button" className="couch-tv-control" onClick={replay}>
+            Replay
+          </button>
+        ) : null}
         {!lobby && campaign.inviteCode ? <CouchTvJoinButton inviteCode={campaign.inviteCode} /> : null}
+        <CouchTvDebugButton state={state} narration={narration} />
       </div>
     </main>
   );
@@ -149,7 +232,12 @@ function useAwake(controls: RefObject<HTMLElement | null>): boolean {
   return awake;
 }
 
-function CouchTvPlay({ state, narration, ttsOn }: { state: CampaignState; narration: NarrationAudio; ttsOn: boolean }) {
+function CouchTvPlay({ state, narration, ttsOn, replays }: {
+  state: CampaignState;
+  narration: NarrationAudio;
+  ttsOn: boolean;
+  replays: number;
+}) {
   const { campaign, messages, sheets } = state;
   const round = state.couchAnswers;
   const [dismissedAnswersId, setDismissedAnswersId] = useState<string | null>(null);
@@ -168,7 +256,27 @@ function CouchTvPlay({ state, narration, ttsOn }: { state: CampaignState; narrat
     round, latestNarrationSeq, playingMessageId: narration.playingMessageId,
     readoutExpected, live: Boolean(round?.live), dismissedId: dismissedAnswersId,
   });
-  const pictures = useMemo(() => tvPictures(messages), [messages]);
+  // Everyone has acted (or the wait ran out): the passage they answered has
+  // done its job, so the narrator stops reading it and drops what queued
+  // behind it, and the answers and the GM's reply come next. Passages still
+  // being voiced are dropped too. Once per live round; a reload never cuts.
+  const { flush, skip } = narration;
+  const liveRoundId = round?.live ? round.id : null;
+  const roundThrough = round?.throughSeq ?? 0;
+  const flushedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!liveRoundId || flushedRef.current === liveRoundId) return;
+    flushedRef.current = liveRoundId;
+    flush(liveRoundId);
+    for (const message of messages) {
+      if (message.authorType === "dm" && message.seq <= roundThrough) skip(message.id);
+    }
+  }, [liveRoundId, roundThrough, messages, flush, skip]);
+  const herePicture = state.couchNavigation?.here.picture ?? null;
+  const pictures = useMemo(() => tvPictures(messages, herePicture), [messages, herePicture]);
+  // An item used this turn takes the find's column (item-show-logic.ts).
+  const itemShow = useMemo(() => tvItemShow(state.couchItems, messages), [state.couchItems, messages]);
+  const itemCaption = useMemo(() => (itemShow ? itemShowCaption(itemShow) : null), [itemShow]);
   // The passage being read aloud, while one is; else the newest.
   const passage = useMemo(() => {
     const spoken = narration.playingMessageId
@@ -178,66 +286,201 @@ function CouchTvPlay({ state, narration, ttsOn }: { state: CampaignState; narrat
   }, [messages, narration.playingMessageId]);
   const voiceStatus = passage ? state.narrationStatus[passage.id]?.state : undefined;
   const voiceExpected = ttsOn && !narration.muted && voiceStatus !== "failed" && voiceStatus !== "skipped";
-  const floorOpen = (campaign?.floor?.mode ?? "open") === "open";
-  const waitingOn = floorOpen && state.dmStatus === "idle" ? (state.tableWait?.waitingOn ?? []) : [];
+  // Whose turn it is: the ones the GM asked, or the seats the open floor
+  // waits for. Their faces light up in the crew strip.
+  const waitingOn = tvTurnSeats({
+    floor: campaign?.floor ?? { mode: "open" },
+    gmIdle: state.dmStatus === "idle",
+    waitingOn: state.tableWait?.waitingOn ?? [],
+    names: Object.fromEntries(sheets.filter((sheet) => !sheet.isCompanion).map((sheet) => [sheet.userId, sheet.name])),
+  });
   const waitingIds = new Set(waitingOn.map((seat) => seat.userId));
-  const crew = sheets.filter((sheet) => !sheet.isCompanion && sheet.userId !== campaign?.leadUserId);
+  const crew = useMemo(() => tvCrew(sheets, campaign?.leadUserId), [sheets, campaign?.leadUserId]);
+  // A fight holds the story until it ends (docs/couch-mode-spec.md 2.11):
+  // the screen turns to it, and the last one is kept for the card that
+  // closes it.
+  const fight = useMemo(
+    () => couchFight(state.encounter, crewHealthOf(sheets)),
+    [state.encounter, sheets],
+  );
+  const [lastFight, setLastFight] = useState<CouchFight | null>(null);
+  if (fight && fight !== lastFight) setLastFight(fight);
+  const fightArt = useFightArt(campaign?.id ?? "", fight ? `${state.encounter?.id}:${fight.enemies.map((enemy) => enemy.artKey).join(",")}` : "");
+  // As CouchRolls reads it: a secret roll is never called on the TV.
+  const rollCalled = state.pendingRolls.some((pending) => (pending as { visibility?: string }).visibility !== "secret");
+  const fightTurnId = fight?.turn?.kind === "crew" ? fight.turn.characterId : "";
+  // A split crew's members off scene, by the room they stand in
+  // (src/lib/couch/whereabouts.ts).
+  const navigation = state.couchNavigation;
+  const site = state.couchSite;
+  // The map's share of the stage: split beside the turn's picture, or the
+  // whole stage until there is one.
+  const sitePicture = pictures.scene ?? campaign?.cover?.url ?? null;
+  const siteLayout: "split" | "full" | null = site && !fight ? (sitePicture ? "split" : "full") : null;
+  const awayFrom = (sheetId: string) =>
+    mapSplit(navigation) ? (navigation?.groups.find((group) => !group.inScene && group.crew.some((member) => member.id === sheetId))?.room.name ?? "") : "";
+  const fightNextId = fight?.upNext?.characterId ?? "";
+  const truce = useTruceShown(state.couchTruce);
   const gmWords = gmStatusWords(state.dmStatus);
+  const gmBusy = gmAtWork(state.dmStatus);
   const halted = useMemo(() => (state.dmStatus === "idle" ? couchHaltedTurn(messages) : null), [messages, state.dmStatus]);
   return (
     <>
-      <TvPictures scene={pictures.scene ?? campaign?.cover?.url ?? null} insert={pictures.insert} />
-      <div className="couch-tv-scrim" aria-hidden="true" />
-      <div className="couch-tv-top">
-        <div className="couch-tv-title">
-          <strong>{campaign?.title}</strong>
-          {gmWords ? (
-            <span className="couch-tv-gm" role="status">
-              <span className="couch-pulse" aria-hidden="true" />
-              {gmWords}…
-            </span>
-          ) : null}
-          <CouchMapRail state={state} />
+      {/* While the GM works, the scene behind it dims so the room can tell
+          from the couch that its moves are in and nobody needs to act. The
+          answers it is reading and the dice stay outside, at full
+          brightness. */}
+      <div className="couch-tv-stage" data-gm-busy={gmBusy ? "" : undefined} data-fight={fight ? "" : undefined} data-site={siteLayout ?? undefined}>
+        {/* A night played on a map splits the stage: the map on the left,
+            the turn's picture in a column on the right with the words over
+            it; a fight takes the whole stage back for the creature
+            (docs/couch-overhead-spec.md). */}
+        {siteLayout ? (
+          <>
+            <CouchTvSite view={site as NonNullable<typeof site>} />
+            {sitePicture ? (
+              <div className="couch-tv-site-side" aria-hidden="true">
+                {/* eslint-disable-next-line @next/next/no-img-element -- a generated picture */}
+                <img key={sitePicture} src={sitePicture} alt="" />
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <TvPictures
+            scene={pictures.scene ?? campaign?.cover?.url ?? null}
+            insert={itemShow?.art ?? pictures.insert}
+            item={itemCaption}
+          />
+        )}
+        <div className="couch-tv-scrim" aria-hidden="true" />
+        <CouchPlaceTitle state={state} />
+        <div className="couch-tv-top">
+          <div className="couch-tv-title">
+            <strong>{campaign?.title}</strong>
+            {site ? null : <CouchMapRail state={state} />}
+          </div>
+          <div className="couch-tv-side">
+            {state.couchObjective ? <CouchTvObjective key={state.couchObjective.text} objective={state.couchObjective} /> : null}
+            {fight ? <CouchTvFightOrder fight={fight} art={fightArt} sheets={sheets} /> : null}
+            {halted && campaign ? <CouchTvHalted campaignId={campaign.id} turnId={halted.turnId} reason={halted.reason} /> : null}
+            {waitingOn.length ? (
+              <div className="couch-tv-waiting" role="status">
+                <span className="couch-label">Waiting on</span>
+                <strong>{waitingOn.map((seat) => seat.name).join(", ")}</strong>
+              </div>
+            ) : null}
+          </div>
         </div>
-        <div className="couch-tv-side">
-          {halted && campaign ? <CouchTvHalted campaignId={campaign.id} turnId={halted.turnId} reason={halted.reason} /> : null}
-          {waitingOn.length ? (
-            <div className="couch-tv-waiting" role="status">
-              <span className="couch-label">Waiting on</span>
-              <strong>{waitingOn.map((seat) => seat.name).join(", ")}</strong>
-            </div>
-          ) : null}
-        </div>
+        {showAnswers && round && !rollCalled ? null : passage ? (
+          <TvSubtitles
+            key={`${passage.id}:${replays}`}
+            id={passage.id}
+            content={passage.content}
+            messages={messages}
+            speaking={narration.playingMessageId === passage.id}
+            paused={narration.paused && narration.playingMessageId === passage.id}
+            voiceExpected={voiceExpected}
+            clock={narration.clock}
+            sentenceOnly={siteLayout === "split"}
+          />
+        ) : null}
+        <ul className="couch-tv-crew" aria-label="The crew">
+          {crew.map((sheet) => (
+            <CrewMember
+              key={sheet.id}
+              sheet={sheet}
+              away={awayFrom(sheet.id)}
+              waiting={waitingIds.has(sheet.userId)}
+              fightTurn={fight ? (sheet.id === fightTurnId ? "now" : sheet.id === fightNextId ? "next" : "") : ""}
+              against={Boolean(fight?.turned.includes(sheet.id))}
+            />
+          ))}
+        </ul>
+        {fight ? <CouchTvFightHud fight={fight} art={fightArt} sheets={sheets} gmBusy={gmBusy} rollsWaiting={rollCalled} truce={truce} /> : null}
       </div>
-      {showAnswers && round ? <CouchTvAnswers round={round} sheets={sheets} /> : passage ? (
-        <TvSubtitles
-          key={passage.id}
-          id={passage.id}
-          content={passage.content}
-          messages={messages}
-          speaking={narration.playingMessageId === passage.id}
-          voiceExpected={voiceExpected}
-        />
-      ) : null}
-      <ul className="couch-tv-crew" aria-label="The crew">
-        {crew.map((sheet) => (
-          <CrewMember key={sheet.id} sheet={sheet} waiting={waitingIds.has(sheet.userId)} />
-        ))}
-      </ul>
+      {/* A roll called on the TV is what the room looks at next: the
+          answers it came from give way rather than sit under the call. */}
+      {showAnswers && round && !rollCalled ? <CouchTvAnswers round={round} sheets={sheets} /> : null}
+      <CouchTvFightOver summary={state.fightSummary} sheets={sheets} art={fightArt} lastFight={lastFight} />
+      {gmBusy ? <div className="couch-gm-edge" aria-hidden="true" /> : null}
+      {/* Always mounted, so a screen reader hears the words arrive. */}
+      <div className="couch-tv-gm-slot" role="status">
+        {gmWords ? (
+          <span className="couch-tv-gm">
+            <span className="couch-pulse" aria-hidden="true" />
+            {gmWords}…
+          </span>
+        ) : null}
+      </div>
       <CouchRolls state={state} narration={narration} />
     </>
   );
 }
 
-function CrewMember({ sheet, waiting }: { sheet: CharacterSheet; waiting: boolean }) {
-  const max = effectiveMaxHp(sheet);
+// What the crew must do now (set_objective, src/lib/couch/pacing.ts), big
+// enough to read from the couch, in the right column so it never covers the
+// map. Only the goal: its clock is the GM's to voice. Keyed by its words, so
+// a new objective arrives with the same fade as a new scene.
+function CouchTvObjective({ objective }: { objective: CouchObjective }) {
   return (
-    <li className="couch-tv-member" data-waiting={waiting ? "" : undefined} data-down={sheet.currentHp <= 0 ? "" : undefined}>
+    <div className="couch-tv-objective" role="status">
+      <span className="couch-label">Objective</span>
+      <span className="couch-tv-objective-text">{objective.text}</span>
+    </div>
+  );
+}
+
+function CrewMember({ sheet, away = "", waiting, fightTurn, against }: {
+  sheet: CharacterSheet;
+  // The room they stand in while the scene is elsewhere.
+  away?: string;
+  waiting: boolean;
+  fightTurn: "now" | "next" | "";
+  against: boolean;
+}) {
+  const max = effectiveMaxHp(sheet);
+  // Health lost flashes the face red, so the room sees who was hit. Only a
+  // drop seen on this screen: a reload does not replay it.
+  const [seen, setSeen] = useState({ hp: sheet.currentHp, hits: 0 });
+  if (seen.hp !== sheet.currentHp) {
+    setSeen({ hp: sheet.currentHp, hits: sheet.currentHp < seen.hp ? seen.hits + 1 : seen.hits });
+  }
+  // The dead stay in the strip, shrunk to a dark face marked Dead, until
+  // their player plays on as someone else (tvCrew); the room should never
+  // read a death as low health.
+  const dead = isDead(sheet);
+  return (
+    <li
+      className="couch-tv-member"
+      data-waiting={!dead && (waiting || fightTurn === "now") ? "" : undefined}
+      data-down={sheet.currentHp <= 0 ? "" : undefined}
+      data-dead={dead ? "" : undefined}
+      data-fight-turn={fightTurn || undefined}
+      data-against={against ? "" : undefined}
+      data-away={away && !dead ? "" : undefined}
+    >
+      {seen.hits ? <span key={seen.hits} className="couch-tv-member-hit" aria-hidden="true" /> : null}
       <CouchFace src={sheet.portrait?.url} name={sheet.name} />
       <span className="couch-tv-member-text">
         <span className="couch-tv-member-name">{sheet.name}</span>
-        {sheet.crewRole?.trim() ? <span className="couch-tv-member-role">{sheet.crewRole}</span> : null}
-        <CouchHp current={sheet.currentHp} max={max} label={`${sheet.name}'s health`} />
+        {dead ? (
+          <span className="couch-tv-member-dead">Dead</span>
+        ) : (
+          <>
+            {/* A crew member fighting the others says so where their role is. */}
+            {against ? (
+              <span className="couch-tv-member-role couch-tv-member-against">Fighting the crew</span>
+            ) : away ? (
+              <span className="couch-tv-member-role couch-tv-member-away">
+                <span className="sr-only">Off scene, in </span>
+                {away}
+              </span>
+            ) : sheet.crewRole?.trim() ? (
+              <span className="couch-tv-member-role">{sheet.crewRole}</span>
+            ) : null}
+            <CouchHp current={sheet.currentHp} max={max} label={`${sheet.name}'s health`} />
+          </>
+        )}
       </span>
     </li>
   );
@@ -249,18 +492,26 @@ const VOICE_WAIT_MS = 8000;
 
 type Pacing = "await" | "read" | "voice" | "done";
 
-// The passage as subtitles, a page at a time. Read aloud, it turns at the
-// narrator's pace from the moment the voice starts and holds the last page
-// once the voice stops; without a voice, at a reading pace. Keyed by the
-// passage, so a new one always starts at its first page.
-function TvSubtitles({ id, content, messages, speaking, voiceExpected }: {
+// How often a page read aloud checks where the voice has got to.
+const VOICE_POLL_MS = 200;
+
+// The passage as subtitles, a page at a time. Read aloud, it turns where the
+// voice reaches it (voicedSubtitlePage) and holds the last page once the
+// voice stops; without a voice, at a reading pace. Keyed by the passage, so
+// a new one always starts at its first page. Beside a map (`sentenceOnly`)
+// the column is narrow: only the sentence being spoken, no earlier lines.
+function TvSubtitles({ id, content, messages, speaking, paused, voiceExpected, clock, sentenceOnly }: {
   id: string;
   content: string;
   messages: CampaignState["messages"];
   speaking: boolean;
+  // The narrator is held: the page stays until the voice goes on.
+  paused: boolean;
   voiceExpected: boolean;
+  clock: NarrationAudio["clock"];
+  sentenceOnly: boolean;
 }) {
-  const pages = useMemo(() => subtitlePages(content), [content]);
+  const pages = useMemo(() => subtitlePages(content, undefined, sentenceOnly), [content, sentenceOnly]);
   const [cursor, setCursor] = useState<{ page: number; pacing: Pacing }>(() => ({
     page: 0,
     pacing: speaking ? "voice" : voiceExpected ? "await" : "read",
@@ -274,6 +525,9 @@ function TvSubtitles({ id, content, messages, speaking, voiceExpected }: {
   const { page, pacing } = cursor;
   const earlier = useMemo(() => previousSubtitlePages(messages, id, page), [messages, id, page]);
   useEffect(() => {
+    if (paused) {
+      return;
+    }
     if (pacing === "await") {
       const timer = window.setTimeout(
         () => setCursor((current) => (current.pacing === "await" ? { ...current, pacing: "read" } : current)),
@@ -281,21 +535,31 @@ function TvSubtitles({ id, content, messages, speaking, voiceExpected }: {
       );
       return () => window.clearTimeout(timer);
     }
-    if ((pacing === "read" || pacing === "voice") && page < pages.length - 1) {
+    if (pacing === "voice") {
+      // Timers rather than animation frames: a background tab still turns.
+      const timer = window.setInterval(() => {
+        const at = clock();
+        if (!at || at.messageId !== id) return;
+        const next = voicedSubtitlePage(pages, at.seconds, at.duration);
+        setCursor((current) => (current.pacing === "voice" && current.page !== next ? { ...current, page: next } : current));
+      }, VOICE_POLL_MS);
+      return () => window.clearInterval(timer);
+    }
+    if (pacing === "read" && page < pages.length - 1) {
       const timer = window.setTimeout(
         () => setCursor((current) => (current.page === page ? { ...current, page: page + 1 } : current)),
-        subtitlePageMs(pages[page], pacing === "voice"),
+        subtitlePageMs(pages[page]),
       );
       return () => window.clearTimeout(timer);
     }
-  }, [pacing, page, pages]);
+  }, [pacing, page, pages, paused, clock, id]);
   if (!pages.length) {
     return null;
   }
   const shown = Math.min(page, pages.length - 1);
   return (
     <div className="couch-tv-subs">
-      {earlier.length ? (
+      {earlier.length && !sentenceOnly ? (
         <div className="couch-tv-history" role="group" aria-label="Earlier narration">
           {earlier.map((entry) => <p key={entry.id}>{entry.content}</p>)}
         </div>

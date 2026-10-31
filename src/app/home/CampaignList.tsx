@@ -16,8 +16,8 @@ import { slotLine, steersStory, type HomeCampaign } from "@/app/home/types";
 // carried. Export is for anyone at the table, Duplicate follows story
 // authority, Delete is the owner's alone. The one on the title screen is
 // listed too, or it could never be exported, copied or deleted from home;
-// its status badge tells it apart. A dashed slot at the end forges a new
-// world.
+// its status badge tells it apart. A dashed slot at the end starts a new
+// couch night.
 export function YourTables({
   campaigns,
   loading,
@@ -26,7 +26,7 @@ export function YourTables({
   actionError,
   onClone,
   onDelete,
-  onNewCampaign,
+  canStart,
 }: {
   campaigns: HomeCampaign[];
   loading: boolean;
@@ -35,7 +35,8 @@ export function YourTables({
   actionError: string;
   onClone: (id: string) => void;
   onDelete: (campaign: HomeCampaign) => void;
-  onNewCampaign: () => void;
+  // The dashed "Start a night" slot, on the same terms as the menu's door.
+  canStart: boolean;
 }) {
   if (!loading && campaigns.length === 0 && !actionError) {
     return null;
@@ -62,14 +63,14 @@ export function YourTables({
               />
             </li>
           ))}
-          <li className="ts-slot-cell">
-            <button type="button" onClick={onNewCampaign} className="ts-slot ts-slot-new motion-card">
+          {canStart ? <li className="ts-slot-cell">
+            <Link href="/couch" className="ts-slot ts-slot-new motion-card">
               <span className="ts-slot-new-plus" aria-hidden="true">
                 <Plus className="size-5" />
               </span>
-              <span className="ts-slot-title">Forge a new world</span>
-            </button>
-          </li>
+              <span className="ts-slot-title">Start a night</span>
+            </Link>
+          </li> : null}
         </ul>
       )}
     </section>

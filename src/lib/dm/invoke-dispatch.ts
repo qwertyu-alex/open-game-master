@@ -36,7 +36,9 @@ import { handlePartyStash } from "@/lib/dm/party-tools";
 import { handleClearEffect, handleSetEffect } from "@/lib/dm/effect-tools";
 import { handleEndScene, handleSceneCheck, handleStartScene } from "@/lib/dm/scene-tools";
 import { handlePlaySting, handleSetAmbience } from "@/lib/dm/ambience-tools";
-import { handleAdvanceAct, handleAwardStoryPoint } from "@/lib/dm/couch-tools";
+import { handleAdvanceAct, handleAwardStoryPoint, handleCutTo, handleRepaintPlace, handleSetMood, handleSetObjective } from "@/lib/dm/couch-tools";
+import { handleOfferTruce } from "@/lib/couch/truce";
+import { handleSiteTool } from "@/lib/couch/site";
 import { handleDismount, handleMountUp } from "@/lib/dm/mount-tools";
 import { handleItemCall } from "@/lib/dm/gear-tool";
 import {
@@ -223,8 +225,24 @@ export async function dispatchAdjudication(
       return handlePlaySting(campaign, rawArguments);
     case "advance_act":
       return handleAdvanceAct(campaign, rawArguments);
+    case "set_objective":
+      return handleSetObjective(campaign, rawArguments);
     case "award_story_point":
       return handleAwardStoryPoint(campaign, rawArguments);
+    case "repaint_place":
+      return handleRepaintPlace(campaign, rawArguments);
+    case "set_mood":
+      return handleSetMood(campaign, rawArguments);
+    case "cut_to":
+      return handleCutTo(campaign, rawArguments);
+    case "offer_truce":
+      return handleOfferTruce(campaign, rawArguments);
+    case "set_border":
+    case "move_foe":
+    case "reveal":
+    case "take_item":
+    case "track":
+      return handleSiteTool(campaign, name, rawArguments);
     case "mount_up":
       return handleMountUp(campaign, rawArguments, sheets, sheetsById, turn);
     case "dismount":

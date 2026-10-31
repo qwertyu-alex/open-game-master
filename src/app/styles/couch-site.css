@@ -1,0 +1,239 @@
+/* The overhead night's map (src/components/couch/CouchSiteMap.tsx). Every
+   element is placed in tiles: --x, --y, --w, --h on the element, --t (one
+   tile) on the map. The night starts black: only what the crew has seen is
+   sent, so the background is the dark. The TV's camera moves the whole
+   plane with one transform; the phone scrolls it. */
+
+.couch-site {
+  --site-floor: #1a2024;
+  --site-corridor: #151b1e;
+  --site-wall: #c9d6cf;
+  --site-hull: #0b0f11;
+  --site-door: #8fe0b5;
+  --site-locked: #f2c46b;
+  --site-sealed: #ff8a7a;
+  --site-glow: rgba(143, 224, 181, 0.16);
+  position: relative;
+  width: calc(var(--cols) * var(--t));
+  height: calc(var(--rows) * var(--t));
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  color: #e8eeea;
+}
+
+.couch-site > * {
+  position: absolute;
+  left: calc(var(--x, 0) * var(--t));
+  top: calc(var(--y, 0) * var(--t));
+  width: calc(var(--w, 0) * var(--t));
+  height: calc(var(--h, 0) * var(--t));
+  box-sizing: border-box;
+}
+
+/* Floors: plated rooms, grated corridors, crawlways a narrow duct. */
+.couch-site-floor {
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px) 0 0 / var(--t) var(--t),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px) 0 0 / var(--t) var(--t),
+    var(--site-floor);
+  transition: filter 400ms ease, opacity 400ms ease;
+}
+.couch-site-floor[data-kind="corridor"],
+.couch-site-floor[data-kind="airlock"] {
+  background:
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.35) 0 2px, transparent 2px calc(var(--t) / 3)),
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px) 0 0 / var(--t) var(--t),
+    var(--site-corridor);
+}
+.couch-site-floor[data-kind="crawlway"] { background: repeating-linear-gradient(45deg, #2a2420 0 4px, #1f1b18 4px 8px); }
+.couch-site-floor[data-kind="exterior"] { background: repeating-linear-gradient(0deg, #4a4a44 0 3px, #3a3b37 3px calc(var(--t) / 2)); }
+
+/* What the crew can see now is lit, the scene's zone brightest; what
+   they saw before is dim. */
+.couch-site-floor[data-sight="visible"],
+.couch-site-floor[data-sight="here"] { box-shadow: inset 0 0 calc(var(--t) * 1.5) var(--site-glow); }
+.couch-site-floor[data-sight="here"] { filter: brightness(1.3); }
+.couch-site-floor[data-scene] { filter: brightness(1.45); box-shadow: inset 0 0 calc(var(--t) * 2) rgba(143, 224, 181, 0.28); }
+.couch-site-floor[data-sight="seen"] { filter: brightness(0.6) saturate(0.5); }
+.couch-site-floor[data-dark][data-sight="seen"] { filter: brightness(0.4) saturate(0.4); }
+.couch-site-floor[data-dark]:not([data-sight="seen"]) { filter: brightness(0.7); }
+
+.couch-site-wall { background: var(--site-wall); border-radius: 1px; box-shadow: 0 0 calc(var(--t) * 0.2) rgba(0, 0, 0, 0.8); }
+.couch-site-wall[data-axis="h"] { height: calc(var(--t) * 0.18); margin-top: calc(var(--t) * -0.09); }
+.couch-site-wall[data-axis="v"] { width: calc(var(--t) * 0.18); margin-left: calc(var(--t) * -0.09); }
+
+/* Doors sit in the wall: green open or shut, amber locked, red sealed.
+   An open door is a gap with two jambs; a vent a small grille. */
+.couch-site-door { background: var(--site-door); border-radius: 2px; }
+.couch-site-door[data-axis="h"] { height: calc(var(--t) * 0.42); margin-top: calc(var(--t) * -0.21); }
+.couch-site-door[data-axis="v"] { width: calc(var(--t) * 0.42); margin-left: calc(var(--t) * -0.21); }
+.couch-site-door[data-kind="airlock"] { background: repeating-linear-gradient(45deg, var(--site-door) 0 4px, #1d3a2c 4px 8px); }
+.couch-site-door[data-kind="vent"] { background: repeating-linear-gradient(90deg, #6b7a73 0 2px, #1a2024 2px 4px); }
+.couch-site-door[data-kind="vent"][data-axis="v"] { background: repeating-linear-gradient(0deg, #6b7a73 0 2px, #1a2024 2px 4px); }
+.couch-site-door[data-state="open"],
+.couch-site-door[data-state="broken"] { background: transparent; border: 0 solid var(--site-door); }
+.couch-site-door[data-axis="h"][data-state="open"] { border-left-width: 3px; border-right-width: 3px; }
+.couch-site-door[data-axis="v"][data-state="open"] { border-top-width: 3px; border-bottom-width: 3px; }
+.couch-site-door[data-state="locked"] { background: var(--site-locked); }
+.couch-site-door[data-state="sealed"] { background: var(--site-sealed); }
+
+/* Furniture, drawn in a few strokes so the room reads at a glance. */
+.couch-site-prop { border: 1px solid rgba(201, 214, 207, 0.35); background: rgba(80, 92, 88, 0.55); border-radius: 2px; }
+.couch-site-prop[data-prop="round-table"] { border-radius: 50%; background: radial-gradient(circle, #5a4a3a 55%, #3a2f25 56% 64%, transparent 65%); border: 0; }
+.couch-site-prop[data-prop="bed"],
+.couch-site-prop[data-prop="pod"] { background: linear-gradient(#e4e8e6 0 30%, #b9c2be 30%); border-color: #f2a65a; border-radius: 4px; }
+.couch-site-prop[data-prop="console"] { background: linear-gradient(90deg, #2a3b33, #3f6a55 50%, #2a3b33); border-color: #8fe0b5; }
+.couch-site-prop[data-prop="stairs"] { background: repeating-linear-gradient(0deg, #5b625e 0 3px, #2a2f2c 3px calc(var(--t) / 2)); }
+.couch-site-prop[data-prop="lift"] { background: repeating-linear-gradient(45deg, #f2c46b33 0 6px, transparent 6px 12px), #2a2f2c; border: 2px solid #f2c46b88; }
+.couch-site-prop[data-prop="tank"] { border-radius: 50%; background: radial-gradient(circle, #6fc8d8aa 40%, #2a3b40 42%); }
+.couch-site-prop[data-prop="toilet"] { border-radius: 40% 40% 50% 50%; background: #d8dedb; }
+.couch-site-prop[data-prop="vehicle"] { background: linear-gradient(#c9a640 0 25%, #4a4a3a 25% 75%, #c9a640 75%); border-radius: 6px; }
+.couch-site-prop[data-prop="crate"] { background: linear-gradient(45deg, transparent 46%, #0006 47% 53%, transparent 54%), #6a5a40; }
+
+/* Labels sit over their zone's largest rectangle, readable from the couch. */
+.couch-site-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 2px;
+  padding: calc(var(--t) * 0.3) 4px 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  pointer-events: none;
+}
+button.couch-site-label { pointer-events: auto; cursor: pointer; border-radius: 6px; }
+button.couch-site-label:focus-visible { outline: 3px solid var(--site-door); outline-offset: -3px; }
+.couch-site-name {
+  font-size: max(9px, calc(var(--t) * 0.58));
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(232, 238, 234, 0.92);
+  text-shadow: 0 1px 3px #000, 0 0 8px #000;
+  line-height: 1.1;
+}
+.couch-site-features { font-size: max(8px, calc(var(--t) * 0.34)); color: var(--site-locked); text-shadow: 0 1px 3px #000; text-transform: uppercase; letter-spacing: 0.08em; }
+.couch-site-label[data-sight="seen"] .couch-site-name { color: rgba(232, 238, 234, 0.55); }
+.couch-site-label[data-sight="here"] .couch-site-name { color: var(--site-door); }
+
+/* Tokens: crew a green disc with initials, people a pale one, hostiles a
+   red diamond, items and clues an amber square, the threat a black hole. */
+.couch-site-token {
+  --size: calc(var(--t) * 1.2);
+  width: var(--size);
+  height: var(--size);
+  margin: calc(var(--size) / -2) 0 0 calc(var(--size) / -2);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: calc(var(--size) * 0.38);
+  font-weight: 800;
+  transition: left 700ms ease, top 700ms ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
+}
+.couch-site-token[data-kind="crew"] { background: #16302a; border: 3px solid var(--site-door); color: #e8f7ee; }
+.couch-site-token[data-you] { background: var(--site-door); color: #03130b; box-shadow: 0 0 0 calc(var(--t) * 0.15) #03130b, 0 0 0 calc(var(--t) * 0.3) var(--site-door); }
+.couch-site-token[data-portrait] { --size: calc(var(--t) * 1.3); overflow: hidden; padding: 0; }
+.couch-site-token img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
+.couch-site-token[data-kind="npc"] { background: #2b3440; border: 3px solid #9cc4ff; color: #e6efff; }
+.couch-site-token[data-kind="foe"] { --size: calc(var(--t) * 1); border-radius: 3px; transform: rotate(45deg); background: #3a0d0a; border: 3px solid #ff5a47; }
+.couch-site-token[data-kind="threat"] { --size: calc(var(--t) * 1.8); background: radial-gradient(circle, #000 45%, #ff5a4766 46%, transparent 70%); box-shadow: none; }
+.couch-site-token[data-kind="item"],
+.couch-site-token[data-kind="clue"] { --size: calc(var(--t) * 0.7); border-radius: 3px; background: #f2c46b; border: 2px solid #3a2c08; }
+.couch-site-token[data-kind="clue"] { background: #e8eeea; }
+.couch-site-token[data-kind="body"] { --size: calc(var(--t) * 0.9); border-radius: 40%; background: #4a2420; border: 2px dashed #ff8a7a; }
+.couch-site-token[data-stance="passive"] { opacity: 0.7; }
+
+/* A motion tracker ping: the room hears it before it sees it. */
+.couch-site-ping::before,
+.couch-site-ping::after {
+  content: "";
+  position: absolute;
+  left: calc(var(--t) * -1.5);
+  top: calc(var(--t) * -1.5);
+  width: calc(var(--t) * 3);
+  height: calc(var(--t) * 3);
+  border-radius: 50%;
+  border: 2px solid #ff5a47;
+  animation: couch-site-ping 1.6s ease-out infinite;
+}
+.couch-site-ping::after { animation-delay: 0.8s; }
+@keyframes couch-site-ping {
+  from { transform: scale(0.2); opacity: 1; }
+  to { transform: scale(1.4); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .couch-site-ping::before,
+  .couch-site-ping::after { animation: none; transform: scale(0.8); }
+  .couch-site-token { transition: none; }
+}
+
+/* The TV, split (CouchTv.tsx data-site): the map on the left 60%, above
+   the crew strip; the turn's picture in a full-height column on the right
+   with the subtitles over its foot. "full" gives the map the whole stage
+   until a picture exists. The camera fits whatever panel the map gets. */
+.couch-tv-stage[data-site] { --site-split: 60vw; --crew-h: 15vh; }
+.couch-tv-stage[data-site="full"] { --site-split: 100vw; }
+.couch-tv-site {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--site-split);
+  bottom: var(--crew-h);
+  overflow: hidden;
+  background: #030506;
+}
+.couch-tv-site-plane { position: absolute; left: 0; top: 0; transform-origin: 0 0; transition: transform 1100ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+.couch-tv-site-side {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: var(--site-split);
+  overflow: hidden;
+  background: #030506;
+  border-left: 1px solid rgba(143, 224, 181, 0.28);
+}
+.couch-tv-site-side img { width: 100%; height: 100%; object-fit: cover; display: block; animation: couch-site-picture-in 900ms ease both; }
+@keyframes couch-site-picture-in { from { opacity: 0; } to { opacity: 1; } }
+/* The darkening sits only where words are: under the subtitles on the
+   picture, and a band under the crew strip. */
+.couch-tv-stage[data-site] .couch-tv-scrim {
+  background:
+    linear-gradient(to top, rgba(0, 0, 0, 0.96) 0%, rgba(0, 0, 0, 0.9) var(--crew-h), rgba(0, 0, 0, 0) calc(var(--crew-h) + 1px)),
+    linear-gradient(to top, rgba(0, 0, 0, 0.92) 0%, rgba(0, 0, 0, 0.7) 40%, rgba(0, 0, 0, 0) 70%) right top / calc(100vw - var(--site-split)) 100% no-repeat,
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0) 16%) right top / calc(100vw - var(--site-split)) 100% no-repeat;
+  pointer-events: none;
+}
+.couch-tv-stage[data-site="split"] .couch-tv-subs { left: calc(var(--site-split) + 2vw); right: 2vw; }
+.couch-tv-stage[data-site="split"] .couch-tv-subs p { font-size: clamp(1.15rem, 1.6vw, 2.4rem); max-width: none; }
+.couch-tv-stage[data-site] .couch-tv-title { padding: 0.6vh 0.8vw; border-radius: 0.6rem; background: rgba(3, 5, 6, 0.72); }
+.couch-tv-site-overview {
+  position: absolute;
+  right: 1.5vw;
+  bottom: 2vh;
+  z-index: 3;
+  overflow: hidden;
+  background: rgba(3, 5, 6, 0.88);
+  border: 1px solid rgba(143, 224, 181, 0.35);
+  border-radius: 10px;
+  box-shadow: 0 0 0 6px rgba(3, 5, 6, 0.6);
+}
+.couch-tv-site-frame { position: absolute; border: 2px solid var(--couch-accent, #8fe0b5); border-radius: 3px; transition: all 1100ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+.couch-site-overview .couch-site-token { box-shadow: none; border-width: 1px; }
+.couch-site-overview .couch-site-ping { display: none; }
+
+/* The phone: scroll the map both ways inside the sheet. */
+.couch-site-sheet { min-width: 0; width: 100%; max-width: 100%; }
+.couch-phone-site { max-width: 100%; overflow: auto; overscroll-behavior: contain; border-radius: 12px; background: #030506; -webkit-overflow-scrolling: touch; }
+.couch-phone-site button.couch-site-label { min-height: 40px; }
+.couch-site-empty { color: var(--couch-dim); font-size: 14px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .couch-tv-site-plane,
+  .couch-tv-site-frame { transition: none; }
+  .couch-tv-site-side img { animation: none; }
+}

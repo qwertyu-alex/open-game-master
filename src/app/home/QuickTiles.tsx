@@ -5,72 +5,40 @@ import { GameIcon } from "@/components/ui/GameIcon";
 
 // The title screen's menu, the way a game's main menu lists its doors:
 // diamond bullets, Cinzel, the painted glyph rising beside the line you
-// hover. Solo adventure disappears rather than greying out when the server
-// has no story model: a solo table is nothing without the AI storyteller,
-// and a dead line explains nothing. The tour anchors are the ones the
-// shells' own home tiles carry, so a guide can point at either.
-//
-// The four ways into a game say in a few words where each leads, so the
-// difference between Quick start and New campaign is not something to find
-// out by trying both; someone with no table yet sees Quick start marked as
-// the place to begin. The apps' home says the same words (STARTING_ROUTES).
+// hover. This fork plays couch nights only (AGENTS.md, "This fork"), so
+// there are two doors: start a night on this laptop, which becomes the TV,
+// or join one with a code. Start a night disappears rather than greying out
+// when the server has no story model or this account may not start a
+// table: a couch night is nothing without the AI storyteller, and a dead
+// line explains nothing. The tour anchors are the ones the shells' own home
+// tiles carry, so a guide can point at either.
 export const STARTING_ROUTES = {
-  starter: "A prepared one-evening adventure, heroes included",
-  new: "Your own table: its world, its rules, your friends",
-  solo: "A custom adventure for you alone",
-  couch: "One TV, everyone's phone, a sci-fi horror one-shot",
-  join: "Sit at a friend's table with their invite",
+  couch: "This laptop becomes the TV; everyone plays on their phone",
+  join: "Sit down at a night someone else started",
 } as const;
 
 export function HomeMenu({
-  onNewCampaign,
-  onStarter,
-  showNew = true,
-  onSolo,
-  showSolo,
+  showCouch,
   onJoin,
   firstTime = false,
 }: {
-  onNewCampaign: () => void;
-  // The quick start: a one-evening adventure with ready-made heroes.
-  onStarter: () => void;
-  // False on a server whose admin starts every campaign: the door is not
-  // there rather than greyed, like Solo adventure.
-  showNew?: boolean;
-  onSolo: () => void;
-  showSolo: boolean;
+  // False on a server with no storyteller, or whose admin starts every
+  // table: the door is not there rather than greyed.
+  showCouch: boolean;
   onJoin: () => void;
-  // No table yet: Quick start is marked as the place to begin.
+  // No night yet: Start a night is marked as the place to begin.
   firstTime?: boolean;
 }) {
   type Item = { id: string; label: string; glyph: string; href?: string; onClick?: () => void; tour: string; sub?: string; tag?: string };
-  // Two groups: the ways into a game, each with its line, and the places
-  // that are yours. From a laptop up they stand side by side, so the menu
-  // stays inside the title screen's frame on a short window.
   const ways: Item[] = [
-    ...(showNew && showSolo
-      ? [{ id: "starter", label: "Quick start", glyph: "ui-quickstart", onClick: onStarter, tour: "tile-quick-start", sub: STARTING_ROUTES.starter, tag: firstTime ? "Start here" : undefined }]
+    ...(showCouch
+      ? [{ id: "couch", label: "Start a night", glyph: "ui-act", href: "/couch", tour: "tile-couch", sub: STARTING_ROUTES.couch, tag: firstTime ? "Start here" : undefined }]
       : []),
-    ...(showNew ? [{ id: "new", label: "New campaign", glyph: "ui-new", onClick: onNewCampaign, tour: "tile-new-campaign", sub: STARTING_ROUTES.new }] : []),
-    ...(showSolo ? [{ id: "solo", label: "Solo adventure", glyph: "ui-solo", onClick: onSolo, tour: "tile-solo", sub: STARTING_ROUTES.solo }] : []),
-    // Couch night (docs/couch-mode-spec.md): the AI writes and runs the whole
-    // evening, so it is offered where Quick start is, a server that may start
-    // a table and has a storyteller.
-    ...(showNew && showSolo ? [{ id: "couch", label: "Couch night", glyph: "ui-act", href: "/couch", tour: "tile-couch", sub: STARTING_ROUTES.couch }] : []),
     { id: "join", label: "Join with a code", glyph: "ui-join", onClick: onJoin, tour: "tile-join", sub: STARTING_ROUTES.join },
-  ];
-  const places: Item[] = [
-    { id: "characters", label: "Characters", glyph: "tab-characters", href: "/characters", tour: "tile-characters" },
-    { id: "workshop", label: "Workshop", glyph: "system-homebrew", href: "/workshop", tour: "tile-workshop" },
-    { id: "rulebook", label: "Rulebook", glyph: "system-rules", href: "/rulebook", tour: "tile-rulebook" },
   ];
   return (
     <nav className="ts-menu" aria-label="Main menu">
-      {[ways, places].map((group, groupIndex) => (
-        <div key={groupIndex} className="ts-menu-group">
-          {group.map((item, itemIndex) => menuItem(item, groupIndex === 0 ? itemIndex : ways.length + itemIndex))}
-        </div>
-      ))}
+      <div className="ts-menu-group">{ways.map((item, index) => menuItem(item, index))}</div>
     </nav>
   );
 

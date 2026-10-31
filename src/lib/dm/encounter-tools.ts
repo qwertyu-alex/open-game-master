@@ -101,6 +101,7 @@ import { handleEnemyAttack } from "@/lib/dm/enemy-attack";
 import { isCompanionUserId } from "@/lib/db/users";
 import { dmPlaysTurn, dominatedRefusal, turnUserId } from "@/lib/dm/companion-command";
 import { setInitiativeFloor } from "@/lib/dm/initiative-floor";
+import { crossOverForAttack } from "@/lib/couch/crew-fight";
 import { wakeDm } from "@/lib/dm/wake";
 import { resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
 import {
@@ -769,24 +770,31 @@ export function ensureInitiativeProgress(campaign: Campaign): string | null {
   }
   let note: string | null = null;
   for (const sheet of missing) {
-    // The same roll request_roll would make (src/lib/dm/contest-roll.ts):
-    // effects on initiative, Feral Instinct, exhaustion, Lucky.
-    const outcome = rollExpression(characterInitiativeExpression(campaign, sheet, computeSheetDerived(sheet).initiative));
-    const roll = insertRoll({
-      campaignId: campaign.id,
-      characterId: sheet.id,
-      requestedBy: "dm",
-      kind: "initiative",
-      detail: "initiative",
-      result: outcome,
-    });
-    publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", {
-      roll,
-      source: "digital",
-    });
-    note = recordInitiativeRoll(campaign.id, sheet.id, outcome.total) ?? note;
+    note = rollInitiativeNow(campaign, sheet) ?? note;
   }
   return note;
+}
+
+// One character's initiative, rolled by the server and recorded: a
+// straggler above, or a couch crew member running into a fight already on
+// (src/lib/couch/whereabouts.ts), who takes a place in the order by it.
+export function rollInitiativeNow(campaign: Campaign, sheet: CharacterSheet): string | null {
+  // The same roll request_roll would make (src/lib/dm/contest-roll.ts):
+  // effects on initiative, Feral Instinct, exhaustion, Lucky.
+  const outcome = rollExpression(characterInitiativeExpression(campaign, sheet, computeSheetDerived(sheet).initiative));
+  const roll = insertRoll({
+    campaignId: campaign.id,
+    characterId: sheet.id,
+    requestedBy: "dm",
+    kind: "initiative",
+    detail: "initiative",
+    result: outcome,
+  });
+  publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", {
+    roll,
+    source: "digital",
+  });
+  return recordInitiativeRoll(campaign.id, sheet.id, outcome.total);
 }
 
 // ---- damage_enemy ----
@@ -1137,7 +1145,11 @@ export function applyEncounterCall(
       if (unasked) {
         return { result: unasked };
       }
-      const result = handlePcAttack(
+      // A couch crew member attacking a crewmate crosses to the other side
+      // first (src/lib/couch/crew-fight.ts), or the attack is refused as one
+      // on an ally.
+      const crossed = crossOverForAttack(campaign, rawArguments);
+      const attacked = handlePcAttack(
         campaign,
         turn,
         rawArguments,
@@ -1146,6 +1158,7 @@ export function applyEncounterCall(
         callContext?.realDiceUserIds ?? new Set(),
         callContext?.toolCallId ?? null,
       );
+      const result = crossed ? { ...attacked, crossedOver: crossed } : attacked;
       markResolvedFromArgs(turn, rawArguments, sheets, sheetsById, result);
       return { result: endTurnAfterAttack(campaign, turn, rawArguments, sheets, sheetsById, result) };
     }
@@ -1315,7 +1328,13 @@ function advancePointer(
 ): { enemiesPassed: string[]; wrapped: boolean } | null {
   const enemiesById = new Map(listEnemies(encounter.id).map((enemy) => [enemy.id, enemy]));
   const leaving = options?.leaving ?? encounter.order[encounter.turnIndex];
-  const acts = (entry: OrderEntry) => entryActs(entry, enemiesById, encounter.surprisedIds);
+  // Surprise costs the first turn only: a surprised combatant the walk
+  // reaches after the order wraps is in round 2 and acts. surprisedIds is
+  // emptied only once the step is taken, so reading it for the whole walk
+  // skipped a surprised crew member at the head of the order a second time
+  // (a couch night's ambush, 2026-10-30).
+  const acts = (entry: OrderEntry) =>
+    entryActs(entry, enemiesById, encounter.order.indexOf(entry) > encounter.turnIndex ? encounter.surprisedIds : []);
   let next = nextTurn(encounter.order, encounter.turnIndex, acts);
   // Round 1 is ending: Thief's Reflexes' second turns go with it
   // (src/lib/dm/encounter-logic.ts), and the step is taken again on the
@@ -1756,6 +1775,20 @@ function turnStuck(campaign: Campaign): boolean {
 // cannot take, wake it too, but only while a round can still change
 // something (an enemy standing, a PC standing or dying): past that each
 // wake is a model call with nothing to show. Whether it woke the DM.
+// A couch night's fight the GM opened without asking anyone's initiative
+// (docs/couch-mode-spec.md 2.11): nothing waits on a phone, the TV says
+// "Roll for initiative" with nothing to throw, and nobody posts, so the
+// next turn's ensureInitiativeProgress never comes. The missing rolls are
+// made now, and the GM is woken when the creatures act first. True when the
+// fight was started.
+export function startStalledFight(campaign: Campaign): boolean {
+  if (!ensureInitiativeProgress(campaign)) {
+    return false;
+  }
+  wakeForNextTurn(campaign);
+  return true;
+}
+
 function wakeForNextTurn(campaign: Campaign): boolean {
   const encounter = getActiveEncounter(campaign.id);
   const next = encounter?.orderReady ? encounter.order[encounter.turnIndex] : undefined;

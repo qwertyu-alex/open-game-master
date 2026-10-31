@@ -805,6 +805,18 @@
   object-fit: cover;
 }
 
+/* The ready-made nights: a grid of story posters (src/components/couch/
+   ScenarioTile.tsx), each the door to the couch-night screen. */
+.ts-ready { display: flex; flex-direction: column; gap: 1rem; }
+.ts-ready-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 .ts-join {
   padding: 22px 24px;
   display: flex;

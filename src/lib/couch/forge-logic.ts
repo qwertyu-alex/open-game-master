@@ -60,20 +60,37 @@ export function careerFor(text: string): Career {
 
 const flat = (value: unknown, max: number): string =>
   typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, max) : typeof value === "number" ? String(value) : "";
-const str = (max: number) => z.unknown().transform((value) => flat(value, max));
+const str = (max: number) => z.unknown().optional().transform((value) => flat(value, max));
+// A short name the model ran past its length: cut at the last clause that
+// fits, else the last whole word, never mid-word ("worn on a cord; its
+// cracked edge can hide a" was a carried thing on a phone).
+export function clipPhrase(text: string, max: number): string {
+  const whole = text.replace(/\s+/g, " ").trim();
+  if (whole.length <= max) return whole;
+  const head = whole.slice(0, max + 1);
+  const clause = Math.max(head.lastIndexOf(";"), head.lastIndexOf(","), head.lastIndexOf(" ("));
+  if (clause >= max / 3) return head.slice(0, clause).trim();
+  const word = head.lastIndexOf(" ");
+  return (word > 0 ? head.slice(0, word) : whole.slice(0, max)).replace(/[\s,;:—–-]+$/, "");
+}
+const phrase = (max: number) => z.unknown().optional().transform((value) => (typeof value === "string" ? clipPhrase(value, max) : ""));
 const list = <T extends z.ZodTypeAny>(item: T) =>
-  z.unknown().transform((value) => (Array.isArray(value) ? value : [])).pipe(z.array(item));
+  z.unknown().optional().transform((value) => (Array.isArray(value) ? value : [])).pipe(z.array(item));
 const strings = (max: number) => list(z.unknown()).transform((items) => items.map((item) => flat(item, max)).filter(Boolean));
 const record = <T extends z.ZodRawShape>(shape: T) =>
-  z.unknown().transform((value) => (value && typeof value === "object" && !Array.isArray(value) ? value : {})).pipe(z.object(shape));
+  z.unknown().optional().transform((value) => (value && typeof value === "object" && !Array.isArray(value) ? value : {})).pipe(z.object(shape));
 
 // What the model is asked for, read leniently: every field is coerced to its
-// shape (a missing string is "", a missing list is []), so one slip costs a
-// field rather than the whole night. What the night cannot do without is
+// shape (a missing string is "", a missing list is []; .optional() because
+// zod 4 refuses an absent key before any transform runs), so one slip costs
+// a field rather than the whole night. What the night cannot do without is
 // checked after, in readForge, with a reason a retry can be given.
 export const forgeReplySchema = record({
   scenario: record({
     title: str(80),
+    // How long the night runs, when a scenario is written shorter than the
+    // usual two and a half hours (a test night): the act clock scales to it.
+    minutes: z.unknown().optional().transform((value) => (typeof value === "number" && value >= 20 && value <= 240 ? Math.round(value) : undefined)),
     logline: str(300),
     briefing: str(1500),
     setting: str(400),
@@ -86,6 +103,7 @@ export const forgeReplySchema = record({
         setPieces: strings(200),
         escalation: str(300),
         clock: str(200),
+        twist: str(300),
       }),
     ),
     cast: list(
@@ -98,6 +116,9 @@ export const forgeReplySchema = record({
         secret: str(300),
       }),
     ),
+    // What the crew can fight, act by act (couchOutline lists them for the
+    // GM, beside the couch enemy menu, src/lib/couch/foes.ts).
+    foes: list(record({ name: str(60), what: str(200), act: z.unknown().optional().transform((value) => Number(value)) })),
     locations: list(record({ name: str(60), look: str(240) })),
   }),
   styleLock: str(300),
@@ -105,6 +126,7 @@ export const forgeReplySchema = record({
   // carry two: null, or the crew member's name and what they really are.
   hiddenRole: z
     .unknown()
+    .optional()
     .transform((value) => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {}))
     .transform((value) => ({ crewMember: flat(value.crewMember ?? value.name, 60), role: flat(value.role, 300) })),
   crew: list(
@@ -117,7 +139,7 @@ export const forgeReplySchema = record({
       personality: str(300),
       backstory: str(1200),
       relationships: list(record({ to: str(60), line: str(200) })),
-      signatureItem: str(80),
+      signatureItem: phrase(80),
       voice: str(120),
       agenda: strings(400),
     }),
@@ -141,11 +163,17 @@ export type ForgedCrew = {
   hiddenRole: string;
 };
 
-export type ForgedAct = { title: string; goal: string; setPieces: string[]; escalation: string; clock: string };
+// twist is optional: a night forged before acts had one has none.
+export type ForgedAct = { title: string; goal: string; setPieces: string[]; escalation: string; clock: string; twist?: string };
+
+// Something the crew can fight, and the act (1 to 3) it comes in.
+export type ForgedFoe = { name: string; what: string; act: number };
 
 export type Forge = {
   scenario: {
     title: string;
+    // Absent: the usual night (src/lib/couch/pacing-logic.ts NIGHT_MINUTES).
+    minutes?: number;
     logline: string;
     briefing: string;
     setting: string;
@@ -153,6 +181,8 @@ export type Forge = {
     threat: string;
     acts: ForgedAct[];
     cast: Array<{ name: string; role: string; look: string; voice: string; agenda: string; secret: string }>;
+    // Absent on a night forged before foes were asked for.
+    foes?: ForgedFoe[];
     locations: Array<{ name: string; look: string }>;
   };
   styleLock: string;
@@ -244,6 +274,7 @@ export function readForge(raw: string, players: number): { ok: true; forge: Forg
     forge: {
       scenario: {
         title: scenario.title,
+        ...(scenario.minutes ? { minutes: scenario.minutes } : {}),
         logline: scenario.logline || sentenceOf(scenario.briefing),
         briefing: scenario.briefing,
         setting: scenario.setting,
@@ -251,6 +282,12 @@ export function readForge(raw: string, players: number): { ok: true; forge: Forg
         threat: scenario.threat,
         acts: acts.slice(0, 3),
         cast: scenario.cast.filter((person) => person.name).slice(0, 6),
+        // An act the model left out or wrote as a word comes in act 2, the
+        // middle of the night.
+        foes: scenario.foes
+          .filter((foe) => foe.name)
+          .map((foe) => ({ ...foe, act: Number.isInteger(foe.act) && foe.act >= 1 && foe.act <= 3 ? foe.act : 2 }))
+          .slice(0, 8),
         locations: scenario.locations.filter((place) => place.name).slice(0, 6),
       },
       styleLock: styleLock || DEFAULT_STYLE_LOCK,
@@ -264,13 +301,13 @@ export function readForge(raw: string, players: number): { ok: true; forge: Forg
 // Pieces of the reply's shape, so the prompt and the schema above say the
 // same fields.
 const REPLY_SHAPE =
-  '{"scenario":{"title":string,"logline":string,"briefing":string,"setting":string,"truth":string,"threat":string,"acts":[{"title":string,"goal":string,"setPieces":[string],"escalation":string,"clock":string}],"cast":[{"name":string,"role":string,"look":string,"voice":string,"agenda":string,"secret":string}],"locations":[{"name":string,"look":string}]},"styleLock":string,"hiddenRole":{"crewMember":string,"role":string}|null,"crew":[{"name":string,"gender":"Female"|"Male"|"Nonbinary","career":string,"crewRole":string,"look":string,"personality":string,"backstory":string,"relationships":[{"to":string,"line":string}],"signatureItem":string,"voice":string,"agenda":[string,string,string]}]}';
+  '{"scenario":{"title":string,"logline":string,"briefing":string,"setting":string,"truth":string,"threat":string,"acts":[{"title":string,"goal":string,"setPieces":[string],"escalation":string,"clock":string,"twist":string}],"cast":[{"name":string,"role":string,"look":string,"voice":string,"agenda":string,"secret":string}],"foes":[{"name":string,"what":string,"act":1|2|3}],"locations":[{"name":string,"look":string}]},"styleLock":string,"hiddenRole":{"crewMember":string,"role":string}|null,"crew":[{"name":string,"gender":"Female"|"Male"|"Nonbinary","career":string,"crewRole":string,"look":string,"personality":string,"backstory":string,"relationships":[{"to":string,"line":string}],"signatureItem":string,"voice":string,"agenda":[string,string,string]}]}';
 
 // A reply this size holds the scenario and every crew member with room to
 // spare; a model that runs past it is cut off rather than left to write
 // until the timeout.
 export function forgeReplyTokens(players: number): number {
-  return 3000 + players * 900;
+  return 3600 + players * 900;
 }
 
 export function forgeSystemPrompt(players: number, offLimits: string): string {
@@ -279,16 +316,16 @@ export function forgeSystemPrompt(players: number, offLimits: string): string {
     `You write a cinematic sci-fi horror one-shot for one game night: one TV, ${players} ${players === 1 ? "player" : "players"} on their phones, two to three hours, three acts. Write the scenario AND the player crew, in the spirit of a late-1970s blue-collar space horror film: a working crew far from help, a Company that owns the ship and everyone on it, and something aboard that should not be.`,
     "Rules:",
     "- Everything original. The threat is a creature or phenomenon of your own design, with its own anatomy, life cycle and tell-tale signs; never one from a film, game or book. Name no real franchise, company or trademark: the owner is \"the Company\" or a corporate name you invent, and ships and places get names of your own.",
-    "- Underneath, the rules are D&D 5e at level 1: the threat is survived by fleeing, sealing, venting, burning or outwitting it, and a straight fight with it is a mistake. Scarcity of air, ammo and time drives every act. One horrible thing per act.",
+    "- Underneath, the rules are D&D 5e at level 1: the threat itself is survived by fleeing, sealing, venting, burning or outwitting it, and a straight fight with it is a mistake. But the night is action-packed: every act has a fight or a chase with something the crew CAN fight (people with their own orders, machines gone wrong, the threat's young or its victims). Scarcity of air, ammo and time drives every act, and every act has a deadline that runs out on its own.",
     `- The crew: exactly ${players}, ordinary working people. career is one of Marine, Pilot, Medic, Roughneck, Company Agent, Scientist, Officer, Kid; a different one each where you can. crewRole is a public one-liner (under 100 characters) of who they are aboard, e.g. "Colonial Marine, the ship's sergeant".`,
     "- agenda: three secret personal agendas, one per act, each one concrete sentence a player can act on at the table. They pull the crew apart: one wants to save someone, one has orders that cost the others, one hides something. In every act at least two agendas collide head-on.",
       players > 1
       ? "- hiddenRole: exactly ONE crew member has one (a synthetic who does not know or does not say, or a Company plant): {\"crewMember\": their name, \"role\": a sentence on what they are and what they are for}. Their agendas serve it without saying it. The truth and the briefing never name who it is."
       : "- hiddenRole: null (a crew of one keeps no secret from itself).",
-    "- look: the fixed, concrete picture of the person, the same in every illustration: face, age, skin, hair, build, clothes, one prop. No names in it. backstory: public, three or four sentences, what the crew knows of them. personality: two or three traits and one flaw. relationships: one short line toward each other crew member, by name (a buddy, a rival, a debt). signatureItem: one personal object they carry. voice: age, accent and texture for a narrator to cast.",
+    "- look: the fixed, concrete picture of the person, the same in every illustration: face, age, skin, hair, build, clothes, one prop. No names in it. backstory: public, three or four sentences, what the crew knows of them. personality: two or three traits and one flaw. relationships: one short line toward each other crew member, by name (a buddy, a rival, a debt). signatureItem: one personal object they carry, named in a few words (under 60 characters, no clauses: 'a cracked blue transit token'). voice: age, accent and texture for a narrator to cast. The TV introduces each crew member aloud to the whole room before anyone chooses, from their crewRole, backstory, personality, signatureItem and relationships: nothing in those gives away an agenda or the hidden role, though a detail the room only understands later is welcome.",
     "- scenario.briefing: read aloud on the TV before play, 80 to 150 words, to the crew as \"you\", ending on the order or hook that starts act 1. No secrets in it. logline: one sentence. setting: the ship, station or colony, the year, and who owns it. truth: what is really going on, the threat, and who knew (GM only). threat: what it looks like and how it behaves, in a few sentences.",
-    "- acts: exactly three, each with a short spoiler-free title for the TV, a goal, two or three set pieces, the escalation, and a clock or deadline. Act 3 lands the ending.",
-    "- cast: three to six NPCs, each with a look, a voice, what they want and a secret. locations: four to six places, each with one line of what the camera sees.",
+    "- acts: exactly three, each with a short spoiler-free title for the TV, a goal the crew can act on at once (get somewhere, fix or seal something, find someone, get out), two or three set pieces, the escalation, a clock or deadline, and a twist: a reveal mid-act that turns what the crew believed or wanted (an ally lying, the rescue is the trap, the Company has written them off, there is more than one). The twist never names who holds the hidden role. Act 1 starts in motion within minutes; act 3 lands the ending.",
+    "- cast: four to six NPCs, each with a look, a voice, what they want and a secret. At least two meet the crew in person and want something from them now, and at least one turns on them or dies on screen. foes: four to six things the crew can fight, each with the act (1 to 3) it comes in, at least one per act and more later: name, and what it is, how it looks and how it fights in a sentence. locations: four to six places, each with one line of what the camera sees.",
     "- styleLock: one line of art direction every picture of this story shares (film stock, era, lighting, palette, interiors), for example: " + DEFAULT_STYLE_LOCK + ".",
     ...(limits ? [`- Off limits tonight, never in the story in any form, not even implied: ${limits}`] : []),
     // The outline the GM reads every turn is built from these fields, and
@@ -403,6 +440,7 @@ export function couchOutline(forge: Forge): string {
       act.setPieces.length ? `Set pieces: ${act.setPieces.join("; ")}.` : "",
       act.escalation ? `Escalation: ${act.escalation}` : "",
       act.clock ? `Clock: ${act.clock}` : "",
+      act.twist ? `Twist (spring it mid-act): ${act.twist}` : "",
     ]
       .filter(Boolean)
       .join(" "),
@@ -410,15 +448,17 @@ export function couchOutline(forge: Forge): string {
   const cast = scenario.cast.map(
     (person) => `- ${person.name}${person.role ? ` (${person.role})` : ""}: ${[person.look, person.voice ? `voice: ${person.voice}` : "", person.agenda ? `wants: ${person.agenda}` : "", person.secret ? `secret: ${person.secret}` : ""].filter(Boolean).join("; ")}`,
   );
+  const foes = (scenario.foes ?? []).map((foe) => `- act ${foe.act}: ${foe.name}: ${foe.what}`);
   const places = scenario.locations.map((place) => `- ${place.name}: ${place.look}`);
   const parts = [
-    `COUCH ONE-SHOT "${scenario.title}": three acts, about two and a half hours; land the ending in act 3. Level 1 throughout.`,
+    `COUCH ONE-SHOT "${scenario.title}": three acts, about ${scenario.minutes ? `${scenario.minutes} minutes` : "two and a half hours"}; land the ending in act 3. Level 1 throughout.`,
     scenario.setting ? `Setting: ${scenario.setting}` : "",
     `The crew heard this briefing on the TV before the first scene; open act 1 right after it without repeating it: ${scenario.briefing}`,
     `The truth (never tell it; let the crew dig it out): ${scenario.truth}`,
     scenario.threat ? `The threat: ${scenario.threat}` : "",
     ...acts,
     cast.length ? `Cast:\n${cast.join("\n")}` : "",
+    foes.length ? `Foes (bring each in its act, with start_encounter and the couch enemy menu's stat blocks):\n${foes.join("\n")}` : "",
     places.length ? `Locations:\n${places.join("\n")}` : "",
   ].filter(Boolean);
   const text = parts.join("\n\n");
@@ -478,7 +518,7 @@ export function couchGameSettings(offLimits: string): GameSettings {
     boardDrawing: false,
     enemyIntent: false,
     waitForTable: true,
-    waitForTableSeconds: 120,
+    waitForTableSeconds: 300,
     worldSimulation: false,
     midGameJoinOpen: false,
     ambienceEnabled: true,

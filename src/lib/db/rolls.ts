@@ -130,6 +130,9 @@ export type RollInsert = {
   detail?: string;
   advantage?: Advantage;
   dc?: number | null;
+  // A table rule that decides the check other than by the total (a couch
+  // night's long shot, src/lib/couch/check-logic.ts); omitted, total >= dc.
+  success?: boolean;
   result: RollResult;
   visibility?: RollVisibility;
   messageId?: string | null;
@@ -141,7 +144,11 @@ export type RollInsert = {
 export function insertRoll(input: RollInsert): StoredRoll {
   const id = crypto.randomUUID();
   const success =
-    input.dc === undefined || input.dc === null ? null : input.result.total >= input.dc ? 1 : 0;
+    input.dc === undefined || input.dc === null
+      ? null
+      : (input.success ?? input.result.total >= input.dc)
+        ? 1
+        : 0;
 
   getDatabase()
     .prepare(

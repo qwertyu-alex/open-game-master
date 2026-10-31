@@ -1,6 +1,8 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import type { Forge } from "@/lib/couch/forge-logic";
+import { isCouchMood, type MoodState } from "@/lib/couch/mood-logic";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
+import { readObjective, type CouchObjective } from "@/lib/couch/pacing-logic";
 
 // A couch night's forge and its crew cards (docs/couch-mode-spec.md 2.1).
 //
@@ -8,6 +10,9 @@ import type { CreateSheetInput } from "@/lib/schemas/sheet";
 // "ready", "failed") and, once ready, its whole output, the scenario the GM
 // keeps secret included. Only src/lib/couch reads it, and nothing it holds
 // leaves the server except the title, logline and briefing.
+//
+// couch_moods: the music director's state (src/lib/couch/mood.ts), one row
+// per couch campaign once the first turn has set it.
 //
 // couch_crew: one row per crew card. A card is a finished, admitted sheet
 // (sheet_json) that belongs to nobody until a player claims it; the claim
@@ -28,9 +33,21 @@ export type CouchForgeRow = {
   players: number;
   seed: string;
   offLimits: string;
+  // A ready-made story's id (src/lib/couch/scenarios), or "" for one the
+  // story model writes tonight from the seed.
+  scenarioId: string;
   forge: Forge | null;
   // The act in force, 0 to 2 (src/lib/couch/play.ts advanceCouchAct).
   act: number;
+  // How far the TV's introductions have got (src/lib/couch/intro-logic.ts):
+  // 0 is the briefing, then one step per crew member. The cards open once
+  // it passes the last.
+  introStep: number;
+  // When the act in force began (src/lib/couch/pacing.ts): "" until the
+  // first turn of the night reads it.
+  actSince: string;
+  // What every screen shows the crew is trying to do now (set_objective).
+  objective: CouchObjective | null;
   updatedAt: string;
 };
 
@@ -52,6 +69,9 @@ export type CouchCrewRow = {
 };
 
 const ensured = new WeakSet<object>();
+
+// Past any crew's last introduction: the cards are open.
+const INTRO_OPEN = 999;
 
 function db() {
   const database = getDatabase();
@@ -86,7 +106,42 @@ function db() {
         created_at TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_couch_crew_campaign ON couch_crew (campaign_id, position);
+      CREATE TABLE IF NOT EXISTS couch_moods (
+        campaign_id TEXT PRIMARY KEY REFERENCES campaigns(id) ON DELETE CASCADE,
+        mood TEXT NOT NULL,
+        since INTEGER NOT NULL,
+        stated TEXT,
+        stated_act INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS couch_item_art (
+        campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+        item_key TEXT NOT NULL,
+        url TEXT,
+        tries INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (campaign_id, item_key)
+      );
     `);
+    // Added after the table first shipped: a night made before it has no
+    // ready-made story, which is what the default says.
+    const columns = database.prepare(`PRAGMA table_info(couch_forges)`).all() as Array<{ name: string }>;
+    if (!columns.some((column) => column.name === "scenario_id")) {
+      database.exec(`ALTER TABLE couch_forges ADD COLUMN scenario_id TEXT NOT NULL DEFAULT ''`);
+    }
+    // Also later: a night forged before the TV introduced its crew has its
+    // cards open already, which is what the large default says.
+    if (!columns.some((column) => column.name === "intro_step")) {
+      database.exec(`ALTER TABLE couch_forges ADD COLUMN intro_step INTEGER NOT NULL DEFAULT ${INTRO_OPEN}`);
+    }
+    // Later still, for the night's pace: a night already under way starts
+    // its act clock at the next turn, with nothing on screen yet.
+    if (!columns.some((column) => column.name === "act_since")) {
+      database.exec(`ALTER TABLE couch_forges ADD COLUMN act_since TEXT NOT NULL DEFAULT ''`);
+    }
+    if (!columns.some((column) => column.name === "objective_json")) {
+      database.exec(`ALTER TABLE couch_forges ADD COLUMN objective_json TEXT NOT NULL DEFAULT ''`);
+    }
     ensured.add(database);
   }
   return database;
@@ -99,8 +154,12 @@ type ForgeRow = {
   players: number;
   seed: string;
   off_limits: string;
+  scenario_id: string;
   forge_json: string;
   act: number;
+  intro_step: number;
+  act_since: string | null;
+  objective_json: string | null;
   updated_at: string;
 };
 
@@ -128,8 +187,12 @@ function mapForge(row: ForgeRow): CouchForgeRow {
     players: row.players,
     seed: row.seed,
     offLimits: row.off_limits,
+    scenarioId: row.scenario_id ?? "",
     forge: parseJson<Forge | null>(row.forge_json, null),
     act: row.act,
+    introStep: row.intro_step ?? INTRO_OPEN,
+    actSince: row.act_since ?? "",
+    objective: readObjective(parseJson<unknown>(row.objective_json || "null", null)),
     updatedAt: row.updated_at,
   };
 }
@@ -159,19 +222,21 @@ export function getCouchForge(campaignId: string): CouchForgeRow | null {
 
 // A new night, or the same night asked again (a reforge): the forge starts
 // over and the old cards go.
-export function beginCouchForge(campaignId: string, input: { players: number; seed: string; offLimits: string }): void {
+export function beginCouchForge(campaignId: string, input: { players: number; seed: string; offLimits: string; scenarioId?: string }): void {
   const now = nowIso();
   const database = db();
   database.transaction(() => {
     database.prepare(`DELETE FROM couch_crew WHERE campaign_id = ?`).run(campaignId);
+    database.prepare(`DELETE FROM couch_moods WHERE campaign_id = ?`).run(campaignId);
     database
       .prepare(
-        `INSERT INTO couch_forges (campaign_id, status, error, players, seed, off_limits, forge_json, act, created_at, updated_at)
-         VALUES (?, 'forging', '', ?, ?, ?, '', 0, ?, ?)
+        `INSERT INTO couch_forges (campaign_id, status, error, players, seed, off_limits, scenario_id, forge_json, act, intro_step, created_at, updated_at)
+         VALUES (?, 'forging', '', ?, ?, ?, ?, '', 0, 0, ?, ?)
          ON CONFLICT (campaign_id) DO UPDATE SET status = 'forging', error = '', players = excluded.players,
-           seed = excluded.seed, off_limits = excluded.off_limits, forge_json = '', act = 0, updated_at = excluded.updated_at`,
+           seed = excluded.seed, off_limits = excluded.off_limits, scenario_id = excluded.scenario_id, forge_json = '', act = 0,
+           intro_step = 0, act_since = '', objective_json = '', updated_at = excluded.updated_at`,
       )
-      .run(campaignId, input.players, input.seed, input.offLimits, now, now);
+      .run(campaignId, input.players, input.seed, input.offLimits, input.scenarioId ?? "", now, now);
   })();
 }
 
@@ -218,8 +283,33 @@ export function finishCouchForge(
   return listCouchCrew(campaignId);
 }
 
+// A new act starts its clock and clears the objective, which belonged to
+// the act before.
 export function setCouchAct(campaignId: string, act: number): void {
-  db().prepare(`UPDATE couch_forges SET act = ?, updated_at = ? WHERE campaign_id = ?`).run(act, nowIso(), campaignId);
+  const now = nowIso();
+  db().prepare(`UPDATE couch_forges SET act = ?, act_since = ?, objective_json = '', updated_at = ? WHERE campaign_id = ?`).run(act, now, now, campaignId);
+}
+
+// The first turn of a night (or of a night already under way when the act
+// clock shipped) starts act I's clock; after that it is left alone.
+export function startCouchActClock(campaignId: string): string {
+  const now = nowIso();
+  db().prepare(`UPDATE couch_forges SET act_since = ? WHERE campaign_id = ? AND act_since = ''`).run(now, campaignId);
+  return getCouchForge(campaignId)?.actSince || now;
+}
+
+export function setCouchObjective(campaignId: string, objective: CouchObjective): void {
+  db().prepare(`UPDATE couch_forges SET objective_json = ?, updated_at = ? WHERE campaign_id = ?`).run(JSON.stringify(objective), nowIso(), campaignId);
+}
+
+// The TV moves its introductions on from the step it was showing. Only from
+// that step, so two TV tabs finishing the same clip move it once, and a
+// late press of Next never skips a step nobody saw.
+export function advanceCouchIntro(campaignId: string, from: number, to: number): boolean {
+  const result = db()
+    .prepare(`UPDATE couch_forges SET intro_step = ? WHERE campaign_id = ? AND intro_step = ? AND status = 'ready'`)
+    .run(to, campaignId, from);
+  return result.changes === 1;
 }
 
 export function listCouchCrew(campaignId: string): CouchCrewRow[] {
@@ -256,4 +346,84 @@ export function releaseCrewCard(crewId: string): void {
 
 export function recordCrewSheet(crewId: string, sheetId: string): void {
   db().prepare(`UPDATE couch_crew SET sheet_id = ? WHERE id = ?`).run(sheetId, crewId);
+}
+
+// A crew member who joined after a death (src/lib/couch/takeover.ts): a
+// card made already taken, last in the crew, so the portrait painter, the
+// scene painter's visual bible and a reload all find them as they find
+// the rest. takeCrewCard's one-card rule is for the lobby's choice; a
+// player who lost a character holds two cards, the dead one and this.
+export function addTakenCrewCard(
+  campaignId: string,
+  member: Omit<CouchCrewRow, "id" | "campaignId" | "position" | "portraitUrl" | "claimedBy" | "sheetId">,
+  userId: string,
+  sheetId: string,
+  portraitUrl: string | null,
+): CouchCrewRow {
+  const database = db();
+  const id = crypto.randomUUID();
+  const { next } = database.prepare(`SELECT COALESCE(MAX(position), -1) + 1 AS next FROM couch_crew WHERE campaign_id = ?`).get(campaignId) as { next: number };
+  database
+    .prepare(
+      `INSERT INTO couch_crew (id, campaign_id, position, name, crew_role, backstory, career, gender, look, sheet_json, portrait_url, claimed_by, sheet_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(id, campaignId, next, member.name, member.crewRole, member.backstory, member.career, member.gender, member.look, JSON.stringify(member.sheet), portraitUrl, userId, sheetId, nowIso());
+  return getCouchCrew(id)!;
+}
+
+// The person a player took over stands behind their new sheet, as a
+// lasting companion's row does (src/lib/db/npcs.ts listCastNpcs): while the
+// sheet lives, the GM's cast, the voices and the scene painter read the
+// sheet, so nobody plays them twice. The row keeps who they were.
+export function linkNpcToCrewSheet(npcId: string, sheetId: string): void {
+  db().prepare(`UPDATE npcs SET companion_sheet_id = ?, attitude = 'friendly', updated_at = ? WHERE id = ?`).run(sheetId, nowIso(), npcId);
+}
+
+type MoodRow = { mood: string; since: number; stated: string | null; stated_act: number };
+
+export function getCouchMood(campaignId: string): MoodState | null {
+  const row = db().prepare(`SELECT mood, since, stated, stated_act FROM couch_moods WHERE campaign_id = ?`).get(campaignId) as
+    | MoodRow
+    | undefined;
+  if (!row || !isCouchMood(row.mood)) return null;
+  return { mood: row.mood, since: row.since, stated: isCouchMood(row.stated) ? row.stated : null, statedAct: row.stated_act };
+}
+
+export function setCouchMood(campaignId: string, state: MoodState): void {
+  db()
+    .prepare(
+      `INSERT INTO couch_moods (campaign_id, mood, since, stated, stated_act, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT (campaign_id) DO UPDATE SET mood = excluded.mood, since = excluded.since, stated = excluded.stated,
+         stated_act = excluded.stated_act, updated_at = excluded.updated_at`,
+    )
+    .run(campaignId, state.mood, state.since, state.stated, state.statedAct, nowIso());
+}
+
+// The pictures a night painted for the things its crew carries
+// (src/lib/couch/item-art.ts), by item key: a url once painted, and how
+// often each was tried.
+export type ItemArtRow = { key: string; url: string | null; tries: number };
+
+export function listItemArt(campaignId: string): ItemArtRow[] {
+  return (
+    db().prepare(`SELECT item_key, url, tries FROM couch_item_art WHERE campaign_id = ?`).all(campaignId) as Array<{
+      item_key: string;
+      url: string | null;
+      tries: number;
+    }>
+  ).map((row) => ({ key: row.item_key, url: row.url, tries: row.tries }));
+}
+
+export function recordItemArtTry(campaignId: string, key: string): void {
+  db()
+    .prepare(
+      `INSERT INTO couch_item_art (campaign_id, item_key, url, tries, updated_at) VALUES (?, ?, NULL, 1, ?)
+       ON CONFLICT (campaign_id, item_key) DO UPDATE SET tries = tries + 1, updated_at = excluded.updated_at`,
+    )
+    .run(campaignId, key, nowIso());
+}
+
+export function setItemArt(campaignId: string, key: string, url: string): void {
+  db().prepare(`UPDATE couch_item_art SET url = ?, updated_at = ? WHERE campaign_id = ? AND item_key = ?`).run(url, nowIso(), campaignId, key);
 }

@@ -20,6 +20,15 @@
 
 </div>
 
+> [!IMPORTANT]
+> **This fork plays couch nights only.** One laptop drives the TV, everyone
+> plays on their own phone, and the AI writes and runs a sci-fi horror
+> one-shot with pictures every turn and ElevenLabs voices. Sign in on the
+> laptop, choose **Start a night**, and friends join by scanning the code on
+> the TV. Run it with `npm run dev:lan`. How a night works is in
+> [docs/couch-mode-spec.md](docs/couch-mode-spec.md). The rest of this README
+> describes the upstream app, whose other modes this fork hides.
+
 > [!NOTE]
 > Open Game Master was called Open Dungeon Master until October 2026. The apps,
 > worlds and accounts carry over unchanged; only the name and the website
@@ -187,7 +196,7 @@ git clone --depth 1 -b stable https://github.com/Lebbitheplow/open-game-master.g
 cd open-game-master
 npm install
 npm run setup        # database key, content pack, memory model, production build
-npm run start:lan    # port 3005 + public link (ngrok installed and authenticated)
+npm run start:lan    # port 3005 + public link (a named Cloudflare Tunnel, see docs/install.md)
 ```
 
 The server prints a link with a one-time setup code. Open it on the same

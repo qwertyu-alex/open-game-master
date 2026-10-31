@@ -8,9 +8,14 @@
 //   live sheet events, their replay and the audit log; the TV (the lead of
 //   an AI table) and every other player read null, and the crew line stays
 //   public;
-//   the GM reads the couch rules in the system prompt and every claimed crew
-//   member's agenda in the game state, except in a prompt whose answer the
-//   whole table reads;
+//   the GM reads the couch rules in the system prompt (driving the night:
+//   the world acts on its own, routine steps are skipped, a failure moves
+//   the story, a stuck table gets a lead) and every claimed crew member's
+//   agenda in the game state, except in a prompt whose answer the whole
+//   table reads;
+//   the NIGHT PACE line hurries an act that has run past its share of the
+//   evening, and asks for an objective when the act has none;
+//   the couch enemy menu is sci-fi, and fits a level-1 crew's budget;
 //   the lobby's gate exempts the TV and asks only for crew cards taken.
 import assert from "node:assert/strict";
 import { heroInput, openWorld } from "./lib/enforce-world.mjs";
@@ -25,6 +30,8 @@ const { sheetForViewer, publicAuditEntry } = await import("../src/lib/dm/sheet-v
 const { tablePayload, payloadForViewer, viewerFor } = await import("../src/lib/table-delivery.ts");
 const { buildDmSystem, buildGameStateBlock } = await import("../src/lib/dm/prompt.ts");
 const { COUCH_RULES, couchAgendaBlock } = await import("../src/lib/couch/prompt-logic.ts");
+const { couchPacingLine, pacePhase, readObjective } = await import("../src/lib/couch/pacing-logic.ts");
+const { COUCH_FOES, couchFoePicks } = await import("../src/lib/couch/foes-logic.ts");
 const { lobbyBlocker } = await import("../src/lib/dm/viewer.ts");
 
 const AGENDA = {
@@ -146,12 +153,66 @@ await test("the GM reads the couch rules above the turn heading, and only at a c
   const system = buildDmSystem(world.campaign(), []);
   assert.ok(system.includes(COUCH_RULES), "the rules ride the system prompt");
   assert.ok(system.indexOf(COUCH_RULES) < system.indexOf("THIS TURN") || !system.includes("THIS TURN"), "with the settings, where a cache keeps them");
-  for (const line of [/three acts/, /Level-locked at 1/, /slow dread, then violence/, /The Company always has a second agenda/, /Use send_whisper for things only one crew member perceives/, /\[whispers\], \[breathing heavily\], \[shouting\], \[panicked\]/, /never hint at a hidden role/]) {
+  for (const line of [/three acts/, /Level-locked at 1/, /dread, then violence/, /the Company always has a second agenda/, /DRIVE THE NIGHT \(these outrank the core rules on pacing\)/, /The world moves on its own/, /Skip what does not matter/, /Never ask anyone to confirm what they said/, /Fail forward/, /Never ask for the same roll again/, /Guide a stuck table/, /set_objective when an act opens/, /NIGHT PACE says over time/, /the outline's foes/, /The crew starts light/, /grant_item it when taken/, /Use send_whisper for things only one crew member perceives/, /\[whispers\], \[breathing heavily\], \[shouting\], \[panicked\]/, /never hint at a hidden role/, /easy \(the default\), a crew member's ordinary work/, /nearly_impossible, an insane ask/, /A natural 20 passes those last two/, /One roll per obstacle/, /againstEnemyId\/againstMonster/, /one group_check, never a request_roll each/]) {
     assert.match(COUCH_RULES, line);
   }
   const plain = { ...world.campaign(), gameSettings: { ...world.campaign().gameSettings, couchMode: false } };
   assert.ok(!buildDmSystem(plain, []).includes(COUCH_RULES), "not at an ordinary table");
-  assert.ok(COUCH_RULES.length < 2200, `compact: ${COUCH_RULES.length} characters`);
+  // Read on every turn of the night: about 1,200 tokens beside a prompt of
+  // a hundred thousand, and kept there.
+  assert.ok(COUCH_RULES.length < 5000, `compact: ${COUCH_RULES.length} characters`);
+});
+
+await test("the night's pace hurries an act past its share, but not a table on a break, and asks for an objective", () => {
+  assert.equal(pacePhase(0, 10, 4), "fresh");
+  assert.equal(pacePhase(0, 22, 9), "middle");
+  assert.equal(pacePhase(0, 35, 12), "late");
+  // Act I of "Unto Us" on 2026-10-30: 85 minutes, fifty replies.
+  assert.equal(pacePhase(0, 85, 50), "over");
+  assert.equal(pacePhase(0, 70, 3), "late", "an hour with three replies is a break, not a stalled act");
+  assert.equal(pacePhase(1, 8, 30), "over", "a table that plays fast reaches the act's end sooner");
+  const over = couchPacingLine({ act: 0, minutes: 85, replies: 50, objective: null });
+  assert.match(over, /^NIGHT PACE: Act I of III, 85 of about 40 minutes, 50 of your replies so far\./);
+  assert.match(over, /OVER TIME by 45 minutes: end the act in this reply or the next\..*advance_act/);
+  assert.match(over, /OBJECTIVE: none on screen for this act\. Call set_objective/);
+  const ending = couchPacingLine({ act: 2, minutes: 60, replies: 20, objective: { text: "Get to the shuttle", clock: "", act: 2 } });
+  assert.match(ending, /land the ending in this reply or the next/);
+  assert.doesNotMatch(ending, /advance_act/, "there is no act after the third");
+  assert.match(ending, /OBJECTIVE on every screen: "Get to the shuttle"\./);
+  // A short night shares its acts out the same way: 45 minutes, act I about 12.
+  assert.match(couchPacingLine({ act: 0, minutes: 20, replies: 8, objective: null, nightMinutes: 45 }), /20 of about 12 minutes.*OVER TIME by 8 minutes/);
+  assert.equal(pacePhase(0, 6, 3, 45), "middle");
+  const stale = couchPacingLine({ act: 1, minutes: 5, replies: 1, objective: { text: "Get to the shuttle", clock: "", act: 0 } });
+  assert.match(stale, /On pace/);
+  assert.match(stale, /none on screen for this act/, "an objective from the act before is not this act's");
+  assert.equal(readObjective({ text: "   ", act: 0 }), null);
+  assert.equal(readObjective({ text: "x".repeat(300), clock: 7, act: -1 }).text.length, 100);
+});
+
+await test("the couch enemy menu is sci-fi, fits a level-1 crew, and is what the GM is offered", async () => {
+  const fantasy = /\b(drow|gnoll|goblin|orc|kobold|dragon|wizard|elf)\b/i;
+  for (const entry of COUCH_FOES) {
+    assert.doesNotMatch(`${entry.name} ${entry.blurb}`, fantasy, entry.name);
+  }
+  const picks = couchFoePicks([1, 1, 1]);
+  const names = picks.map((entry) => entry.name);
+  assert.ok(names.includes("Company Security") && names.includes("Feral Host") && names.includes("Corporate Trooper"), names.join(", "));
+  assert.ok(!names.includes("Merc Sergeant"), "a CR 3 sergeant is past three level-1 crew's deadly budget");
+  const block = buildGameStateBlock(state({ enemySuggestions: picks }));
+  assert.match(block, /guard as "Company Security" \(CR 1\/8\)/);
+  assert.doesNotMatch(block, /drow|gnoll/i);
+  const { readFileSync } = await import("node:fs");
+  const turn = readFileSync(new URL("../src/lib/dm/turn.ts", import.meta.url), "utf8");
+  assert.match(turn, /enemySuggestions: campaign\.gameSettings\.couchMode\s+\? couchFoePicks\(/, "a couch turn is offered the couch menu");
+});
+
+await test("the game state carries the night's pace in the moment, only at a couch table", () => {
+  const line = couchPacingLine({ act: 0, minutes: 50, replies: 30, objective: null });
+  const block = buildGameStateBlock(state({ couchPacing: line }));
+  assert.ok(block.includes(line));
+  assert.ok(block.indexOf(line) > block.indexOf("THIS MOMENT"), "with what changes every turn");
+  const plain = { ...world.campaign(), gameSettings: { ...world.campaign().gameSettings, couchMode: false } };
+  assert.ok(!buildGameStateBlock(state({ campaign: plain, couchPacing: line })).includes(line));
 });
 
 await test("the game state lists each crew member's agenda in force, the later ones, the hidden role and story points", () => {

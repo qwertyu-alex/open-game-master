@@ -17,6 +17,7 @@
 // and the console and the party lead keep their free hand.
 
 import type { Campaign } from "@/lib/db/campaigns";
+import { offScene } from "@/lib/couch/whereabouts";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { getRoll, markRollApplied } from "@/lib/db/rolls";
 import { isValidExpression } from "@/lib/dice";
@@ -105,9 +106,17 @@ export function gateAiCall(name: string, rawArguments: string, ctx: GateContext)
       return args.enemyId && args.action === "drop" && !enemyHoldsItem(ctx.campaign.id, String(args.enemyId), String(args.item ?? ""))
         ? itemFacts(ctx, name, args, rawArguments)
         : { args: rawArguments };
+    case "request_roll": {
+      // A split couch crew rolls where the scene is: a phone off scene has
+      // nothing in front of it to roll for (src/lib/couch/whereabouts.ts).
+      const away = offScene(ctx.campaign, String(args.characterId ?? ""));
+      if (away) {
+        return { result: { error: `${away.members.find((member) => member.id === args.characterId)?.name ?? "That character"} is in ${away.placeName}, off scene. cut_to their group first.`, retry: true } };
+      }
+      return claimSource(args, rawArguments);
+    }
     case "pc_attack":
     case "enemy_attack":
-    case "request_roll":
       return claimSource(args, rawArguments);
     default:
       return { args: rawArguments };

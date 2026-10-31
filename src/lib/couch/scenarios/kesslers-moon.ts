@@ -1,0 +1,245 @@
+import type { WrittenScenario } from "@/lib/couch/scenarios/types";
+
+// SPOILERS. The whole of a ready-made couch night: the truth, the threat,
+// every crew member's secret agenda and the hidden role. If you mean to play
+// it, stop reading here; the home screen shows its spoiler-free card
+// (src/lib/couch/scenario-cards.ts).
+
+export const KESSLERS_MOON: WrittenScenario = {
+  id: "kesslers-moon",
+  reply: {
+    scenario: {
+      title: "Night Shift on Kessler's Moon",
+      logline: "The night shift of a frozen mining colony goes down a silent bore and brings something warm back up, nine hours before a Company shuttle that is not coming to rescue anyone.",
+      briefing:
+        "Halden Deep, Kessler's Moon. 02:40, colony time. Sixty colonists asleep under two kilometres of ice, and you are the night shift. Twenty minutes ago Bore Six, the new deep drill, stopped answering. Six drill hands are down there. The lift cage still works, and its telemetry says the bottom of the shaft is thirty degrees above freezing, which is not possible. The uplink to the relay has been locked since midnight, on the Administrator's code. The relief shuttle Saint Agnes is due in nine hours. Supervisor's orders: suit up, ride the cage down, and bring the drill crew home.",
+      setting:
+        "Halden Deep, an ice-mining colony of sixty under the surface of Kessler's Moon, in the rings of the gas giant Tarrant, 2187. Owned, like the moon, by Ardent-Tamura Extraction.",
+      truth:
+        "Two years ago a survey core from this site came up holding dormant silicate filaments from a geothermal lens deep in the rock. Ardent-Tamura's biotech division wanted them alive. They had Administrator Okafor site Bore Six on the lens and call it a heat-exchange project. Tonight the drill broke through and the organism woke in the drill crew's warmth. Dr. Halasz has been quietly sedating feverish patients for two weeks: early exposures from the cores, kept off the books on Okafor's orders. The Saint Agnes is a Company recovery team: collect live samples and hosts, and if containment fails, overload the colony reactor and leave nobody to talk. Okafor locked the uplink so no one can call anyone else.",
+      threat:
+        "Glasswort: living silicate threads, fine as hair and clear as ice, that seek warmth. It enters a sleeping or wounded body and lines the nerves; hosts run feverish, feel no pain, hum one high note and crave heat, their skin veined with frost-white crystal. Hours later the host splits open into a walking lattice of glass limbs that hunts by heat. Deep cold makes it brittle and dormant and it shatters when frozen; flame bursts it into a glittering spore dust. Tells: frost patterns on warm metal, a singing hum in the vents, heaters smashed open and huddled around.",
+      acts: [
+        {
+          title: "Night Shift",
+          goal: "Ride the cage down Bore Six, find the drill crew and bring them up.",
+          setPieces: [
+            "The open lift cage rattles down the shaft as frost turns to dripping water and the hum grows.",
+            "The foreman, Valdés, is found wrapped around a heat exchanger, smiling, feverish, asking the crew to stay where it's warm.",
+            "The lens chamber: a warm cavern glittering with glass threads, and empty pressure suits sitting upright.",
+          ],
+          escalation: "Back up top, a sedated patient in the infirmary splits open into the first lattice, and the habitation ring's heaters begin to die.",
+          clock: "Heating fails one sector per hour as something feeds on the heat lines; the cage's power cell holds two round trips.",
+          twist: "Not all six drill hands are lost: Penny's mother, Joan Ashgrove, is alive and unfevered in a cold side gallery, and she says the order to drill past the lens's safety line came on the Administrator's code at 02:10 tonight.",
+        },
+        {
+          title: "The Warm Rooms",
+          goal: "Hold the colony together, wake and protect the sleepers, and learn what the Administrator knew.",
+          setPieces: [
+            "The dormitory, where some cots are frosted over and their sleepers too warm to touch.",
+            "Okafor's locked office: the uplink lockout, the core survey, and the Saint Agnes's real orders.",
+            "A lattice stalks the steaming hydroponics bay, hunting by body heat among the grow lamps.",
+          ],
+          escalation: "The lattices gather on the reactor hall, the warmest thing on the moon, and the crew learn the shuttle means to burn the colony with them in it.",
+          clock: "The Saint Agnes's landing countdown, and the reactor's coolant as the lattices crowd it.",
+          twist: "Okafor is not on the Saint Agnes's manifest either: the Company has written her off with everyone else. Cornered, she offers the crew the uplink codes and the reactor override in exchange for a seat on the crawler.",
+        },
+        {
+          title: "Surface",
+          goal: "Survive the shuttle's arrival: freeze the colony, cross the ice to the relay and tell the truth, or bargain a way aboard.",
+          setPieces: [
+            "The six-wheeled crawler races across blue-black ice under the ringed giant, a lattice clinging to the hull.",
+            "The Saint Agnes lands in floodlights and Captain Rhee comes down the ramp asking, politely, for the samples.",
+            "Venting the colony's heat to the surface: everything warm, alive or not, has minutes.",
+          ],
+          escalation: "The recovery team starts the reactor overload and only takes aboard what it came for.",
+          clock: "Twenty minutes from overload to the colony becoming a crater; the shuttle leaves when its hold is full.",
+          twist: "One of Rhee's troopers took a thread in the reactor hall and is humming under his visor. Rhee orders him left behind with the colony, and his own team splits: half of them now want off this moon on any ship but Rhee's.",
+        },
+      ],
+      cast: [
+        {
+          name: "Marguerite Okafor",
+          role: "Colony Administrator",
+          look: "Black woman in her fifties, silver locs pinned up, immaculate grey Ardent-Tamura uniform, a pearl-white comm earpiece.",
+          voice: "Low, warm and unhurried, Nigerian-British.",
+          agenda: "Get through the night with her career intact and the shuttle's orders carried out quietly.",
+          secret: "She sited Bore Six on the lens knowing what was in it, and locked the uplink herself.",
+        },
+        {
+          name: "Teo Valdés",
+          role: "Bore Six foreman, infected",
+          look: "Broad Chilean man in his forties, thick black moustache, orange pressure suit unzipped to the waist, skin veined with frost-white crystal.",
+          voice: "Gravelly, Chilean Spanish accent, eerily calm and kind.",
+          agenda: "To be warm, and to bring everyone down where it's warm.",
+          secret: "He is still partly himself, and when lucid he begs to be frozen.",
+        },
+        {
+          name: "Dr. Imre Halasz",
+          role: "Colony doctor",
+          look: "Bald white man in his sixties, cardigan over green scrubs, reading glasses on a cord, hands that shake.",
+          voice: "Soft, tired, Hungarian accent.",
+          agenda: "Save the drill crew and the patients he already has.",
+          secret: "He has sedated fevered patients for two weeks and kept them off the books for Okafor.",
+        },
+        {
+          name: "Cal Dunleavy",
+          role: "Bore Six drill hand",
+          look: "Lanky Irish man of twenty-two, red hair shaved at the sides, freckles, orange overalls, a bandaged hand.",
+          voice: "Young, Irish, joking even when terrified.",
+          agenda: "Get home to his sister and never go back underground.",
+          secret: "He was cut by the threads at the breakthrough and is already infected.",
+        },
+        {
+          name: "Penny Ashgrove",
+          role: "Colonist's daughter, eleven",
+          look: "Small girl, hood up, oversized mittens, a chunky yellow handheld thermal camera she uses as a toy.",
+          voice: "Young, quick, English.",
+          agenda: "Find her mother, a drill hand on Bore Six.",
+          secret: "She has seen glass spiders in the vents for days and nobody believed her; the thermal camera shows them.",
+        },
+        {
+          name: "Captain Rhee Sung-min",
+          role: "Commander of the Saint Agnes recovery team",
+          look: "Korean man in his forties, hard face, white hazard armour, a silver Company pin at the collar.",
+          voice: "Clipped, polite, Seoul-accented.",
+          agenda: "Live samples, one living host, and a clean report.",
+          secret: "His orders are to leave no witnesses who have seen the organism.",
+        },
+      ],
+      foes: [
+        { name: "Fevered drill hand", what: "A Bore Six hand in an unzipped orange suit, skin veined with frost-white crystal, smiling and feeling no pain; grabs people and drags them down toward the warm lens.", act: 1 },
+        { name: "Glass spider swarm", what: "Hand-sized crawlers of clear glass thread spilling from the vents toward heat, ticking on the steel; they bite through gloves and shatter under a boot or a blast of cold.", act: 2 },
+        { name: "Frosted sleeper", what: "A colonist from the dormitory in long johns, too hot to touch, eyes glazed, humming one note; smashes heaters open and fights anyone who carries warmth away.", act: 2 },
+        { name: "Saint Agnes recovery trooper", what: "Ardent-Tamura trooper in white hazard armour and a mirrored visor, with a carbine and tranquilliser darts; shoots witnesses and nets anything humming for the hold.", act: 3 },
+        { name: "Half-split lattice", what: "A host only half split open: a man's torso on a nest of knee-high glass limbs, slow and shrieking, hunting by heat; blunt blows crack it and cold shatters it.", act: 3 },
+      ],
+      locations: [
+        { name: "Bore Six lift cage", look: "An open steel cage descending a raw rock shaft lit by sodium lamps, frost on every rung giving way to dripping water." },
+        { name: "The lens chamber", look: "A vast warm cavern of black rock furred with glittering glass threads, steam rising from still pools." },
+        { name: "Habitation ring", look: "Curved corridors of green-painted steel, ticking heaters, frosted portholes framing the ringed giant planet." },
+        { name: "Infirmary", look: "Six cots behind plastic curtains, a wall of cold-storage morgue drawers, one cot frosted over." },
+        { name: "Reactor hall", look: "A squat fission pile behind yellow railings, the warmest orange light on the moon, steam and warning strobes." },
+        { name: "The ice field", look: "Blue-black ice to the horizon under the huge ringed planet Tarrant, a six-wheeled crawler and a distant relay mast." },
+      ],
+    },
+    styleLock:
+      "late-1970s science fiction film still, 35mm film grain, sodium-orange and ice-blue practical lighting, cramped industrial mining interiors, frost and steam, deep shadows",
+    hiddenRole: {
+      crewMember: "Ines Varga",
+      role: "A Company synthetic who believes she is human. Her buried directive is to deliver one living glasswort host to the Saint Agnes. The organism ignores her, because her body runs cold.",
+    },
+    crew: [
+      {
+        name: "Maeve Dunleavy",
+        gender: "Female",
+        career: "Roughneck",
+        crewRole: "Drill tech on the night shift, ran Bore Six's rig last week",
+        look: "White Irish woman in her late thirties, freckled pale skin, red hair in a tight braid under a grey knit cap, stocky and strong, grease-stained orange thermal overalls, a heavy torque wrench on her belt.",
+        personality: "Blunt, funny, fiercely protective; flaw: reckless when someone she loves is in danger.",
+        backstory: "Eight years on Kessler's Moon, the best rig tech in Halden Deep and the loudest in the canteen. She got her little brother Cal his job here. Cal is on the Bore Six crew tonight.",
+        relationships: [
+          { to: "Ines Varga", line: "Her supervisor, fair but cold; Maeve has never once seen her lose her temper." },
+          { to: "Desmond Achebe", line: "Drinking buddy who has stitched her up more than once." },
+          { to: "Yusuf Kaya", line: "Owes her money from cards, and she lets him know it." },
+          { to: "Rook Tanaka-Bell", line: "Thinks the Company geologist is a spy and says so." },
+        ],
+        signatureItem: "Cal's dented harmonica",
+        voice: "Irish woman, late thirties, rough, warm and loud.",
+        agenda: [
+          "Get down Bore Six and bring your brother Cal back up alive, whatever it takes and whoever objects.",
+          "Cal is infected. Keep him alive, warm and hidden from anyone who would freeze him or hand him over: there has to be a cure.",
+          "Get Cal off this moon, on the shuttle or the crawler, even if the infection comes with him.",
+        ],
+      },
+      {
+        name: "Ines Varga",
+        gender: "Female",
+        career: "Officer",
+        crewRole: "Night-shift supervisor of Halden Deep",
+        look: "Woman in her early forties, light brown skin, close-cropped black hair with a single white streak, tall and very still, pressed navy supervisor's parka with rank tabs, a clipboard tablet always in hand.",
+        personality: "Calm, precise, kind in a by-the-book way; flaw: cannot break a rule even when she should.",
+        backstory: "Three years running the night shift, never late, never sick, never rattled. She keeps a paper photograph of a family on another world she never talks about. The shift trusts her to know the procedure for everything.",
+        relationships: [
+          { to: "Maeve Dunleavy", line: "Her best tech and her biggest headache." },
+          { to: "Desmond Achebe", line: "Signs off his infirmary reports and has noticed they got longer." },
+          { to: "Yusuf Kaya", line: "Has written him up four times and likes him anyway." },
+          { to: "Rook Tanaka-Bell", line: "Was told by Okafor to give the geologist anything they ask for." },
+        ],
+        signatureItem: "A creased paper photo of a family",
+        voice: "Woman, forties, neutral accent, very even and soothing.",
+        agenda: [
+          "Keep the shift calm and on procedure: nobody unlocks the uplink or leaves the colony without Administrator Okafor's say-so.",
+          "Make sure at least one infected person is kept alive and restrained, not frozen or burned. Tell yourself it is for the doctor.",
+          "Get one living host aboard the Saint Agnes. If anyone tries to destroy the last one, stop them.",
+        ],
+      },
+      {
+        name: "Desmond Achebe",
+        gender: "Male",
+        career: "Medic",
+        crewRole: "Colony paramedic, Dr. Halasz's assistant",
+        look: "Black man in his early thirties, dark brown skin, shaved head, wiry, blue paramedic jacket with reflective stripes, a stethoscope around his neck and a red trauma bag.",
+        personality: "Gentle, quick with a joke, conscientious; flaw: does what he is told by anyone in a white coat.",
+        backstory: "Trained on Earth, came out for the hazard pay, stayed for the people. He runs the infirmary at night while Dr. Halasz sleeps. Lately there have been a lot of fevers.",
+        relationships: [
+          { to: "Maeve Dunleavy", line: "His favourite patient and worst listener." },
+          { to: "Ines Varga", line: "Has never once taken her blood pressure, and she always has an excuse." },
+          { to: "Yusuf Kaya", line: "Old friends from the transport out; they still share a bottle." },
+          { to: "Rook Tanaka-Bell", line: "Lent the geologist a cold-storage drawer for their samples." },
+        ],
+        signatureItem: "A red trauma bag",
+        voice: "Nigerian-English man, thirties, gentle and wry.",
+        agenda: [
+          "Keep the fevered patients in the infirmary sedated and apart from everyone, and let nobody see the sedation logs you signed for Dr. Halasz.",
+          "Find something that stops the glasswort inside a living body, cold, drugs, anything, and try it on someone, even if they have not agreed.",
+          "Get the infirmary's patients off this moon alive, and make sure the Company, not you, takes the blame for the cover-up.",
+        ],
+      },
+      {
+        name: "Yusuf Kaya",
+        gender: "Male",
+        career: "Pilot",
+        crewRole: "Crawler driver and cargo pilot",
+        look: "Turkish man in his late twenties, olive skin, curly black hair, stubble, aviator goggles pushed up on a fur-lined flight cap, a patched brown leather flight jacket over thermals.",
+        personality: "Charming, cynical, quick; flaw: looks after himself first.",
+        backstory: "He drives the six-wheeled crawler between the colony and the surface relay, forty kilometres of ice, and flies cargo when the shuttles come. He owes money to half of Halden Deep.",
+        relationships: [
+          { to: "Maeve Dunleavy", line: "Owes her three months of card debts and the occasional apology." },
+          { to: "Ines Varga", line: "She keeps writing him up; he keeps flirting with her." },
+          { to: "Desmond Achebe", line: "The one friend he would go back for." },
+          { to: "Rook Tanaka-Bell", line: "Drove the geologist to the relay twice, and they paid him to forget it." },
+        ],
+        signatureItem: "A ring of crawler keys on a lanyard",
+        voice: "Turkish-German man, late twenties, wry and fast.",
+        agenda: [
+          "Get into the Administrator's office and find out why the uplink has been locked since midnight.",
+          "Administrator Okafor has quietly promised you a seat on the Saint Agnes and your debts cleared if you keep the crawler ready and say nothing. Keep the crawler ready, and keep its keys away from Maeve.",
+          "Get yourself and one person you choose onto the shuttle or across the ice. Everyone else is their own problem.",
+        ],
+      },
+      {
+        name: "Rook Tanaka-Bell",
+        gender: "Nonbinary",
+        career: "Scientist",
+        crewRole: "Ardent-Tamura geologist, six months into a survey",
+        look: "Person in their late twenties, Japanese and white, shaved sides with a black topknot, round wire glasses, thin, layered grey thermal fleece with a Company patch, a rock hammer and an aluminium sample case.",
+        personality: "Curious, nervous, stubborn about facts; flaw: forgets people when there is data.",
+        backstory: "Sent by the Company to log Bore Six's cores, and given more access than any geologist needs. Most of the colony thinks they are a spy. Their own survey files keep being edited by someone else.",
+        relationships: [
+          { to: "Maeve Dunleavy", line: "She calls them a spy; they think she is the only one who knows the rock." },
+          { to: "Ines Varga", line: "She gives them everything they ask for, which is what frightens them." },
+          { to: "Desmond Achebe", line: "Keeps samples in his morgue drawer and owes him an explanation." },
+          { to: "Yusuf Kaya", line: "Paid him to drive them to the relay and keep quiet." },
+        ],
+        signatureItem: "An aluminium core-sample case",
+        voice: "Young Californian, quick, with a nervous laugh.",
+        agenda: [
+          "Get one clean sample of whatever came up Bore Six, sealed and cold, before anyone burns it all.",
+          "Your survey files prove Ardent-Tamura knew what was in the lens two years ago. Get them off the colony's servers before Okafor wipes them.",
+          "Broadcast the truth from the surface relay, even if it costs Yusuf the crawler or the crew a seat on the shuttle.",
+        ],
+      },
+    ],
+  },
+};

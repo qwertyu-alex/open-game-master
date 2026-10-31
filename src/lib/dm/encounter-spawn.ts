@@ -76,8 +76,11 @@ export function resolveEnemyRequests(
   const sheetFoes = campaignId ? sheetFoesByName(campaignId) : new Map<string, SheetFoeEntry>();
   for (const request of requests) {
     const count = request.count ?? 1;
-    const wanted = textKey(request.monster);
-    const foe = sheetFoes.get(wanted);
+    // A character may be named as the monster or as the display name
+    // ({ monster: "humanoid", name: "Veya Dunn" }): either way it is them.
+    const named = request.name?.trim() ? sheetFoes.get(textKey(request.name)) : undefined;
+    const foe = sheetFoes.get(textKey(request.monster)) ?? named;
+    const wanted = foe ? textKey(foe.name) : textKey(request.monster);
     if (foe) {
       if (!resolved.some((entry) => entry.sheetFoe && textKey(entry.name) === wanted)) {
         resolved.push({ slug: "sheet", name: foe.name, stats: foe.stats, sheetFoe: foe.foe });

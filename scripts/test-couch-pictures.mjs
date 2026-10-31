@@ -6,6 +6,9 @@
 // from their portraits, the narrator is not also offered generate_image,
 // and when turns come faster than pictures only the newest one waits. A
 // thing found in the place on screen is painted as an insert beside it.
+// The first picture in a place is its establishing shot: wide, empty, kept
+// with the place, looked at for the GM, and the reference for every later
+// picture there; the GM's repaint_place has the next one paint it anew.
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
@@ -47,6 +50,10 @@ const { fakePng } = await import("../src/lib/harness/adapters/fake.ts");
 const { handleMcpRequest } = await import("../src/lib/agents/mcp-server.ts");
 const { subscribe } = await import("../src/lib/events.ts");
 const { imageVariantsSettled } = await import("../src/lib/image-variants.ts");
+const { getPlaceShot, placeLooksSettled } = await import("../src/lib/couch/place-shots.ts");
+const { couchNavigation } = await import("../src/lib/couch/navigation.ts");
+const { navigationPrompt } = await import("../src/lib/couch/navigation-logic.ts");
+const { handleRepaintPlace } = await import("../src/lib/dm/couch-tools.ts");
 
 let passed = 0;
 async function test(name, fn) {
@@ -270,8 +277,69 @@ try {
     assert.equal(replaced.imageRequest.failed, undefined, "being replaced is not a failure");
   });
 
+  await test("a place's first picture is its establishing shot: wide, empty, kept with the place, and looked at for the GM", async () => {
+    const spine = upsertCurrentLocation({ campaignId: campaign.id, name: "Docking spine", layoutDescription: "A ribbed corridor ending at the outer hatch." });
+    const arrival = insertCampaignMessage({
+      campaignId: campaign.id,
+      seq: allocateSeq(campaign.id),
+      authorType: "dm",
+      content: `Kara leads the crew down the docking spine. ${NARRATION}`,
+      imageRequest: sceneShotRequest(table(), NARRATION),
+      speech: [],
+    });
+    // Every run reads the same step: the planner gets prose it cannot use,
+    // so the place's own description frames the picture, and the look at
+    // the finished picture gets the prose as its answer.
+    const SEEN = "A long ribbed corridor lit by failing strip lights, frost on the ribs, a heavy round hatch at the far end with an amber lamp above it.";
+    setScript([[{ paint: [48, 32] }, { text: SEEN }]]);
+    globalThis.__odmFakeHarnessLog = [];
+    await fulfillSceneShot(campaign.id, arrival.id, arrival.imageRequest, table().settings);
+    await placeLooksSettled();
+    const image = getCampaignMessage(arrival.id).generatedImage;
+    assert.deepEqual(image.shot, {
+      kind: "wide",
+      frame: "The whole of Docking spine: A ribbed corridor ending at the outer hatch, empty of people.",
+      placeId: spine.id,
+      establishing: true,
+    });
+    const planner = String(log().find((entry) => entry.kind === "prompt" && String(entry.detail).includes("ON SCREEN NOW:"))?.detail ?? "");
+    assert.match(planner, /ESTABLISHING SHOT: the crew has just arrived here/);
+    const [run] = pictureRuns();
+    assert.deepEqual(run.pictures, [], "nobody's face rides along: the place is empty");
+    assert.match(run.prompt, /Wide shot: The whole of Docking spine/);
+    assert.doesNotMatch(run.prompt, /Kara Voss:/);
+    // The look: the picture handed over as a file, and what it saw kept.
+    const lookStart = log().findIndex((entry) => entry.kind === "prompt" && /Describe what the attached picture shows/.test(String(entry.detail)));
+    assert.ok(lookStart >= 0, "the finished picture was looked at");
+    assert.match(String(log()[lookStart].detail), /PLACE: Docking spine/);
+    const attached = log().slice(0, lookStart).reverse().find((entry) => entry.kind === "pictures")?.detail ?? [];
+    assert.match(String(attached[0] ?? ""), /picture-1\.png$/, "the picture travels to the agent program as a file");
+    assert.deepEqual(getPlaceShot(spine.id), { locationId: spine.id, url: image.url, frame: image.shot.frame, seen: SEEN, change: "", stale: false });
+    // Every seat's map carries it, and the GM reads what was seen.
+    const map = couchNavigation(table());
+    assert.deepEqual(map.here.picture, { url: image.url, seen: SEEN, placeId: spine.id });
+    assert.match(navigationPrompt(map), /WHAT THE CREW SAW of Docking spine \(the picture every screen showed when they arrived; keep to it\): A long ribbed corridor/);
+    assert.match(navigationPrompt(map), /call repaint_place/);
+  });
+
+  await test("an establishing shot keeps a wide planned frame, and makes any other answer the place's own description", async () => {
+    const cast = sceneShotCast(campaign.id, NARRATION);
+    setScript([[{ text: '{"shot":"wide","subjects":["c1"],"prompt":"An empty ribbed corridor under red emergency light, a round hatch ahead."}' }]]);
+    assert.deepEqual(await planSceneShot(table(), NARRATION, cast, null, { shot: null }), {
+      shot: "wide",
+      subjects: [],
+      prompt: "An empty ribbed corridor under red emergency light, a round hatch ahead.",
+    });
+    setScript([[{ text: '{"shot":"close","subjects":["c1"],"prompt":"Kara Voss stares at her wet glove under a failing red lamp."}' }]]);
+    const own = await planSceneShot(table(), NARRATION, cast, null, { shot: null });
+    assert.equal(own.shot, "wide");
+    assert.deepEqual(own.subjects, []);
+    assert.match(own.prompt, /^The whole of Docking spine/);
+  });
+
   await test("a find in the place on screen is painted square beside it, with nobody in it; a new place is never an insert", async () => {
     const spine = upsertCurrentLocation({ campaignId: campaign.id, name: "Docking spine", layoutDescription: "A ribbed corridor ending at the outer hatch." });
+    const spineShot = path.join(process.cwd(), "public", getPlaceShot(spine.id).url);
     const passage = (text) =>
       insertCampaignMessage({ campaignId: campaign.id, seq: allocateSeq(campaign.id), authorType: "dm", content: text, imageRequest: sceneShotRequest(table(), text), speech: [] });
     const plannerPrompt = () => String(log().find((entry) => entry.kind === "prompt" && String(entry.detail).includes("ON SCREEN NOW:"))?.detail ?? "");
@@ -282,12 +350,16 @@ try {
     // The place, painted the turn before.
     const hatch = passage(`Kara reaches the outer hatch at the end of the spine. ${NARRATION}`);
     setScript([[{ paint: [48, 32] }, { text: '{"shot":"medium","subjects":["c1"],"prompt":"Kara crouches at the outer hatch, wrench in hand, amber light above."}' }]]);
+    globalThis.__odmFakeHarnessLog = [];
     await fulfillSceneShot(campaign.id, hatch.id, hatch.imageRequest, table().settings);
     assert.deepEqual(getCampaignMessage(hatch.id).generatedImage.shot, {
       kind: "medium",
       frame: "Kara crouches at the outer hatch, wrench in hand, amber light above.",
       placeId: spine.id,
     }, "the framing is kept with the picture for the next turn's planner and the screens");
+    assert.deepEqual(pictureRuns()[0].pictures, [karaFace, spineShot], "Kara's face, and the place's establishing shot for the room");
+    assert.match(pictureRuns()[0].prompt, /Reference 2 is Docking spine: keep the place's layout/);
+    assert.match(plannerPrompt(), /PLACE: Docking spine\. A ribbed corridor ending at the outer hatch\. It looks like this: A long ribbed corridor lit by failing strip lights/);
 
     const found = passage(FIND);
     setScript([[{ paint: [40, 40] }, { text: '{"shot":"insert","subjects":["c1"],"prompt":"A spring-loaded collar around a pipe coupling, alignment marks painted beside it."}' }]]);
@@ -298,21 +370,51 @@ try {
     assert.equal(insert.shot.kind, "insert");
     assert.equal(insert.aspect, "square");
     const [run] = pictureRuns();
-    assert.deepEqual(run.pictures, [], "a face as a reference would paint Kara instead of the collar");
+    assert.deepEqual(run.pictures, [], "a face or the room as a reference would paint them instead of the collar");
     assert.match(run.prompt, /Insert shot of a detail: A spring-loaded collar/);
     assert.doesNotMatch(run.prompt, /Kara Voss:/);
     assert.match(run.prompt, /Shape: square/);
 
     // Through the hatch: the spine is not where the party stands, so a find
-    // in the new place has no picture to sit beside and stands on its own.
-    upsertCurrentLocation({ campaignId: campaign.id, name: "Warden-4 airlock", layoutDescription: "A cramped airlock, frost on every surface." });
+    // in the new place has no picture to sit beside. The new place's first
+    // picture is its establishing shot instead.
+    const airlock = upsertCurrentLocation({ campaignId: campaign.id, name: "Warden-4 airlock", layoutDescription: "A cramped airlock, frost on every surface." });
     const through = passage(`The hatch gives at last. ${FIND}`);
     globalThis.__odmFakeHarnessLog = [];
     await fulfillSceneShot(campaign.id, through.id, through.imageRequest, table().settings);
+    await placeLooksSettled();
     assert.match(plannerPrompt(), /ON SCREEN NOW: none\n/);
     const own = getCampaignMessage(through.id).generatedImage;
-    assert.equal(own.shot.kind, "close");
+    assert.equal(own.shot.kind, "wide");
+    assert.equal(own.shot.establishing, true);
     assert.equal(own.aspect, "landscape");
+    assert.equal(getPlaceShot(airlock.id).url, own.url);
+  });
+
+  await test("repaint_place has the next picture paint the place anew, from its old picture and with what changed", async () => {
+    const airlock = upsertCurrentLocation({ campaignId: campaign.id, name: "Warden-4 airlock", layoutDescription: "A cramped airlock, frost on every surface." });
+    const before = getPlaceShot(airlock.id);
+    const result = handleRepaintPlace(table(), JSON.stringify({ change: "the outer door is breached and venting" }));
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.equal(getPlaceShot(airlock.id).stale, true);
+    assert.equal(couchNavigation(table()).here.picture.url, before.url, "the old picture stays on the map until the new one lands");
+    assert.equal(handleRepaintPlace(table(), "{}").retry, true);
+    assert.equal(handleRepaintPlace({ ...table(), gameSettings: { ...table().gameSettings, couchMode: false } }, JSON.stringify({ change: "fire" })).refused, "rules");
+
+    const passage = insertCampaignMessage({ campaignId: campaign.id, seq: allocateSeq(campaign.id), authorType: "dm", content: `Alarms scream. ${NARRATION}`, imageRequest: sceneShotRequest(table(), NARRATION), speech: [] });
+    setScript([[{ paint: [48, 32] }, { text: '{"shot":"wide","subjects":[],"prompt":"The cramped airlock torn open, frost blasting out through a ragged breach."}' }]]);
+    globalThis.__odmFakeHarnessLog = [];
+    await fulfillSceneShot(campaign.id, passage.id, passage.imageRequest, table().settings);
+    await placeLooksSettled();
+    const planner = String(log().find((entry) => entry.kind === "prompt" && String(entry.detail).includes("ON SCREEN NOW:"))?.detail ?? "");
+    assert.match(planner, /THE PLACE HAS CHANGED: the outer door is breached and venting\./);
+    const [run] = pictureRuns();
+    assert.deepEqual(run.pictures, [path.join(process.cwd(), "public", before.url)], "the old picture keeps the room's layout");
+    const after = getPlaceShot(airlock.id);
+    assert.equal(after.stale, false);
+    assert.equal(after.change, "");
+    assert.equal(after.url, getCampaignMessage(passage.id).generatedImage.url);
+    assert.notEqual(after.url, before.url);
   });
 
   await test("the narrator's own picture keeps the faces of the characters it named", async () => {

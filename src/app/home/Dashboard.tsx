@@ -1,58 +1,40 @@
 "use client";
 
-import { ScrollText } from "lucide-react";
 import { appConfirm } from "@/components/ui/ConfirmDialog";
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { ui } from "@/lib/ui";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { SessionUser } from "@/lib/campaign-types";
 import { offersStoryModel, useCapabilities, type ClientCapabilities } from "@/lib/use-capabilities";
-import { StarterDialog } from "@/app/home/StarterDialog";
-
-// The campaign creator (every step, its field groups and the defaults
-// manager) loads when it is first opened, not with the title screen; once
-// open it stays mounted, so a draft closed half-done is there on reopening.
-const CreateCampaignDialog = lazy(() =>
-  import("@/app/CreateCampaignDialog").then((module) => ({ default: module.CreateCampaignDialog })),
-);
 import { AccountMenu, AppBrand, AppHomeButton } from "@/components/AccountMenu";
 import { DeletionBanner } from "@/components/DeletionBanner";
 import { NotificationBell } from "@/components/NotificationBell";
-import { HowToPlayDialog } from "@/components/HowToPlayDialog";
-import { Tooltip } from "@/components/ui/Tooltip";
-import type { WorkshopSummary } from "@/app/workshop/types";
 import { YourTables } from "@/app/home/CampaignList";
 import { ContinueHero, EmptyHero, FailedHero, LoadingHero, RecapPanel, ScreenBackdrop } from "@/app/home/ContinueHero";
 import { HomeFooter } from "@/app/home/HomeFooter";
 import { JoinCard } from "@/app/home/JoinCard";
+import { ReadyNights } from "@/app/home/ReadyNights";
 import { HomeMenu } from "@/app/home/QuickTiles";
 import { SetupNudge } from "@/app/home/SetupNudge";
-import { WorkshopSection } from "@/app/home/WorkshopSection";
 import { pickContinue, type HomeCampaign } from "@/app/home/types";
-import { currentPathname, currentQuery, navigateTo, replaceAddress } from "@/lib/navigation";
-import { shellHost } from "@/lib/shell-host";
+import { currentQuery, navigateTo } from "@/lib/navigation";
 
 // The desktop and Android shells' quick tiles land here with ?new=1,
-// ?new=solo or ?new=starter and expect that wizard already open. Read once, at mount, as the
-// initial dialog state: Home only mounts the dashboard after the session
-// check resolves on the client, so there is no server render to disagree
-// with, and no effect has to set state after the fact.
-function requestedWizard(): "campaign" | "solo" | "starter" | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-  const value = currentQuery().get("new");
-  return value === "solo" ? "solo" : value === "starter" ? "starter" : value === "1" ? "campaign" : null;
+// ?new=solo or ?new=starter and expect a way to start a game. This fork
+// starts couch nights only (AGENTS.md, "This fork"), so each of them opens
+// the couch night's one screen instead of the upstream wizards.
+function requestedNew(): boolean {
+  return typeof window !== "undefined" && currentQuery().has("new");
 }
 
 // The home is a title screen (docs: "ODM World Concepts", round 3a): the
 // table you were last at fills the screen behind a Continue, the menu runs
 // down the left like a game's main menu, the recap and your tables sit
 // as raised night panels, and the bench, the sigil and the small print wait
-// below the fold. Everything the old dashboard offered is still here; only
-// the composition changed.
+// below the fold. In this fork the only ways in are starting a couch night
+// and joining one (AGENTS.md, "This fork"): the upstream campaign wizard,
+// Quick start, solo adventures, the workshop and the rulebook are not
+// offered from home.
 export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () => void }) {
   const [campaigns, setCampaigns] = useState<HomeCampaign[]>([]);
-  const [workshops, setWorkshops] = useState<WorkshopSummary[]>([]);
   const [loading, setLoading] = useState(true);
   // A failed list fetch must not read as "no campaigns": the empty-table
   // words are a statement about the account, not about the network.
@@ -60,49 +42,18 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
   // Clone and delete failures, shown beside the save slots.
   const [actionError, setActionError] = useState("");
   const [cloningId, setCloningId] = useState("");
-  const [createOpen, setCreateOpen] = useState(() => requestedWizard() === "campaign");
-  const [soloOpen, setSoloOpen] = useState(() => requestedWizard() === "solo");
-  // Whether each creator has been opened yet (it loads on first open).
-  const [createSeen, setCreateSeen] = useState(createOpen);
-  const [soloSeen, setSoloSeen] = useState(soloOpen);
-  if (createOpen && !createSeen) {
-    setCreateSeen(true);
-  }
-  if (soloOpen && !soloSeen) {
-    setSoloSeen(true);
-  }
-  const [starterOpen, setStarterOpen] = useState(() => requestedWizard() === "starter");
-  // A wizard the apps opened from their own title screen (?new=): closed
-  // without a campaign, it goes back to that screen, which already shows
-  // everything this one does. A create closes the dialog on its way to the
-  // lobby, so onCreated cancels the return.
-  const [openedByApp] = useState(() => requestedWizard() !== null && shellHost() !== null);
-  const appReturn = useRef<number | null>(null);
-  const closesToApp = (setOpen: (open: boolean) => void) => (open: boolean) => {
-    setOpen(open);
-    if (open || !openedByApp) {
-      return;
-    }
-    appReturn.current = window.setTimeout(() => shellHost()?.showServers(), 0);
-  };
-  const [howToOpen, setHowToOpen] = useState(false);
   const joinInputRef = useRef<HTMLInputElement | null>(null);
   const capabilities = useCapabilities();
 
-  // The query has done its job once the wizard is open; a reload or a share
-  // of the address should not reopen it.
   useEffect(() => {
-    if (!requestedWizard()) {
-      return;
+    if (requestedNew()) {
+      navigateTo("/couch");
     }
-    const query = currentQuery();
-    query.delete("new");
-    replaceAddress(`${currentPathname()}${query.size ? `?${query}` : ""}`);
   }, []);
 
-  // Promise-chain shape for the same reason as refreshWorkshops below: the
-  // state lands in callbacks, so the refetch reads as "subscribe to an
-  // external system" to React and to the effect linter.
+  // The state lands in .then callbacks rather than after an await, so the
+  // refetch reads as "subscribe to an external system" to React and to the
+  // effect linter, which is what it is.
   const refresh = useCallback(
     () =>
       fetch("/api/campaigns")
@@ -128,28 +79,6 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
     void refresh();
   }, [refresh]);
 
-  // The state lands in a .then callback rather than after an await, so the
-  // refetch reads as "subscribe to an external system" to React and to the
-  // effect linter, which is what it is. Same shape as ContentImportPicker.
-  const refreshWorkshops = useCallback(
-    () =>
-      fetch("/api/workshops")
-        .then((response) => (response.ok ? response.json() : null))
-        .then((data) => {
-          if (data) {
-            setWorkshops(data.workshops ?? []);
-          }
-        })
-        .catch(() => {
-          // transient; the workshop page itself is one click away
-        }),
-    [],
-  );
-
-  useEffect(() => {
-    void refreshWorkshops();
-  }, [refreshWorkshops]);
-
   async function deleteCampaign(campaign: HomeCampaign) {
     if (
       !await appConfirm(
@@ -171,8 +100,7 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
   }
 
   // A copy of the world without the play: prep travels, the transcript does
-  // not (src/lib/db/campaign-clone.ts). Same call for a workshop, which is
-  // why both rows use it.
+  // not (src/lib/db/campaign-clone.ts).
   async function clone(id: string) {
     setCloningId(id);
     setActionError("");
@@ -185,11 +113,10 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
         setActionError(data?.error || "Could not make the copy.");
         return;
       }
-      const data = await response.json().catch(() => ({}));
-      // Refetched rather than pushed onto the list: the list endpoints add
+      // Refetched rather than pushed onto the list: the list endpoint adds
       // the per-row counts a slot renders, and the clone response is just the
       // new row.
-      await (data.campaign?.kind === "workshop" ? refreshWorkshops() : refresh());
+      await refresh();
     } finally {
       setCloningId("");
     }
@@ -205,13 +132,9 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
   }
 
   const continueCampaign = loading || loadFailed ? null : pickContinue(campaigns);
-  const onCreated = (campaignId: string) => {
-    if (appReturn.current !== null) {
-      window.clearTimeout(appReturn.current);
-      appReturn.current = null;
-    }
-    navigateTo(`/campaigns/${campaignId}`);
-  };
+  // Start a night: the AI writes the story, so a server with no storyteller
+  // has nothing to offer, and an admin may keep table-starting to itself.
+  const canStart = user.canCreateCampaigns !== false && offersStoryModel(capabilities);
 
   return (
     <main className="ts-root bg-starfield">
@@ -238,12 +161,6 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
             <div className="ts-cluster">
               <AppHomeButton />
               <NotificationBell />
-              <Tooltip content="What this app is and how a table works" side="bottom">
-                <button type="button" onClick={() => setHowToOpen(true)} className={ui.btnSmall} aria-label="How to play">
-                  <ScrollText className="size-4" />
-                  <span className="hidden sm:inline">How to play</span>
-                </button>
-              </Tooltip>
               <span className="ts-username" aria-hidden="true">{user.username}</span>
               <AccountMenu user={user} onLogout={onLogout} />
             </div>
@@ -268,14 +185,10 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
               ) : continueCampaign ? (
                 <ContinueHero campaign={continueCampaign} userId={user.id} />
               ) : (
-                <EmptyHero onNewCampaign={() => setCreateOpen(true)} canCreate={user.canCreateCampaigns !== false} />
+                <EmptyHero canStart={canStart} />
               )}
               <HomeMenu
-                onNewCampaign={() => setCreateOpen(true)}
-                onStarter={() => setStarterOpen(true)}
-                showNew={user.canCreateCampaigns !== false}
-                onSolo={() => setSoloOpen(true)}
-                showSolo={offersStoryModel(capabilities)}
+                showCouch={canStart}
                 onJoin={focusJoin}
                 firstTime={!loading && !loadFailed && campaigns.length === 0}
               />
@@ -291,24 +204,18 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
                 actionError={actionError}
                 onClone={clone}
                 onDelete={deleteCampaign}
-                onNewCampaign={() => setCreateOpen(true)}
+                canStart={canStart}
               />
             </div>
           </section>
         </div>
 
         <section className="ts-below">
-          <WorkshopSection workshops={workshops} cloningId={cloningId} onClone={clone} />
+          <ReadyNights canStart={canStart} />
           <JoinCard inputRef={joinInputRef} />
           <HomeFooter />
         </section>
 
-        <Suspense fallback={null}>
-          {createSeen ? <CreateCampaignDialog open={createOpen} onOpenChange={closesToApp(setCreateOpen)} onCreated={onCreated} /> : null}
-          {soloSeen ? <CreateCampaignDialog solo open={soloOpen} onOpenChange={closesToApp(setSoloOpen)} onCreated={onCreated} /> : null}
-        </Suspense>
-        <StarterDialog open={starterOpen} onOpenChange={closesToApp(setStarterOpen)} onCreated={onCreated} />
-        <HowToPlayDialog open={howToOpen} onOpenChange={setHowToOpen} />
       </div>
     </main>
   );
@@ -340,7 +247,7 @@ function DmStatusLine({ capabilities }: { capabilities: ClientCapabilities | nul
     tone === "wait"
       ? "Waking the GM"
       : tone === "off"
-        ? "No AI storyteller · human-run tables"
+        ? "No AI storyteller · a couch night needs one"
         : tone === "awake"
           ? "The GM is awake"
           : "The GM is not answering";

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { TvScene } from "@/components/couch/CouchTvLobby";
 
 // The TV's pictures (couch-logic.ts tvPictures): the place, and beside it a
@@ -12,7 +12,14 @@ import { TvScene } from "@/components/couch/CouchTvLobby";
 // The column's picture stays mounted while it closes, so it slides out
 // rather than vanishing. A find that arrives after the column closed opens
 // a fresh one (a new key), never the last find's picture first.
-export function TvPictures({ scene, insert }: { scene: string | null; insert: string | null }) {
+//
+// The column also holds an item a crew member used (item-show-logic.ts
+// tvItemShow), named under its picture so the room reads what it is.
+export function TvPictures({ scene, insert, item = null }: {
+  scene: string | null;
+  insert: string | null;
+  item?: { title: string; line: string } | null;
+}) {
   const [column, setColumn] = useState<{ key: number; url: string | null; loaded: boolean; was: string | null }>(() => ({
     key: 0,
     url: insert,
@@ -34,11 +41,23 @@ export function TvPictures({ scene, insert }: { scene: string | null; insert: st
   const shown = (url: string) =>
     setColumn((current) => (url === current.url && !current.loaded ? { ...current, loaded: true } : current));
   return (
-    <div className="couch-tv-pictures" data-split={open ? "" : undefined}>
+    // The scene's own picture, blurred, fills the space a fight's creature
+    // column takes from it (couch-fight.css).
+    <div
+      className="couch-tv-pictures"
+      data-split={open ? "" : undefined}
+      style={scene ? ({ "--scene-url": `url(${JSON.stringify(scene)})` } as CSSProperties) : undefined}
+    >
       <TvScene url={scene} />
       {column.url ? (
-        <div className="couch-tv-insert" data-open={open ? "" : undefined}>
+        <div className="couch-tv-insert" data-open={open ? "" : undefined} data-item={item ? "" : undefined}>
           <TvScene key={column.key} url={column.url} onShown={shown} />
+        </div>
+      ) : null}
+      {item ? (
+        <div className="couch-tv-item" data-open={open ? "" : undefined} role="status">
+          <strong>{item.title}</strong>
+          <span>{item.line}</span>
         </div>
       ) : null}
     </div>

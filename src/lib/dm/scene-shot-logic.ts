@@ -40,6 +40,9 @@ export type PictureShot = {
   // The place it was painted in. A picture of the place the party left is
   // not one a find can sit beside.
   placeId?: string;
+  // The place's establishing shot: wide, empty, and kept with the place
+  // (src/lib/couch/place-shots.ts).
+  establishing?: true;
 };
 
 // What the screen shows: the stage (the place, the newest picture that is
@@ -108,6 +111,8 @@ export const SCENE_SHOT_MIN_CHARS = 120;
 const PROMPT_MAX_CHARS = 600;
 const LOOK_MAX_CHARS = 300;
 const ON_SCREEN_MAX_CHARS = 300;
+// The place's layout and, once a picture of it was looked at, what it shows.
+const PLACE_MAX_CHARS = 700;
 // The end of a long passage is what is on screen now; the planner reads no
 // more than this of it.
 const PLANNER_TEXT_CHARS = 2_400;
@@ -211,15 +216,18 @@ export const SHOT_PLANNER_SYSTEM = [
 // The planner's question: who it may name, where they are, what the screen
 // shows now, and the end of the passage. Refs (c1, c2) stand for the ids,
 // which the model would only garble. `onScreen` is onScreenFrame's line.
-export function shotPlannerInput(content: string, cast: readonly ShotCastMember[], place = "", onScreen: string | null = null): string {
+// `brief` is a standing instruction for this one picture (an establishing
+// shot's, src/lib/couch/place-shots-logic.ts).
+export function shotPlannerInput(content: string, cast: readonly ShotCastMember[], place = "", onScreen: string | null = null, brief = ""): string {
   const text = shotText(content);
   const end = text.length > PLANNER_TEXT_CHARS ? `…${text.slice(-PLANNER_TEXT_CHARS)}` : text;
   return [
     "CAST:",
     ...(cast.length ? cast.map((member, index) => `- c${index + 1}: ${member.name}`) : ["(nobody)"]),
-    ...(place.trim() ? ["", `PLACE: ${clip(place.replace(/\s+/g, " ").trim(), 300)}`] : []),
+    ...(place.trim() ? ["", `PLACE: ${clip(place.replace(/\s+/g, " ").trim(), PLACE_MAX_CHARS)}`] : []),
     "",
     `ON SCREEN NOW: ${onScreen?.trim() || "none"}`,
+    ...(brief.trim() ? ["", brief.trim()] : []),
     "",
     "NARRATION:",
     end,

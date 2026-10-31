@@ -64,16 +64,39 @@ git clone --depth 1 -b stable https://github.com/Lebbitheplow/open-game-master.g
 cd open-game-master
 npm install
 npm run setup        # database key, content pack, memory model, production build
-npm run start:lan    # port 3005, with an ngrok link for your party
+npm run start:lan    # port 3005, with a Cloudflare Tunnel link for your party
 ```
 
-`start:lan` and `dev:lan` start ngrok alongside the server. Install
-[ngrok](https://ngrok.com/download) and connect it to your ngrok account once
-before running either command. The terminal prints the public HTTPS address;
-invite links and QR codes use that address for the current run. Keep the command
-running while you play. Ctrl+C stops both the server and ngrok. If either process
-fails, the other stops too. The tunnel address is not saved in your settings.
-Use `npm run start:lan -- --port 3010` (or `PORT`) to choose a different port.
+`start:lan` and `dev:lan` run a [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/)
+alongside the server, so phones anywhere can reach it at a fixed HTTPS address
+on a domain you have on Cloudflare. Invite links and QR codes use that address,
+and stay the same across restarts. Keep the command running while you play.
+Ctrl+C stops both the server and cloudflared. If either process fails, the
+other stops too. Rerunning the command replaces the night already running from
+the same checkout. Use `npm run start:lan -- --port 3010` (or `PORT`) to choose
+a different port; the tunnel follows it.
+
+It must be a named tunnel. A quick tunnel (`*.trycloudflare.com`) does not carry
+Server-Sent Events, and the table's live updates are an event stream, so phones
+would join and then hear nothing. Set one up once:
+
+```bash
+brew install cloudflared               # or see Cloudflare's downloads page
+cloudflared tunnel login               # pick the domain in the browser
+cloudflared tunnel create couch-night
+cloudflared tunnel route dns couch-night couch.example.com
+```
+
+Then save both names in `.env.server`, beside the app's keys:
+
+```bash
+CLOUDFLARE_TUNNEL=couch-night
+CLOUDFLARE_TUNNEL_URL=https://couch.example.com
+```
+
+The same variables in the environment override the file for one run. The launcher points the
+tunnel at the local port with `--url`, so leave ingress rules out of
+`~/.cloudflared/config.yml`: they would take precedence.
 
 For local development without online sharing, use `npm run dev`. For a LAN-only
 production server, run `npm run start -- -H 0.0.0.0 -p 3005`.

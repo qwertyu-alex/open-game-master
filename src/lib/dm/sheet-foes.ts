@@ -7,6 +7,7 @@ import { moveToSide } from "@/lib/dm/combat-sides";
 import { fieldReturning, returningByName } from "@/lib/dm/companion-return";
 import { sheetStatBlock } from "@/lib/dm/companion-statblock";
 import { textKey } from "@/lib/language/text-logic";
+import { crewFoesByName, standWithCrew } from "@/lib/couch/crew-fight";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // The characters a fight's roster can name as foes (issue 503, Phase 6):
@@ -40,6 +41,11 @@ export function sheetFoesByName(campaignId: string): Map<string, SheetFoeEntry> 
     const { stats } = sheetStatBlock(sheet, { open: true, asItStands: true });
     found.set(textKey(sheet.name), { foe: { kind: "turned", sheetId: sheet.id, name: sheet.name }, name: sheet.name, stats, currentHp: sheet.currentHp });
   }
+  // On a couch night the crew can be named too: a crew member who turns on
+  // the others fights as themselves (src/lib/couch/crew-fight.ts).
+  for (const [key, entry] of crewFoesByName(campaignId)) {
+    if (!found.has(key)) found.set(key, entry);
+  }
   return found;
 }
 
@@ -57,6 +63,8 @@ export function fieldSheetFoes(campaign: Campaign, foes: readonly SheetFoe[]): C
     if ("error" in moved) {
       continue;
     }
+    // A couch crew member who turned starts beside the crew (crew-fight.ts).
+    standWithCrew(campaign, sheet.id);
     fielded.push(getSheetById(sheet.id) ?? sheet);
   }
   return fielded;

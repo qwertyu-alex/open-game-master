@@ -6,6 +6,7 @@ import type { NarrationAudio } from "@/app/campaigns/[campaignId]/useNarrationAu
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { CouchFace } from "@/components/couch/CouchParts";
 import { COUCH_DICE_TRAY_ID, useCouchDice, type CouchDice } from "@/components/couch/useCouchDice";
+import { CouchGroupStage } from "@/components/couch/CouchTvGroupCheck";
 import { couchRollCall, couchRollVoiceId, type CouchRollFeedback } from "@/lib/couch/roll-feedback-logic";
 
 // The TV's dice (docs/couch-mode-spec.md 2.10). While the GM waits on a crew
@@ -13,25 +14,52 @@ import { couchRollCall, couchRollVoiceId, type CouchRollFeedback } from "@/lib/c
 // target. When their phone throws it, the dice tumble across the scene and
 // land on the server's faces, and the result follows. Several rolls can
 // land in one tool call: keep them in order instead of replacing an attack
-// with its damage before anyone can read the attack.
+// with its damage before anyone can read the attack. A group check shows as
+// one card for the whole crew (CouchTvGroupCheck.tsx).
 export function CouchRolls({ state, narration }: { state: CampaignState; narration: NarrationAudio }) {
   const dice = useCouchDice({ volume: narration.volume * 0.8, on: narration.unlocked && !narration.muted });
   const [through, setThrough] = useState(() => state.lastSeq);
-  const next = state.couchRolls.find((entry) => entry.seq > through);
+  const [mountedAt] = useState(() => state.lastSeq);
+  // A group check's throws show in the group's card, not one by one.
+  const next = state.couchRolls.find((entry) => entry.seq > through && !entry.groupId);
   const seq = next?.seq ?? through;
   const { clear } = dice;
   const complete = useCallback(() => {
     clear();
     setThrough(seq);
   }, [clear, seq]);
+  // The group check on screen: while any of its rolls still waits, and once
+  // finished until its verdict has been read. A group the turn left behind
+  // (halted, retried) has no roll waiting and is not shown.
+  const [groupDone, setGroupDone] = useState<string | null>(null);
+  const group = state.couchGroup;
+  const groupPending = new Set(group?.members.flatMap((member) => member.pendingId ? [member.pendingId] : []) ?? []);
+  const groupShown = group && group.id !== groupDone && (group.status === "done"
+    ? group.seq > mountedAt
+    : state.pendingRolls.some((pending) => groupPending.has(pending.id))) ? group : null;
+  const groupId = group?.id ?? null;
+  const completeGroup = useCallback(() => {
+    clear();
+    setGroupDone(groupId);
+  }, [clear, groupId]);
   // A roll behind the GM's screen waits like any other, but is not called
-  // out on the room's screen.
-  const calls = state.pendingRolls.filter((pending) => (pending as { visibility?: string }).visibility !== "secret");
+  // out on the room's screen; a group check's rolls are called in its card.
+  const calls = state.pendingRolls.filter((pending) => (pending as { visibility?: string }).visibility !== "secret" && !groupPending.has(pending.id));
+  // A thrown roll's call has done its job: the narrator stops reading it,
+  // or never starts, and the result comes next instead of after the call.
+  const { skip } = narration;
+  useEffect(() => {
+    for (const entry of state.couchRolls) {
+      if (entry.pendingId) skip(couchRollVoiceId(entry.pendingId, "call"));
+    }
+  }, [state.couchRolls, skip]);
   return (
     <>
       <div id={COUCH_DICE_TRAY_ID} className="couch-dice-tray" aria-hidden="true" />
       {next ? (
         <RollStage key={next.roll.id} feedback={next} state={state} narration={narration} dice={dice} complete={complete} />
+      ) : groupShown ? (
+        <CouchGroupStage key={groupShown.id} group={groupShown} state={state} narration={narration} dice={dice} complete={completeGroup} />
       ) : calls.length ? (
         <RollCalls calls={calls} state={state} />
       ) : null}
@@ -242,8 +270,16 @@ function RollStage({ feedback, state, narration, dice, complete }: {
 export function CouchRollCard({ feedback, phase, dice = "flat" }: { feedback: CouchRollFeedback; phase: Phase; dice?: DiceShow }) {
   const faces = feedback.roll.breakdown.terms.filter((term) => term.kind === "dice").flatMap((term) => term.dice).filter((die) => die.kept).slice(0, 4);
   return (
-    <section className="couch-tv-roll" data-phase={phase} data-dice={dice} aria-label="Dice roll" role="status" aria-live="polite" aria-atomic="true">
+    <section className="couch-tv-roll" data-phase={phase} data-dice={dice} data-item={feedback.item ? "" : undefined} aria-label="Dice roll" role="status" aria-live="polite" aria-atomic="true">
       <span className="couch-label">{phase === "announce" ? "Roll coming up" : phase === "rolling" ? "Rolling…" : feedback.verdict}</span>
+      {feedback.item ? (
+        // The weapon swung, as its owner's phone pictures it. A hit lights
+        // it, a miss dims it, once the dice have landed.
+        <span className="couch-tv-roll-item" data-good={phase === "result" && feedback.good ? "" : undefined} data-bad={phase === "result" && feedback.bad ? "" : undefined}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={feedback.item.art} alt="" decoding="async" />
+        </span>
+      ) : null}
       <strong className="couch-tv-roll-lead">{feedback.label}</strong>
       {dice === "flat" ? (
         <div className="couch-dice" aria-hidden="true">

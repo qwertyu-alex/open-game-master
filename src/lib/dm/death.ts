@@ -5,6 +5,7 @@ import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
 import { insertCharacterEvent } from "@/lib/db/character-events";
 import { noteDeathMoment } from "@/lib/dm/revival";
+import { couchCrewDied } from "@/lib/couch/death";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { insertRoll } from "@/lib/db/rolls";
 import { rollExpression } from "@/lib/dice";
@@ -78,6 +79,8 @@ function recordDeath(campaign: Campaign, sheet: CharacterSheet, cause: string) {
     kind: "death",
     summary: `Died: ${cause}.`,
   });
+  // A couch night shows the death on the TV (src/lib/couch/death.ts).
+  couchCrewDied(campaign, sheet);
 }
 
 function tableNote(campaign: Campaign, content: string, glyph: SystemGlyph) {

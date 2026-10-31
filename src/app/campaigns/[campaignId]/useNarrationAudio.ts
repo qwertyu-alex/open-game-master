@@ -26,6 +26,9 @@ import { narrationAfterUnlock, type NarrationClip } from "@/lib/narration-queue-
 // file when that is ready, since a live stream may be gone by then. A replay
 // pressed during the break is the listener's own choice and still plays.
 
+// Long enough to sound deliberate rather than broken off.
+const FLUSH_FADE_MS = 300;
+
 const MUTED_KEY = AUDIO_PREF_FIELDS.narrationMuted.key;
 const VOLUME_KEY = AUDIO_PREF_FIELDS.narrationVolume.key;
 const PREFS_EVENT = AUDIO_PREF_FIELDS.narrationMuted.event;
@@ -61,10 +64,27 @@ export type NarrationAudio = {
   held: number;
   // The message whose audio this device last failed to play, if any.
   playbackFailure: string | null;
+  // The passage being read is held mid-sentence by the listener (the couch
+  // TV's Pause). It keeps its place: what lands meanwhile queues behind it.
+  paused: boolean;
+  pause: () => void;
+  resume: () => void;
+  // Where the clip being read has got to, in seconds, and how long it is
+  // (Infinity while a live stream is still arriving). Null when nothing is
+  // being read. Read on demand, so subtitles can follow the voice itself.
+  clock: () => { messageId: string; seconds: number; duration: number } | null;
   setMuted: (muted: boolean) => void;
   setVolume: (volume: number) => void;
   unlock: () => void;
   play: (messageId: string, url: string) => void;
+  // Replaying the passage being read starts it again from the top and keeps
+  // what queued behind it.
+  // Drops one clip nobody needs to hear any more, playing, waiting or not
+  // yet arrived: a roll's call once the dice are thrown.
+  skip: (messageId: string) => void;
+  // Ends the reading for a table that has moved on: the clip being read
+  // fades out and everything waiting behind it is dropped, except `keep`.
+  flush: (keep?: string) => void;
   audioByMessage: Map<string, string>;
   onTtsReady: (messageId: string, url: string, live: boolean, keepWithNext?: boolean) => void;
 };
@@ -76,6 +96,10 @@ export function useNarrationAudio(onBreak = false): NarrationAudio {
   const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
   const [playbackFailure, setPlaybackFailure] = useState<string | null>(null);
   const [held, setHeld] = useState(0);
+  // The clip paused by hand. Read as paused only while that clip is still
+  // the one playing, so every other stop (skip, flush, mute, a break, the
+  // next clip) ends the pause without having to clear it.
+  const [pausedId, setPausedId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [audioByMessage] = useState(() => new Map<string, string>());
   const unlockedRef = useRef(false);
@@ -208,6 +232,7 @@ export function useNarrationAudio(onBreak = false): NarrationAudio {
       playingRef.current = id;
       playingKeepWithNextRef.current = keepWithNext;
       setPlayingMessageId(id);
+      setPausedId(null);
       setPlaybackFailure((current) => (current === id ? null : current));
       audio.src = src;
       audio.volume = readVolume();
@@ -267,10 +292,123 @@ export function useNarrationAudio(onBreak = false): NarrationAudio {
   // Explicit replay: interrupts whatever is playing and clears the queue.
   const play = useCallback(
     (messageId: string, url: string) => {
+      const audio = audioRef.current;
+      if (audio && playingRef.current === messageId) {
+        setPausedId(null);
+        audio.currentTime = 0;
+        void audio.play().catch(() => setPlaybackFailure(messageId));
+        return;
+      }
       queueRef.current = [];
       startPlayback(messageId, url);
     },
     [startPlayback],
+  );
+
+  // Holds the clip where it is; its end, and so the queue, waits with it.
+  const pause = useCallback(() => {
+    const current = playingRef.current;
+    if (!current || !audioRef.current) {
+      return;
+    }
+    audioRef.current.pause();
+    setPausedId(current);
+  }, []);
+
+  const resume = useCallback(() => {
+    const current = playingRef.current;
+    const audio = audioRef.current;
+    setPausedId(null);
+    if (!current || !audio) {
+      return;
+    }
+    void audio.play().catch(() => setPlaybackFailure(current));
+  }, []);
+
+  const paused = pausedId !== null && pausedId === playingMessageId;
+
+  const clock = useCallback(() => {
+    const current = playingRef.current;
+    const audio = audioRef.current;
+    if (!current || !audio) {
+      return null;
+    }
+    return { messageId: current, seconds: audio.currentTime, duration: audio.duration };
+  }, []);
+
+  // Skipping the clip being read starts the next in line, as its end would.
+  // Marked handled first, so a call still being synthesized never starts.
+  const skip = useCallback(
+    (messageId: string) => {
+      handledRef.current.add(messageId);
+      queueRef.current = queueRef.current.filter((clip) => clip.messageId !== messageId);
+      if (pendingRef.current.some((clip) => clip.messageId === messageId)) {
+        setPending(pendingRef.current.filter((clip) => clip.messageId !== messageId));
+      }
+      if (playingRef.current !== messageId) {
+        return;
+      }
+      const audio = audioRef.current;
+      if (audio) {
+        audio.onended = null;
+        audio.onerror = null;
+        audio.pause();
+      }
+      playingRef.current = null;
+      setPlayingMessageId(null);
+      if (breakRef.current) {
+        return;
+      }
+      const next = queueRef.current.shift();
+      if (next && !readMuted()) {
+        startPlayback(next.messageId, next.url, next.keepWithNext);
+      }
+    },
+    [setPending, startPlayback],
+  );
+
+  // Timers rather than animation frames: the TV's tab may be in the
+  // background, and a fade that never runs would leave the passage playing.
+  // The element is shared, so a clip that starts during the fade takes it
+  // over (its own start sets the volume) and the fade stops touching it.
+  const flush = useCallback(
+    (keep?: string) => {
+      queueRef.current = queueRef.current.filter((clip) => clip.messageId === keep);
+      if (pendingRef.current.some((clip) => clip.messageId !== keep)) {
+        setPending(pendingRef.current.filter((clip) => clip.messageId === keep));
+      }
+      const current = playingRef.current;
+      const audio = audioRef.current;
+      if (!current || current === keep || !audio) {
+        return;
+      }
+      audio.onended = null;
+      audio.onerror = null;
+      playingRef.current = null;
+      setPlayingMessageId(null);
+      const turn = turnRef.current;
+      const from = audio.volume;
+      const started = Date.now();
+      const step = () => {
+        if (turnRef.current !== turn) {
+          return;
+        }
+        const done = Math.min(1, (Date.now() - started) / FLUSH_FADE_MS);
+        audio.volume = from * (1 - done);
+        if (done < 1) {
+          window.setTimeout(step, 30);
+          return;
+        }
+        audio.pause();
+        audio.volume = readVolume();
+        const next = queueRef.current.shift();
+        if (next && !breakRef.current && !readMuted()) {
+          startPlayback(next.messageId, next.url, next.keepWithNext);
+        }
+      };
+      step();
+    },
+    [setPending, startPlayback],
   );
 
   // The browser requires a user gesture before audio can play; the header
@@ -382,13 +520,19 @@ export function useNarrationAudio(onBreak = false): NarrationAudio {
       playingMessageId,
       held,
       playbackFailure,
+      paused,
+      pause,
+      resume,
+      clock,
       setMuted,
       setVolume,
       unlock,
       play,
+      skip,
+      flush,
       audioByMessage,
       onTtsReady,
     }),
-    [muted, volume, unlocked, playingMessageId, held, playbackFailure, setMuted, setVolume, unlock, play, audioByMessage, onTtsReady],
+    [muted, volume, unlocked, playingMessageId, held, playbackFailure, paused, pause, resume, clock, setMuted, setVolume, unlock, play, skip, flush, audioByMessage, onTtsReady],
   );
 }

@@ -262,7 +262,268 @@ html[data-sheet="open"] body { overflow: hidden; }
 .couch-map-legend i[data-unexplored] { border-style: dashed; }
 .couch-map-tip { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--couch-raise); font-size: 0.9rem; line-height: 1.45; }
 
+/* A place with a picture is a button: the picture across the top of its
+   box, the name under it. */
+button.couch-plan-room { padding: 0 0 10px; overflow: hidden; color: inherit; font-family: inherit; cursor: pointer; }
+button.couch-plan-room:focus-visible,
+.couch-plan-side button:focus-visible,
+.couch-place-back:focus-visible,
+.couch-place-nav button:focus-visible { outline: 2px solid var(--couch-accent); outline-offset: 2px; }
+button.couch-plan-room > small,
+.couch-plan-room-name { padding: 0 12px; }
+.couch-plan-thumb { width: 100%; aspect-ratio: 16 / 7; margin-bottom: 6px; object-fit: cover; background: var(--couch-raise); }
+.couch-plan-stop[data-here] button.couch-plan-room .couch-plan-thumb { border-bottom: 1px solid var(--couch-accent-ink); }
+.couch-plan-side li[data-pictured] { padding: 0; }
+.couch-plan-side button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 4px 9px 4px 4px;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  text-transform: inherit;
+  cursor: pointer;
+}
+.couch-plan-side-thumb { flex: none; width: 32px; height: 32px; border-radius: 4px; object-fit: cover; background: var(--couch-raise); }
+
+/* One place's picture, inside the sheet. */
+.couch-place-view { display: grid; gap: 14px; }
+.couch-place-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.couch-place-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 44px;
+  padding: 0 12px 0 4px;
+  border-radius: 10px;
+  color: var(--couch-accent);
+  font-size: 1rem;
+  font-weight: 650;
+}
+.couch-place-back:active { background: var(--couch-raise); }
+.couch-place-count { color: var(--couch-dim); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+.couch-place-figure { display: grid; gap: 12px; margin: 0; touch-action: pan-y; user-select: none; }
+.couch-place-picture {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  border: 1px solid var(--couch-line-strong);
+  border-radius: 12px;
+  object-fit: cover;
+  background: var(--couch-raise);
+  animation: couch-place-in 240ms ease-out;
+}
+@keyframes couch-place-in { from { opacity: 0; } }
+.couch-place-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin: 0;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 0.95rem;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.couch-place-name small { color: var(--couch-accent); font-size: 0.62rem; font-weight: 700; letter-spacing: 0.14em; }
+.couch-place-seen { margin: 6px 0 0; color: var(--couch-dim); font-size: 0.9rem; line-height: 1.5; user-select: text; }
+.couch-place-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.couch-place-nav button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--couch-line-strong);
+  border-radius: 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.couch-place-nav button:last-child { justify-content: flex-end; text-align: right; }
+.couch-place-nav button span:not(.sr-only) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.couch-place-nav button:disabled { opacity: 0.4; }
+.couch-place-nav button:not(:disabled):active { background: var(--couch-raise); }
+
+/* ---- the TV: a new place's name as the crew arrives ---- */
+
+.couch-tv-place {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  /* Above the subtitles, which fill the lower half. */
+  align-items: start;
+  justify-items: center;
+  padding-top: 24vh;
+  pointer-events: none;
+  animation: couch-tv-place 6s ease-in-out both;
+}
+.couch-tv-place-name {
+  max-width: 80vw;
+  padding: 1.6vh 3vw;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0));
+  color: rgba(225, 245, 233, 0.96);
+  font: 600 max(1.8rem, 3.6vw) / 1.15 var(--font-geist-mono), ui-monospace, monospace;
+  letter-spacing: 0.22em;
+  text-align: center;
+  text-shadow: 0 0 2vw rgba(0, 0, 0, 0.8);
+  text-transform: uppercase;
+}
+@keyframes couch-tv-place {
+  0% { opacity: 0; letter-spacing: 0.32em; }
+  15% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { opacity: 0; letter-spacing: 0.22em; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .couch-map-sheet[open] .couch-map-panel { animation: none; }
   .couch-map-panel { transition: none; }
+  .couch-place-picture { animation: none; }
+  .couch-tv-place { animation: couch-tv-place-still 6s step-end both; }
 }
+@keyframes couch-tv-place-still { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+/* ---- a split crew (src/lib/couch/whereabouts.ts) ---- */
+
+/* Faces of who stands in a room. */
+.couch-crew-faces { display: inline-flex; justify-content: center; }
+.couch-crew-faces > * {
+  width: 1.9em;
+  height: 1.9em;
+  border: 1.5px solid var(--couch-bg, #050807);
+  border-radius: 50%;
+  object-fit: cover;
+  background: rgba(143, 224, 181, 0.25);
+}
+.couch-crew-faces > * + * { margin-left: -0.45em; }
+.couch-crew-face-initial {
+  display: grid;
+  place-items: center;
+  color: rgba(232, 238, 234, 0.96);
+  font-weight: 700;
+}
+
+/* The TV: the scene's faces under its room, and the other groups under the
+   rail, each its faces, who and where. */
+.couch-rail[data-split] { flex-wrap: wrap; }
+/* Faces inside a room's box on the rail, before its name. */
+.couch-rail[data-split] .couch-rail-box,
+.couch-rail-side li[data-occupied] { display: flex; align-items: center; gap: 0.5em; }
+.couch-rail[data-split] .couch-rail-box:has(.couch-crew-faces),
+.couch-rail-side li[data-occupied] { padding-left: 0.3em; }
+.couch-rail-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.couch-rail .couch-crew-faces { flex: none; font-size: 1.05em; }
+.couch-rail .couch-crew-faces > * { border-color: rgba(0, 0, 0, 0.75); }
+.couch-rail-elsewhere {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  gap: 0.5em 1.4em;
+  margin: 0.2em 0 0;
+  padding: 0.5em 0 0;
+  border-top: 1px dashed var(--rail-dash);
+  list-style: none;
+}
+.couch-rail-elsewhere li { display: flex; align-items: center; gap: 0.55em; }
+.couch-rail-elsewhere .couch-crew-faces { font-size: 1.1em; }
+.couch-rail-elsewhere-who { color: rgba(232, 238, 234, 0.88); text-transform: none; letter-spacing: 0.02em; }
+.couch-rail-elsewhere-place { max-width: 12vw; overflow: hidden; color: rgba(143, 224, 181, 0.66); text-overflow: ellipsis; white-space: nowrap; }
+.couch-rail-elsewhere-place::before { content: "· "; }
+
+/* A cut: "Meanwhile" over the place, who the story is with under it. */
+.couch-tv-place[data-meanwhile] { gap: 0.8vh; }
+.couch-tv-place-kicker,
+.couch-tv-place-who {
+  color: rgba(143, 224, 181, 0.9);
+  font: 600 max(0.9rem, 1.3vw) / 1.2 var(--font-geist-mono), ui-monospace, monospace;
+  letter-spacing: 0.3em;
+  text-shadow: 0 0 1.4vw rgba(0, 0, 0, 0.9);
+  text-transform: uppercase;
+}
+.couch-tv-place-who { color: rgba(225, 245, 233, 0.9); letter-spacing: 0.08em; text-transform: none; }
+
+/* The TV's crew strip: someone off scene dims, their room where their role was. */
+.couch-tv-member[data-away]:not([data-waiting]) { opacity: 0.55; }
+.couch-tv-member-away { color: rgba(143, 224, 181, 0.85); }
+
+/* The phone's plan: the scene's room outlined, faces under each occupied
+   room, and an occupied side room never folded away. */
+.couch-plan-room .couch-crew-faces { margin-top: 4px; font-size: 0.95rem; }
+.couch-plan-stop[data-scene]:not([data-here]) .couch-plan-room { border: 2px solid var(--couch-accent); }
+.couch-plan-room small.couch-plan-scene { color: var(--couch-accent); opacity: 1; }
+.couch-plan-stop[data-here] .couch-plan-room small.couch-plan-scene { color: inherit; }
+.couch-plan-side li[data-occupied] { display: grid; justify-items: start; gap: 4px; }
+.couch-plan-side li[data-here] { border-color: var(--couch-accent); color: var(--couch-accent); }
+.couch-plan-side li small { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.14em; }
+.couch-plan-side .couch-crew-faces { font-size: 0.85rem; }
+.couch-map-legend i[data-scene] { border: 2px solid var(--couch-accent); }
+
+/* ---- the deck plan: the whole ship under the fog of war
+   (src/components/couch/CouchDeckMap.tsx) ---- */
+
+.couch-deck { display: block; height: auto; font-family: var(--font-geist-mono), ui-monospace, monospace; }
+.couch-deck-links line { stroke: rgba(143, 224, 181, 0.22); stroke-width: 2; stroke-dasharray: 5 6; }
+.couch-deck-links line[data-known] { stroke: rgba(143, 224, 181, 0.55); stroke-dasharray: none; }
+/* The way the crew walked, lit. */
+.couch-deck-links line[data-walked] { stroke: rgba(143, 224, 181, 0.95); stroke-width: 4; }
+.couch-deck-room rect { fill: rgba(5, 10, 8, 0.82); stroke: rgba(143, 224, 181, 0.6); stroke-width: 1.5; }
+.couch-deck-room text { fill: rgba(143, 224, 181, 0.85); font-size: 14px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+/* Visited: lit. Seen from next door: dashed, its name dim. Fog: an outline and a question mark. */
+.couch-deck-room[data-state="visited"] rect { fill: rgba(22, 48, 36, 0.92); stroke: rgba(143, 224, 181, 0.85); }
+.couch-deck-room[data-state="seen"] rect { stroke-dasharray: 6 4; }
+.couch-deck-room[data-state="seen"] text { fill: rgba(143, 224, 181, 0.6); }
+.couch-deck-room[data-state="unknown"] rect { fill: rgba(5, 10, 8, 0.55); stroke: rgba(143, 224, 181, 0.22); stroke-dasharray: 2 5; }
+.couch-deck-fog-mark { fill: rgba(143, 224, 181, 0.28) !important; font-size: 18px !important; }
+/* The scene's room. */
+.couch-deck-room[data-here] rect { fill: rgba(143, 224, 181, 0.32); stroke: rgba(225, 245, 233, 0.98); stroke-width: 3; }
+.couch-deck-room[data-here] text { fill: rgba(240, 250, 244, 1); }
+/* Faces of who stands there, over the room's corner. */
+.couch-deck-face-initial circle { fill: rgba(22, 48, 36, 1); stroke: rgba(5, 10, 8, 1); stroke-width: 2; }
+.couch-deck-face-initial text { fill: rgba(232, 238, 234, 0.96); font-size: 12px; }
+
+/* The TV: the whole plan in the corner under the title, on a feathered dark
+   patch like the rail it replaces, so the picture stays in front. */
+.couch-deckmap-tv {
+  width: 40vw;
+  margin-top: 1.1vh;
+  padding: 0.6vw;
+  border-radius: 0.9vw;
+  background: rgba(0, 0, 0, 0.38);
+  box-shadow: 0 0 2vw 1.2vw rgba(0, 0, 0, 0.36);
+}
+.couch-deckmap-tv .couch-deck { width: 100%; max-height: 34vh; }
+
+/* The phone: the map scrolls sideways when the ship is wider than the phone;
+   the scene's room is not the player's own here, so "you" gets the fill. */
+.couch-deck-scroll { overflow-x: auto; margin: 0 -4px; padding: 14px 4px 4px; overscroll-behavior-x: contain; }
+.couch-deck-phone .couch-deck-room[data-here]:not([data-you]) rect { fill: rgba(22, 48, 36, 0.92); stroke: var(--couch-accent); stroke-width: 3; }
+.couch-deck-phone .couch-deck-room[data-you] rect { fill: var(--couch-accent); stroke: var(--couch-accent); }
+.couch-deck-phone .couch-deck-room[data-you] text { fill: var(--couch-accent-ink); }
+.couch-deck-phone .couch-deck-room[role="button"] { cursor: pointer; }
+.couch-deck-phone .couch-deck-room[role="button"]:focus-visible { outline: none; }
+.couch-deck-phone .couch-deck-room[role="button"]:focus-visible rect { stroke: var(--couch-ink, #fff); stroke-width: 4; }
+.couch-deck-sheet { display: grid; gap: 16px; }
+.couch-deck-ways h3 { margin: 0 0 8px; color: var(--couch-dim); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+.couch-deck-ways ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.couch-deck-ways li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--couch-line-strong);
+  border-radius: 8px;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.couch-deck-ways li[data-state="seen"] { border-style: dashed; }
+.couch-deck-ways li small { color: var(--couch-dim); font-size: 0.65rem; letter-spacing: 0.1em; }
+.couch-map-legend i[data-fog] { border-style: dotted; opacity: 0.6; }

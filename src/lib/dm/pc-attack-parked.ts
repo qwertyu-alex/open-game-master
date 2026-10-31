@@ -34,7 +34,7 @@ import {
   poisonOnHit,
   spendFeatureUse,
 } from "@/lib/dm/attack-onhit";
-import { storeBudget } from "@/lib/dm/turn-budget";
+import { noteSwing, storeBudget } from "@/lib/dm/turn-budget";
 import { SAVAGE_ATTACKER_USED, savageAttackerApplies } from "@/lib/srd/feat-combat";
 import { landNaturalOnHit } from "@/lib/dm/natural-onhit";
 import { rollAgainst } from "@/lib/roll-labels";
@@ -187,6 +187,14 @@ export function resolvePendingPcAttack(pending: PendingRoll, roll: StoredRoll): 
         : null;
   const hit = adjudicated.hit || Boolean(rescueNote);
   const crit = adjudicated.crit || (hit && context.autoCrit === true);
+  // The swing is this turn's, as a digitally rolled one is (pc-attack.ts):
+  // the narration guard reads the turn's struck swings, and without this a
+  // thrown hit narrated as a hit was sent back as a blow no tool rolled, so
+  // a couch night's every attack came out as a non-event (2026-10-30).
+  const struck = fight && context.targetEnemyId ? resolveTargetFoe(pending.campaignId, fight, context.targetEnemyId) : null;
+  if (struck && pending.characterId) {
+    noteSwing(pending.campaignId, pending.characterId, { target: struck.displayName, hit });
+  }
   if (!hit) {
     return `${context.attacker}'s ${context.weapon} attack rolled ${roll.total} vs AC ${context.targetAc}: MISS${
       roll.breakdown.crit === "nat1" ? " (natural 1)" : ""

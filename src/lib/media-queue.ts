@@ -23,7 +23,11 @@ import { bindUsageScope } from "@/lib/usage/scope";
 // caller's promise then settles when the newer job has run, so whoever was
 // waiting on it still waits for a finished picture.
 
-export type MediaLane = "gpu" | "tts" | `tts:${string}`;
+// "couch:<campaign id>" is a couch night's fight pictures
+// (src/lib/couch/fight-art.ts) and "couch:<campaign id>:items" its item
+// pictures (src/lib/couch/item-art.ts), on a painter that is not this
+// machine's GPU: beside the turn's scene picture, never in front of it.
+export type MediaLane = "gpu" | "tts" | `tts:${string}` | `couch:${string}`;
 
 type Waiting = { superseded: boolean; followers: Array<() => void> };
 
@@ -120,7 +124,7 @@ export function enqueueMediaJob(
   lanes[lane] = next;
   // A campaign's lane is forgotten once it runs dry, so the map does not
   // keep a settled promise for every table that ever narrated.
-  if (lane.startsWith("tts:")) {
+  if (lane.startsWith("tts:") || lane.startsWith("couch:")) {
     void next.then(() => {
       if (lanes[lane] === next) {
         delete lanes[lane];

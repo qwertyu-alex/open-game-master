@@ -24,7 +24,11 @@
     // besides the pages, src/renderer/game/index.tsx imports DeviceSettings for the apps' own Settings screen, and
     // scripts/build-renderer.mjs folds this sheet into theirs.
     "src/components/DeviceSettings.tsx",
-    "src/app/styles/component-sheets.css"
+    "src/app/styles/component-sheets.css",
+    // Upstream home pieces this fork's couch-only home no longer mounts (AGENTS.md, "This fork"): kept rather than
+    // deleted so merges from upstream stay clean.
+    "src/app/home/StarterDialog.tsx",
+    "src/app/home/WorkshopSection.tsx"
   ],
   // Resolved by name at run time (createRequire().resolve), which no import graph sees: src/lib/image-variants.ts and
   // scripts/browser/lib.mjs.

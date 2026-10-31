@@ -116,15 +116,23 @@ export function turnOverFor(campaignId: string, turn: Pick<DmTurn, "resolvedChar
 // Whether this DM turn ruled on something the character did: a call that
 // names them ran and answered, as a result or a refusal (a swing out of
 // reach, a walk with no movement left). Asking them a question is no ruling.
-export function ruledFor(conversation: readonly GuardMessage[], sheet: Pick<CharacterSheet, "id" | "name">): boolean {
+// `besides` names calls that are no ruling here: a couch night does not
+// count a walk alone as the crew member's action (turn.ts).
+export function ruledFor(conversation: readonly GuardMessage[], sheet: Pick<CharacterSheet, "id" | "name">, besides: readonly string[] = []): boolean {
   return collectExchanges(conversation).some((exchange) => {
-    if (!exchange.result || exchange.name === "request_player_input") {
+    if (!exchange.result || exchange.name === "request_player_input" || besides.includes(exchange.name)) {
       return false;
     }
     try {
       // Under the names the call ran by: an older name (a walk's tokenName)
       // names the character all the same.
       const args = JSON.parse(mergedCallText(exchange.name, exchange.arguments || "{}").rawArguments || "{}") as Record<string, unknown>;
+      // Rolling their initiative as a fight opens is no ruling on anything
+      // they did: on a couch night, where a ruling ends the turn, it ended
+      // the first crew member's turn before they had acted.
+      if (exchange.name === "request_roll" && args.kind === "initiative") {
+        return false;
+      }
       // move_token names its walker by name or id.
       const walker = typeof args.token === "string" ? args.token : "";
       return args.characterId === sheet.id || args.casterId === sheet.id || args.casterCharacterId === sheet.id || args.healerId === sheet.id || walker === sheet.id || (walker !== "" && textKey(walker) === textKey(sheet.name));
@@ -132,6 +140,16 @@ export function ruledFor(conversation: readonly GuardMessage[], sheet: Pick<Char
       return false;
     }
   });
+}
+
+// Whether this DM turn left the character's move open: it walked them
+// (a call in `walks`) or asked them for more (request_player_input). On a
+// couch night a turn in a fight that did neither was spent on words, a
+// plea, a threat or an offer of peace, and ends like any ruling (turn.ts):
+// the GM that asked the others "do you accept?" kept the floor with the
+// speaker, and nobody else's phone could answer.
+export function leftMoveOpen(conversation: readonly GuardMessage[], walks: readonly string[]): boolean {
+  return collectExchanges(conversation).some((exchange) => exchange.name === "request_player_input" || walks.includes(exchange.name));
 }
 
 // Whether the player's own words end the turn the fight still waits on

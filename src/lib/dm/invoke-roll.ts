@@ -36,6 +36,7 @@ import type { Campaign } from "@/lib/db/campaigns";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { moteAfterRoll, moteOf } from "@/lib/dm/authored-mote";
 import { applyRollGates } from "@/lib/dm/roll-gates";
+import { checkSuccess } from "@/lib/couch/check-logic";
 import { invalidArguments, toolError, type ToolResult } from "@/lib/dm/tool-errors";
 
 export function handleRequestRoll(
@@ -201,6 +202,7 @@ export function handleRequestRoll(
 
   try {
     const outcome = rollExpression(resolved.expression);
+    const success = checkSuccess(campaign.gameSettings, args.kind, args.dc, outcome);
     const roll = insertRoll({
       campaignId,
       characterId: sheet?.id ?? null,
@@ -209,6 +211,7 @@ export function handleRequestRoll(
       detail: resolved.detail,
       advantage: args.advantage ?? "none",
       dc: args.dc ?? null,
+      success,
       result: outcome,
       // Free text about the sheet's own roll: its owner reads as the roller.
       attacker: null,
@@ -246,7 +249,7 @@ export function handleRequestRoll(
       ok: true,
       total: roll.total,
       dice: outcome.terms,
-      ...(args.dc !== undefined ? { dc: args.dc, success: roll.total >= args.dc } : {}),
+      ...(args.dc !== undefined ? { dc: args.dc, success: roll.success } : {}),
       ...(gated.contest ? { contest: `${gated.contest.name} rolled ${gated.contest.skill} ${gated.contest.total}; ${gated.contest.answering ? "a tie goes to the character" : "the character must beat it"}.` } : {}),
       ...(outcome.crit ? { crit: outcome.crit } : {}),
       ...(resolved.conditionNotes ? { conditionEffects: resolved.conditionNotes } : {}),

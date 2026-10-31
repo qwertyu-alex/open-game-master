@@ -6,6 +6,7 @@ import { DEED_SEVERITIES } from "@/lib/dm/companion-values-logic";
 
 import type { CatalogEntry } from "@/lib/dm/catalog-types";
 import { cueOptions, sceneOptions } from "@/lib/ambience/catalog";
+import { COUCH_MOODS } from "@/lib/couch/mood-logic";
 import { RELATIONSHIP_BEAT_NAMES } from "@/lib/dm/relationship-logic";
 import { TOLD_GENDERS } from "@/lib/gender";
 import {
@@ -713,11 +714,53 @@ export const TABLE_ADJUDICATIONS: CatalogEntry[] = [
     fields: [{ name: "title", label: "Under the act number", kind: "text", placeholder: "The Hold Opens" }],
   },
   {
+    name: "set_objective",
+    label: "Crew objective",
+    category: "story",
+    summary: "Puts what a couch crew must do now on the TV and every phone.",
+    fields: [
+      { name: "objective", label: "Objective", kind: "text", required: true, placeholder: "Seal the cargo lock" },
+      { name: "clock", label: "Clock", kind: "text", placeholder: "ships dock in 1 hour" },
+    ],
+  },
+  {
     name: "award_story_point",
     label: "Story point",
     category: "story",
     summary: "One story point to a crew member for chasing their secret agenda.",
     fields: [{ name: "characterId", label: "Crew member", kind: "character", required: true }],
+  },
+  {
+    name: "repaint_place",
+    label: "Repaint the place",
+    category: "story",
+    summary: "The next picture repaints the place the crew is in, for every map: for a place that has changed.",
+    fields: [{ name: "change", label: "What changed", kind: "text", required: true, placeholder: "The bulkhead is breached" }],
+  },
+  {
+    name: "cut_to",
+    label: "Cut to a group",
+    category: "story",
+    summary: "While a couch crew is split, turns the scene to another group.",
+    fields: [
+      { name: "characterIds", label: "Who", kind: "characters" },
+      { name: "place", label: "Or where", kind: "text" },
+    ],
+  },
+  {
+    name: "set_mood",
+    label: "Set the mood",
+    category: "table",
+    summary: "What a couch one-shot's scene is doing to the crew; the TV's music follows it.",
+    fields: [
+      {
+        name: "mood",
+        label: "Mood",
+        kind: "select",
+        required: true,
+        options: COUCH_MOODS.map((mood) => ({ value: mood, label: mood[0].toUpperCase() + mood.slice(1) })),
+      },
+    ],
   },
   {
     name: "set_ambience",

@@ -25,7 +25,7 @@
 import { agentSpeedEligibility } from "@/lib/speed-tier";
 import { acceptsCall } from "@/lib/dm/tool-merge-logic";
 import { randomBytes, createHash } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { ChatMessage, ChatRequestOptions, UpstreamResult } from "@/lib/model-client";
@@ -737,6 +737,26 @@ async function startSession(
   return result;
 }
 
+const PICTURE_DATA = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+=*)$/;
+const MAX_ATTACHED_PICTURES = 4;
+
+// The data-URL pictures in a completion's messages, written into the run's
+// own folder, in order.
+function attachedPictures(messages: readonly ChatMessage[], cwd: string): string[] {
+  const files: string[] = [];
+  for (const message of messages) {
+    if (!Array.isArray(message.content)) continue;
+    for (const part of message.content) {
+      const found = part.type === "image_url" ? PICTURE_DATA.exec(part.image_url.url) : null;
+      if (!found || files.length >= MAX_ATTACHED_PICTURES) continue;
+      const file = path.join(cwd, `picture-${files.length + 1}.${found[1] === "jpeg" ? "jpg" : found[1]}`);
+      writeFileSync(file, Buffer.from(found[2], "base64"));
+      files.push(file);
+    }
+  }
+  return files;
+}
+
 // One question, one answer, no tools of any kind: summaries, compaction, the
 // narration guard's rewrite, Ask without a search.
 async function completeWithHarness(
@@ -755,6 +775,11 @@ async function completeWithHarness(
     return { error: harnessError("Every agent slot is busy; try again in a moment.", "timeout") };
   }
   const rendered = renderCompletion(messages);
+  // A question about a picture (a couch place's establishing shot,
+  // src/lib/couch/place-shots.ts) hands the picture over as a file, to a
+  // program that takes pictures with its message. Any other still reads
+  // that a picture was shared, and says it cannot see it.
+  const pictures = adapter.attachesPictures ? attachedPictures(messages, cwd) : [];
   let program: HarnessSession | null = null;
   let text = "";
   // A streamed or narration-only answer is read for a loop as a model's is.
@@ -820,7 +845,7 @@ async function completeWithHarness(
           started.close();
           return;
         }
-        started.send(rendered.prompt);
+        started.send(rendered.prompt, pictures);
       })
       .catch((error) =>
         settle({

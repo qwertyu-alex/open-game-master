@@ -280,12 +280,12 @@ html[data-theme="light"][data-backdrop="off"] body { background: #eef1ed; }
 .couch-roll-chip-verdict[data-good] { color: var(--couch-accent); }
 .couch-roll-chip-verdict[data-bad] { color: var(--couch-danger); }
 
-/* Only you: the GM's private line. */
+/* Only you & the GM: one private exchange, where it was asked. */
 .couch-private {
   display: grid;
   gap: 0.6rem;
-  padding: 0.9rem;
-  border: 1px solid var(--couch-line-strong);
+  padding: 0.75rem;
+  border: 1px dashed var(--couch-line-strong);
   border-radius: 14px;
   background: var(--couch-surface);
 }
@@ -312,7 +312,24 @@ html[data-theme="light"][data-backdrop="off"] body { background: #eef1ed; }
 .couch-whisper[data-unread] { box-shadow: 0 0 0 1px var(--couch-accent) inset; }
 .couch-whisper[data-mine] { border-left-color: var(--couch-faint); color: var(--couch-dim); }
 .couch-whisper-who { color: var(--couch-faint); font-size: 0.75rem; white-space: normal; }
-.couch-private-reply { justify-self: start; min-height: 44px; font-size: 0.95rem; }
+/* Folded: one dashed line in the story, opened with a tap. */
+.couch-private-fold {
+  display: inline-flex;
+  justify-self: start;
+  min-height: 40px;
+  max-width: 100%;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.9rem;
+  border: 1px dashed var(--couch-line-strong);
+  border-radius: 999px;
+  color: var(--couch-dim);
+  font-size: 0.88rem;
+  text-align: left;
+}
+.couch-private-fold b { color: var(--couch-accent); font-weight: 600; }
+.couch-private-toggle { display: inline-flex; min-height: 40px; align-items: center; gap: 0.4rem; }
+.couch-private-follow { display: inline-flex; justify-self: start; min-height: 40px; align-items: center; gap: 0.4rem; font-size: 0.92rem; }
 
 /* ---- the dock: whose move, and the action box ---- */
 
@@ -327,7 +344,31 @@ html[data-theme="light"][data-backdrop="off"] body { background: #eef1ed; }
   background: linear-gradient(to bottom, color-mix(in srgb, var(--couch-bg) 0%, transparent), var(--couch-bg) 1.1rem);
   pointer-events: none;
 }
+/* The iOS keyboard is up (useKeyboardInset in CouchDock.tsx): the dock rides
+   on top of it, and the home bar's inset is under the keyboard. */
+html[data-couch-keyboard] .couch-dock {
+  bottom: var(--couch-kb, 0px);
+  padding-bottom: 0.5rem;
+}
 .couch-dock-inner { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.45rem; pointer-events: auto; }
+/* What the crew must do now (CouchPhoneView.tsx), one quiet line at the
+   head of the story. */
+.couch-objective {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.5rem;
+  margin: 0;
+  padding: 0.4rem 0.7rem;
+  border-left: 3px solid var(--couch-accent);
+  border-radius: 0 10px 10px 0;
+  background: var(--couch-surface);
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
+.couch-objective-label { color: var(--couch-accent); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.couch-objective-text { color: var(--couch-ink); font-weight: 600; }
+.couch-objective-clock { color: var(--couch-warn); font-size: 0.82rem; font-weight: 600; }
 .couch-turn { display: grid; gap: 0.25rem; padding-inline: 0.35rem; }
 .couch-turn-row { display: flex; min-height: 26px; align-items: center; justify-content: space-between; gap: 0.75rem; }
 .couch-turn-head {
@@ -352,12 +393,13 @@ html[data-theme="light"][data-backdrop="off"] body { background: #eef1ed; }
 .couch-turn[data-tone="waiting"] .couch-turn-prompt { color: var(--couch-dim); font-size: 0.92rem; }
 .couch-turn-pass { min-height: 40px; padding: 0 1rem; }
 
-/* The box: at rest a rounded line with the send button in it; writing, a
-   card with the text above and Do, Say and Private beside the send. */
+/* The box: at rest a rounded line with the send in it; writing, a
+   card with the text above and Do, Say and Ask GM as three toggles beside
+   the send. Asking, the box goes dashed. */
 .couch-composer {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  grid-template-areas: "lock input send";
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "input send";
   align-items: center;
   column-gap: 0.4rem;
   padding: 4px 4px 4px 1rem;
@@ -376,8 +418,11 @@ html[data-theme="light"][data-backdrop="off"] body { background: #eef1ed; }
   padding: 0.55rem 0.5rem 0.5rem 0.9rem;
   border-radius: 20px;
 }
-.couch-composer[data-private] { border-style: dashed; }
-.couch-composer-lock { grid-area: lock; color: var(--couch-accent); }
+.couch-composer[data-private] {
+  border-style: dashed;
+  border-color: var(--couch-accent);
+  background: color-mix(in srgb, var(--couch-accent) 6%, var(--couch-surface));
+}
 .couch-composer-input {
   grid-area: input;
   min-width: 0;
@@ -416,6 +461,23 @@ html[data-theme="light"][data-backdrop="off"] body { background: #eef1ed; }
   background: var(--couch-accent);
   color: var(--couch-accent-ink);
 }
+.couch-composer-ask {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0 0.85rem;
+  border: 1px solid var(--couch-line-strong);
+  border-radius: 999px;
+  color: var(--couch-accent);
+  font-size: 0.92rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.couch-composer-ask:disabled { opacity: 0.45; }
+/* Among the toggles Ask GM is one of three, drawn like Do and Say. */
+.couch-composer-modes > .couch-composer-ask { padding: 0 0.8rem; color: var(--couch-dim); font-weight: 600; }
+.couch-composer-modes > .couch-composer-ask[aria-pressed="true"] { color: var(--couch-accent-ink); }
 .couch-composer-send {
   grid-area: send;
   display: grid;
@@ -428,15 +490,98 @@ html[data-theme="light"][data-backdrop="off"] body { background: #eef1ed; }
   color: var(--couch-accent-ink);
 }
 .couch-composer-send:disabled { opacity: 0.35; }
+/* The GM is answering: Do and Say rest, and a light runs along the box's
+   rim, the phone's echo of the TV's breathing edge. */
+.couch-composer[data-gm-answering] { position: relative; }
+.couch-composer[data-gm-answering]::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  padding: 1.5px;
+  border-radius: inherit;
+  background: linear-gradient(
+    110deg,
+    color-mix(in srgb, var(--couch-accent) 18%, transparent) 30%,
+    var(--couch-accent) 45%,
+    color-mix(in srgb, var(--couch-accent) 18%, transparent) 60%
+  );
+  background-size: 250% 100%;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  animation: couch-composer-shimmer 2.2s linear infinite;
+}
+@keyframes couch-composer-shimmer {
+  from { background-position: 150% 0; }
+  to { background-position: -100% 0; }
+}
 .couch-composer-note { padding-inline: 0.9rem; color: var(--couch-dim); font-size: 0.85rem; line-height: 1.4; }
+.couch-composer-note[data-private] { color: var(--couch-accent); }
+/* An unread whisper out of sight in the story: one tap brings it up. */
+.couch-answer-jump {
+  display: inline-flex;
+  justify-self: center;
+  min-height: 40px;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 1rem;
+  border-radius: 999px;
+  background: var(--couch-accent);
+  color: var(--couch-accent-ink);
+  font-size: 0.92rem;
+  font-weight: 650;
+  box-shadow: 0 8px 22px -8px rgba(0, 0, 0, 0.6);
+}
 
 /* ---- the Character view ---- */
 
 .couch-me-name { font-size: 1.15rem; font-weight: 650; line-height: 1.2; }
 .couch-me-role { color: var(--couch-dim); font-size: 0.95rem; line-height: 1.3; }
 .couch-sheet { display: grid; gap: 0.9rem; padding-bottom: 1rem; }
-.couch-sheet-hero { display: flex; align-items: center; gap: 0.9rem; padding-top: 0.25rem; }
-.couch-sheet-hero .couch-face { border-radius: 16px; }
+/* Who you are and how you are doing: on top whichever section is open. */
+.couch-sheet-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem 0.9rem;
+  padding-top: 0.25rem;
+}
+.couch-sheet-hero .couch-face { border-radius: 18px; }
+.couch-hero-text { display: grid; min-width: 0; gap: 0.2rem; }
+.couch-hero-hp { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.35rem; }
+.couch-hero-hp .couch-hp { flex: 1; height: 10px; }
+.couch-hero-hp b { font: 650 1.15rem var(--font-geist-mono), ui-monospace, monospace; white-space: nowrap; }
+.couch-hero-hp small { color: var(--couch-dim); font-size: 0.85rem; font-weight: 500; }
+.couch-hero-pills { grid-column: 1 / -1; }
+.couch-hero-pills:empty { display: none; }
+
+/* Gear, Skills, About: a segmented control under the hero. Clear of the
+   pinned bar when a section is chosen from further down. */
+.couch-sections {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--couch-raise);
+  scroll-margin-top: 6.5rem;
+}
+.couch-section-tab {
+  position: relative;
+  min-height: 44px;
+  border-radius: 10px;
+  color: var(--couch-dim);
+  font-size: 0.98rem;
+  font-weight: 650;
+}
+.couch-section-tab[aria-selected="true"] {
+  background: var(--couch-surface);
+  color: var(--couch-ink);
+  box-shadow: 0 0 0 1px var(--couch-line-strong), 0 2px 6px -2px rgba(0, 0, 0, 0.35);
+}
+.couch-section { display: grid; gap: 0.9rem; }
+.couch-section[hidden] { display: none; }
 .couch-sheet-block {
   display: grid;
   gap: 0.6rem;
@@ -465,9 +610,10 @@ html[data-theme="light"][data-backdrop="off"] body { background: #eef1ed; }
 }
 .couch-pill b { color: var(--couch-ink); font: 600 0.95rem var(--font-geist-mono), ui-monospace, monospace; }
 .couch-pill[data-tone="warn"] { border-color: var(--couch-warn); color: var(--couch-warn); }
+.couch-pill[data-tone="good"] { border-color: var(--couch-accent); color: var(--couch-accent); }
 
 .couch-checks { display: grid; }
-.couch-check { display: flex; min-height: 42px; align-items: center; gap: 0.6rem; border-top: 1px solid var(--couch-line); }
+.couch-check { display: flex; min-height: 46px; align-items: center; gap: 0.6rem; border-top: 1px solid var(--couch-line); }
 .couch-check:first-child { border-top: 0; }
 .couch-check-name { flex: 1; min-width: 0; font-size: 0.98rem; }
 .couch-check-ability {
@@ -518,18 +664,161 @@ html[data-theme="light"][data-backdrop="off"] body { background: #eef1ed; }
 .couch-feature:first-child { border-top: 0; padding-top: 0; }
 .couch-row-name { font-weight: 600; overflow-wrap: anywhere; }
 .couch-row-numbers { color: var(--couch-dim); font: 0.85rem var(--font-geist-mono), ui-monospace, monospace; }
-.couch-feature { display: grid; gap: 0.2rem; padding-block: 0.5rem; border-top: 1px solid var(--couch-line); }
+.couch-feature {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 0.75rem;
+  padding-block: 0.65rem;
+  border-top: 1px solid var(--couch-line);
+}
 .couch-feature p { color: var(--couch-dim); font-size: 0.9rem; line-height: 1.5; }
-.couch-gear { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-.couch-gear li {
-  padding: 0.3rem 0.65rem;
+.couch-more {
+  justify-self: start;
+  min-height: 44px;
+  padding: 0 0.2rem;
+  color: var(--couch-accent);
+  font-size: 0.92rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* A small painting beside a line: a skill, a feature. */
+.couch-glyph { display: inline-grid; flex: none; place-items: center; width: 26px; height: 26px; }
+.couch-glyph[data-size="lg"] { width: 40px; height: 40px; border-radius: 10px; background: #0b0f11; }
+.couch-glyph img { width: 100%; height: 100%; object-fit: contain; }
+.couch-glyph[data-size="lg"] img { width: 86%; height: 86%; }
+.couch-check:not([data-training]) .couch-glyph { opacity: 0.55; }
+
+/* ---- Gear: pictures of what you carry ---- */
+
+/* A thing's picture, on a dark case in either theme: the painted icons are
+   cut-outs and the night's own pictures are painted on black. */
+.couch-pic {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
   border: 1px solid var(--couch-line);
+  border-radius: 12px;
+  background: radial-gradient(circle at 50% 38%, #1b2427, #080b0c 78%);
+}
+.couch-pic[data-size="sm"] { width: 52px; border-radius: 10px; }
+.couch-pic[data-size="lg"] { justify-self: center; width: min(62vw, 15rem); border-radius: 18px; }
+.couch-pic img { width: 100%; height: 100%; object-fit: cover; }
+.couch-pic[data-fit="icon"] img { width: 74%; height: 74%; object-fit: contain; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.6)); }
+.couch-pic-letter { color: rgba(163, 177, 170, 0.6); font: 600 1.5rem var(--font-geist-mono), ui-monospace, monospace; }
+.couch-pic[data-size="sm"] .couch-pic-letter { font-size: 1.1rem; }
+.couch-pic-qty,
+.couch-pic-new {
+  position: absolute;
+  padding: 1px 6px;
   border-radius: 999px;
+  font: 600 0.72rem/1.4 var(--font-geist-mono), ui-monospace, monospace;
+}
+.couch-pic-qty { right: 4px; bottom: 4px; background: rgba(6, 8, 10, 0.82); color: #e8eeea; }
+.couch-pic-new { top: 4px; left: 4px; background: #8fe0b5; color: #03130b; letter-spacing: 0.06em; text-transform: uppercase; }
+.couch-pic[data-size="sm"] .couch-pic-qty { right: 2px; bottom: 2px; padding: 0 4px; font-size: 0.62rem; }
+.couch-pic[data-size="sm"] .couch-pic-new { top: 2px; left: 2px; padding: 0 4px; font-size: 0.55rem; }
+
+/* The signature item: the one thing that is yours alone, large. */
+.couch-signature {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.9rem;
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--couch-line-strong);
+  border-radius: 16px;
+  background: var(--couch-surface);
+  text-align: left;
+}
+.couch-signature-text { display: grid; gap: 0.3rem; min-width: 0; }
+.couch-signature-name { font-size: 1.08rem; font-weight: 650; line-height: 1.25; overflow-wrap: anywhere; }
+.couch-signature-full {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  color: var(--couch-dim);
   font-size: 0.88rem;
-  line-height: 1.35;
+  line-height: 1.4;
+}
+
+.couch-weapons { display: grid; }
+.couch-weapons li + li { border-top: 1px solid var(--couch-line); }
+.couch-weapon {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 64px;
+  padding-block: 0.45rem;
+  text-align: left;
+}
+.couch-weapon-text { display: grid; gap: 0.15rem; min-width: 0; }
+.couch-weapon-hit { display: grid; justify-items: end; }
+.couch-weapon-hit b { font: 650 1.3rem var(--font-geist-mono), ui-monospace, monospace; line-height: 1.1; }
+.couch-weapon-hit span { color: var(--couch-faint); font: 0.68rem var(--font-geist-mono), ui-monospace, monospace; letter-spacing: 0.08em; text-transform: uppercase; }
+
+/* The pack: a grid of pictures, three to a row on a phone. */
+.couch-items { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem 0.6rem; }
+@media (min-width: 30rem) { .couch-items { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.couch-item { display: grid; align-content: start; gap: 0.35rem; width: 100%; text-align: center; }
+.couch-item-name {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 0.82rem;
+  line-height: 1.25;
   overflow-wrap: anywhere;
 }
-.couch-gear-qty { color: var(--couch-dim); font-family: var(--font-geist-mono), ui-monospace, monospace; }
+.couch-item-tag {
+  justify-self: center;
+  color: var(--couch-accent);
+  font: 600 0.62rem var(--font-geist-mono), ui-monospace, monospace;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.couch-item:active .couch-pic,
+.couch-weapon:active .couch-pic,
+.couch-signature:active { border-color: var(--couch-accent); }
+
+/* One item up close, in the Map's sheet. */
+.couch-item-body { justify-items: stretch; gap: 14px; }
+.couch-item-full { font-size: 1rem; line-height: 1.5; }
+.couch-item-rules {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 8;
+}
+.couch-item-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+.couch-item-facts > span {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 0.6rem;
+  border: 1px solid var(--couch-line);
+  border-radius: 12px;
+}
+.couch-item-facts b { font: 650 1.35rem var(--font-geist-mono), ui-monospace, monospace; }
+
+/* ---- About: who you are ---- */
+
+.couch-story-text { color: var(--couch-ink); font-size: 1rem; line-height: 1.6; }
+.couch-ties { display: grid; }
+.couch-tie { display: flex; align-items: center; gap: 0.75rem; padding-block: 0.55rem; border-top: 1px solid var(--couch-line); }
+.couch-tie:first-child { border-top: 0; padding-top: 0; }
+.couch-tie .couch-face { border-radius: 12px; }
+.couch-tie-line { color: var(--couch-dim); font-size: 0.92rem; line-height: 1.45; }
 .couch-sheet-rules summary { min-height: 44px; align-content: center; cursor: pointer; font-weight: 600; }
 .couch-rules { display: grid; gap: 1rem; padding-top: 0.5rem; color: var(--couch-dim); font-size: 0.95rem; line-height: 1.55; }
 .couch-rules h3 { color: var(--couch-ink); }
@@ -558,8 +847,51 @@ html[data-theme="light"][data-backdrop="off"] body { background: #eef1ed; }
   line-height: 1.5;
 }
 .couch-crew[data-state="chosen"] .couch-crew-story { -webkit-line-clamp: unset; }
+/* The one the TV is introducing, while the room reads along. */
+.couch-crew[data-state="now"] { border-color: var(--couch-accent); box-shadow: 0 0 0 1px var(--couch-accent); }
+.couch-crew[data-state="now"] .couch-crew-story { -webkit-line-clamp: unset; }
+.couch-crew-facts { display: grid; gap: 0.45rem; font-size: 0.92rem; line-height: 1.45; }
+.couch-crew-facts > div { display: grid; grid-template-columns: minmax(4.5rem, auto) 1fr; gap: 0.6rem; }
+.couch-crew-facts dt { color: var(--couch-accent); font-weight: 600; overflow-wrap: anywhere; }
+.couch-crew-facts dd { color: var(--couch-dim); }
+.couch-crew-facts dd::first-letter { text-transform: uppercase; }
 .couch-center { display: grid; justify-items: center; gap: 0.75rem; padding: 2.5rem 0.5rem; text-align: center; }
+
+/* ---- playing on after a death (docs/couch-mode-spec.md 2.12) ---- */
+
+.couch-tab-dead { color: var(--couch-danger); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.couch-takeover { display: grid; gap: 0.85rem; margin-top: 1rem; padding: 1rem; border-color: color-mix(in srgb, var(--couch-danger) 45%, var(--couch-line)); border-radius: 16px; }
+.couch-takeover-head { display: flex; align-items: center; gap: 0.8rem; }
+.couch-takeover-head .couch-face { filter: grayscale(1) brightness(0.55); }
+.couch-takeover-title { font-size: 1.25rem; font-weight: 650; line-height: 1.25; }
+.couch-takeover-writing { display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.25rem 0; }
+.couch-takeover-writing .couch-pulse { flex: none; margin-top: 0.45rem; }
 
 @media (prefers-reduced-motion: reduce) {
   .couch-chevron { transition: none; }
+  .couch-composer[data-gm-answering]::before { animation: none; background: var(--couch-accent); }
 }
+html[data-effects="low"] .couch-composer[data-gm-answering]::before { animation: none; background: var(--couch-accent); }
+
+/* Which group of a split crew a passage or a move belongs to
+   (src/lib/couch/whereabouts.ts): its place, then "Your group" or who. */
+.couch-group-tag {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15rem 0.4rem;
+  justify-self: start;
+  max-width: 100%;
+  margin-bottom: 0.15rem;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--couch-line-strong);
+  border-radius: 999px;
+  color: var(--couch-dim);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.couch-group-tag[data-mine] { border-color: var(--couch-accent); color: var(--couch-accent); }
+.couch-group-place { font-family: var(--font-geist-mono), ui-monospace, monospace; letter-spacing: 0.06em; text-transform: uppercase; }
+.couch-group-who::before { content: "· "; }
+.couch-group-off { padding: 0 0.35rem; border-radius: 999px; background: var(--couch-raise); color: var(--couch-dim); }
+.couch-post[data-mine] .couch-group-tag { justify-self: end; }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Swords } from "lucide-react";
+import { Tv } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
@@ -76,8 +76,8 @@ export function ContinueHero({ campaign, userId }: { campaign: HomeCampaign; use
       <div className="ts-actions ts-reveal" style={{ animationDelay: "640ms" }}>
         <Link href={`/campaigns/${campaign.id}`} className="ts-enter motion-magnet" data-tour="tile-continue">
           <span className="ts-enter-sheen" aria-hidden="true" />
-          <Swords className="size-4" aria-hidden="true" />
-          {ended ? "Revisit the world" : lobby ? "Take your seat" : "Enter the world"}
+          <Tv className="size-4" aria-hidden="true" />
+          {ended ? "Look back at the night" : lobby ? "Back to the lobby" : "Back to the night"}
         </Link>
       </div>
     </div>
@@ -123,30 +123,29 @@ export function RecapPanel({ campaign }: { campaign: HomeCampaign }) {
   );
 }
 
-// The same slot when the account has no campaigns at all. Kept word for
-// word from the old dashboard: it is a statement about the account, which
-// is why a failed list fetch never shows it.
-// `canCreate` is false on a server whose admin starts every campaign
-// (src/lib/shared-host.ts): the invitation then points at the room code
-// instead of a door this account cannot open.
-export function EmptyHero({ onNewCampaign, canCreate = true }: { onNewCampaign: () => void; canCreate?: boolean }) {
+// The same slot when the account has no nights at all: it is a statement
+// about the account, which is why a failed list fetch never shows it.
+// `canStart` is false on a server with no storyteller or whose admin starts
+// every table (src/lib/shared-host.ts): the invitation then points at the
+// room code instead of a door this account cannot open.
+export function EmptyHero({ canStart = true }: { canStart?: boolean }) {
   return (
     <div className="ts-title-block">
-      <span className="ts-eyebrow ts-reveal" style={{ animationDelay: "140ms" }}>Your first tale</span>
+      <span className="ts-eyebrow ts-reveal" style={{ animationDelay: "140ms" }}>Couch night</span>
       <h1 className="ts-title ts-title-sm ts-reveal" style={{ animationDelay: "220ms" }}>
-        <span className="ts-title-face">Every campaign starts with an empty table.</span>
+        <span className="ts-title-face">One TV, everyone&apos;s phone, a sci-fi horror one-shot.</span>
       </h1>
       <p className="ts-lede ts-reveal" style={{ animationDelay: "420ms" }}>
-        {canCreate
-          ? "Create one and invite your friends, or join theirs with a room code below."
-          : "On this server an administrator starts the campaigns. Ask them for a room code and join below."}
+        {canStart
+          ? "Start the night on this laptop and put it on the TV. Your friends join by scanning the code on screen."
+          : "On this server an administrator starts the nights. Ask them for a room code and join below."}
       </p>
-      {canCreate ? (
+      {canStart ? (
         <div className="ts-actions ts-reveal" style={{ animationDelay: "640ms" }}>
-          <button type="button" onClick={onNewCampaign} className="ts-enter motion-magnet">
+          <Link href="/couch" className="ts-enter motion-magnet">
             <span className="ts-enter-sheen" aria-hidden="true" />
-            <Swords className="size-4" aria-hidden="true" /> Forge a new world
-          </button>
+            <Tv className="size-4" aria-hidden="true" /> Start a night
+          </Link>
         </div>
       ) : null}
     </div>

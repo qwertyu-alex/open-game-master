@@ -5,6 +5,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { CampaignState, PendingRoll } from "@/app/campaigns/[campaignId]/useCampaignStream";
 import { buzz, onShake, supportsShake } from "@/lib/dice/shake-to-roll";
 import { couchRollCall } from "@/lib/couch/roll-feedback-logic";
+import { groupTally } from "@/lib/couch/group-check-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // The phone's roll screen (docs/couch-mode-spec.md 2.10). When the GM calls
@@ -48,12 +49,16 @@ export function CouchRollPrompt({ state, sheet }: { state: CampaignState; sheet:
       />
     );
   }
+  // A group check's roll says so: everyone is throwing, and how many must
+  // make it (src/lib/couch/group-check.ts).
+  const group = current && state.couchGroup?.members.some((member) => member.pendingId === current.id) ? groupTally(state.couchGroup) : null;
   return current ? (
     <RollSheet
       key={current.id}
       campaignId={campaignId}
       pending={current}
       sheet={sheet}
+      group={group}
       onThrown={() => setThrown({ pendingId: current.id, at: Date.now() })}
     />
   ) : null;
@@ -65,10 +70,11 @@ const D6 = "M8 12h84v86H8Z";
 // other, so filling them alone leaves holes behind the word Roll.
 const D20_BODY = "M50 3 96 29v52l-46 26L4 81V29Z";
 
-function RollSheet({ campaignId, pending, sheet, onThrown }: {
+function RollSheet({ campaignId, pending, sheet, group = null, onThrown }: {
   campaignId: string;
   pending: PendingRoll;
   sheet: CharacterSheet;
+  group?: ReturnType<typeof groupTally> | null;
   onThrown: () => void;
 }) {
   const titleId = useId();
@@ -120,7 +126,7 @@ function RollSheet({ campaignId, pending, sheet, onThrown }: {
   return (
     <div className="couch-roll-sheet" role="dialog" aria-modal="true" aria-labelledby={titleId}>
       <div className="couch-roll-sheet-body">
-        <span className="couch-label">{sheet.name}, your roll</span>
+        <span className="couch-label">{group ? `Group check · ${sheet.name}, your roll` : `${sheet.name}, your roll`}</span>
         <h2 id={titleId} className="couch-roll-sheet-title">{call.what}</h2>
         {pending.reason.trim() ? <p className="couch-roll-sheet-why">{pending.reason}</p> : null}
         <button
@@ -146,6 +152,11 @@ function RollSheet({ campaignId, pending, sheet, onThrown }: {
           {call.formula}
           {call.target !== null ? ` · need ${call.target} or more` : ""}
         </p>
+        {group && group.count > 1 ? (
+          <p className="couch-roll-sheet-group">
+            Everyone rolls. {group.needed === group.count ? `All ${group.count}` : `${group.needed} of ${group.count}`} of you must make it.
+          </p>
+        ) : null}
         {call.edge ? <p className="couch-roll-sheet-edge">{call.edge}</p> : null}
         <p id={`${titleId}-hint`} className="couch-roll-sheet-hint">
           {canShake ? "Tap Roll or shake your phone." : "Tap Roll."} The dice land on the TV for everyone.

@@ -19,6 +19,7 @@ const {
   subtitlePages,
   previousSubtitlePages,
   subtitlePageMs,
+  voicedSubtitlePage,
   maskSecret,
   actNumeral,
   healthView,
@@ -26,8 +27,16 @@ const {
   joinLink,
   normalizeRoster,
   unclaimedCount,
+  introRunning,
+  introducedCard,
   couchHaltedTurn,
+  gmAtWork,
+  gmStatusWords,
 } = await import("../src/components/couch/couch-logic.ts");
+const { checkSuccess } = await import("../src/lib/couch/check-logic.ts");
+const { crewIntroduction, briefingIntroduction, introTexts, introReadMs, introTotal, introDone, splitFlaw, forgedMember } = await import(
+  "../src/lib/couch/intro-logic.ts"
+);
 
 let passed = 0;
 function test(name, fn) {
@@ -133,6 +142,19 @@ test("the phone keeps the newest passage open and folds what came before", () =>
   assert.equal(storyBeats(messages, 1).earlier.length, 1);
 });
 
+test("a phone sees only its own move until the GM answers the round", () => {
+  const messages = [
+    message("m1", "player", "I look around.", { userId: "u1" }),
+    message("m2", "dm", "The galley is warm."),
+    message("m3", "player", "I pour coffee.", { userId: "u1" }),
+    message("m4", "player", "I check the hauler.", { userId: "u2" }),
+  ];
+  assert.deepEqual(storyBeats(messages, 8, "u1").after.map((entry) => entry.id), ["m3"]);
+  assert.deepEqual(storyBeats(messages, 8, "u3").after, [], "a player who has not moved sees nobody's");
+  const answered = storyBeats([...messages, message("m5", "dm", "Coffee, and the hauler hums.")], 8, "u1");
+  assert.deepEqual(answered.earlier.map((entry) => entry.id), ["m1", "m2", "m3", "m4"], "once answered, every move shows");
+});
+
 test("before the GM has spoken, what the players said is all there is", () => {
   const beats = storyBeats([message("m1", "player", "Hello?", { userId: "u1" })]);
   assert.equal(beats.latest, null);
@@ -171,6 +193,22 @@ test("the newest picture stays until the next one lands, and a find stands besid
   assert.deepEqual(tvPictures([place("/collar.webp", "insert")]), { scene: null, insert: "/collar.webp" }, "the cover stands in for the place");
 });
 
+test("back in a place the crew has seen, its establishing shot goes straight back up", () => {
+  const at = (url, placeId, kind = "medium") => ({ generatedImage: { url, shot: { kind, frame: url, placeId } } });
+  const spine = { url: "/spine-wide.webp", seen: "A ribbed corridor.", placeId: "spine" };
+  assert.deepEqual(
+    tvPictures([at("/hatch.webp", "hatch"), at("/collar.webp", "hatch", "insert")], spine),
+    { scene: "/spine-wide.webp", insert: null },
+    "the hatch they left and its find give way to the spine they came back to",
+  );
+  assert.deepEqual(
+    tvPictures([at("/spine-wide.webp", "spine", "wide"), at("/kara.webp", "spine")], spine),
+    { scene: "/kara.webp", insert: null },
+    "a picture of the place they are in stays",
+  );
+  assert.deepEqual(tvPictures([at("/hatch.webp", "hatch")], null), { scene: "/hatch.webp", insert: null }, "a place with no picture yet keeps the last one up");
+});
+
 test("subtitles gather whole sentences, start each paragraph fresh and break a long sentence between words", () => {
   const pages = subtitlePages("One. Two. Three.\n\nFour.", 10);
   assert.deepEqual(pages, ["One. Two.", "Three.", "Four."]);
@@ -181,15 +219,29 @@ test("subtitles gather whole sentences, start each paragraph fresh and break a l
   }
   // Markdown and voice tags are not read off a TV.
   assert.deepEqual(subtitlePages("[whispers] *Run.*"), ["Run."]);
+  // Beside a map, one sentence at a time.
+  assert.deepEqual(subtitlePages("One. Two. Three.\n\nFour.", 170, true), ["One.", "Two.", "Three.", "Four."]);
 });
 
-test("a page reads aloud at the narrator's pace and silently a little quicker, within bounds", () => {
-  const page = "x".repeat(140);
-  assert.equal(subtitlePageMs(page, true), 10000);
-  assert.ok(subtitlePageMs(page, false) < subtitlePageMs(page, true));
-  assert.equal(subtitlePageMs("Hi.", true), 2500);
-  assert.equal(subtitlePageMs("Hi.", false), 3500);
-  assert.equal(subtitlePageMs("x".repeat(1000), true), 16000);
+test("a page read silently stays up at a reading pace, within bounds", () => {
+  assert.equal(subtitlePageMs("x".repeat(170)), 11200);
+  assert.equal(subtitlePageMs("Hi."), 3500);
+  assert.equal(subtitlePageMs("x".repeat(1000)), 16000);
+});
+
+test("a page read aloud turns where the voice reaches it, not ahead of a slow narrator", () => {
+  const pages = ["x".repeat(100), "x".repeat(50), "x".repeat(50)];
+  // A finished 40-second file: each page holds its share of the clip.
+  assert.equal(voicedSubtitlePage(pages, 0, 40), 0);
+  assert.equal(voicedSubtitlePage(pages, 19.9, 40), 0);
+  assert.equal(voicedSubtitlePage(pages, 20, 40), 1);
+  assert.equal(voicedSubtitlePage(pages, 30, 40), 2);
+  assert.equal(voicedSubtitlePage(pages, 40, 40), 2);
+  // A live stream of unknown length: an ordinary narrator's pace.
+  assert.equal(voicedSubtitlePage(pages, 7, Number.POSITIVE_INFINITY), 0);
+  assert.equal(voicedSubtitlePage(pages, 8, Number.NaN), 1);
+  assert.equal(voicedSubtitlePage(pages, 999, Number.POSITIVE_INFINITY), 2);
+  assert.equal(voicedSubtitlePage([], 5, 10), 0);
 });
 
 test("a hidden agenda keeps its shape and none of its letters", () => {
@@ -252,6 +304,69 @@ test("the forge's crew is read defensively", () => {
   assert.equal(empty.status, "forging");
   assert.deepEqual(empty.crew, []);
   assert.equal(normalizeRoster({ status: "nonsense" }).status, "forging");
+  // A server from before the introductions sends none: nothing to wait for.
+  assert.deepEqual(roster.intro, { step: 0, total: 0, key: "" });
+  assert.equal(introRunning(roster), false);
+  assert.deepEqual(roster.crew[1].ties, []);
+});
+
+test("the TV's introductions: the briefing, then each crew card, and the phones wait until the end", () => {
+  const raw = {
+    status: "ready",
+    intro: { step: 2, total: 3, key: "abc" },
+    crew: [
+      { id: "c1", name: "Kara", ties: [{ to: "Brakk", line: "owes him her life" }, { to: "" }, "nonsense"] },
+      { id: "c2", name: "Brakk", personality: "Loud; flaw: drinks", signatureItem: "A torque wrench" },
+    ],
+  };
+  const roster = normalizeRoster(raw);
+  assert.deepEqual(roster.crew[0].ties, [{ to: "Brakk", line: "owes him her life" }]);
+  assert.equal(roster.crew[1].signatureItem, "A torque wrench");
+  assert.equal(introRunning(roster), true);
+  assert.equal(introducedCard(roster)?.id, "c2", "step 2 is the second crew card");
+  assert.equal(introducedCard(normalizeRoster({ ...raw, intro: { step: 0, total: 3 } })), null, "the briefing introduces nobody");
+  const done = normalizeRoster({ ...raw, intro: { step: 7, total: 3 } });
+  assert.equal(done.intro.step, 3, "never past the end");
+  assert.equal(introRunning(done), false);
+  assert.equal(introRunning(normalizeRoster({ ...raw, status: "forging" })), false);
+  assert.equal(introTotal(3), 4);
+  assert.equal(introTotal(0), 0);
+  assert.equal(introDone(4, 4), true);
+  assert.equal(introDone(3, 4), false);
+});
+
+test("a crew member is introduced aloud from their public card, never their secrets", () => {
+  const roz = {
+    name: "Roz Achterberg",
+    crewRole: "First mate and acting captain of the tug Mule Seven",
+    backstory: "Twenty years on hauling tugs. The Mule Seven is mortgaged to the hilt.",
+    personality: "Dry, competent, quietly motherly; flaw: money worries she never mentions.",
+    signatureItem: "A tin of hard peppermints",
+    gender: "Female",
+  };
+  assert.equal(
+    crewIntroduction(roz),
+    "Roz Achterberg, first mate and acting captain of the tug Mule Seven. Twenty years on hauling tugs. The Mule Seven is mortgaged to the hilt. " +
+      "Dry, competent, quietly motherly. Her flaw: money worries she never mentions. She carries a tin of hard peppermints.",
+  );
+  // They carry; a name of its own keeps its capital; no flaw, no role.
+  assert.equal(
+    crewIntroduction({ name: "Lio", crewRole: "", backstory: "Along for the audit", personality: "Quiet", signatureItem: "Grandfather's compass", gender: "Nonbinary" }),
+    "Lio. Along for the audit. Quiet. They carry Grandfather's compass.",
+  );
+  assert.deepEqual(splitFlaw("Dry, loyal; FLAW: never admits fear."), { traits: "Dry, loyal", flaw: "never admits fear" });
+  assert.deepEqual(splitFlaw("Calm."), { traits: "Calm", flaw: "" });
+  assert.equal(briefingIntroduction("Cold Storage", "Day nineteen adrift."), "Cold Storage.\n\nDay nineteen adrift.\n\nThis is your crew.");
+  const texts = introTexts({ title: "Cold Storage", briefing: "Day nineteen adrift." }, [roz]);
+  assert.equal(texts.length, 2);
+  assert.equal(introTexts({ title: "x", briefing: "y" }, []).length, 0, "no crew, no introductions");
+  assert.equal(introReadMs("word"), 6000, "a short step still stays up long enough to look at");
+  assert.ok(introReadMs(texts[1]) > 10_000);
+  // A card finds its forge entry by its place, checked by name.
+  const crew = [{ name: "A" }, { name: "B" }];
+  assert.equal(forgedMember(crew, { position: 1, name: "B" })?.name, "B");
+  assert.equal(forgedMember(crew, { position: 0, name: "B" })?.name, "B", "a moved card is found by name");
+  assert.equal(forgedMember(crew, { position: 0, name: "C" }), null);
 });
 
 test("a crashed GM turn shows until the story moves on or the retry is claimed", () => {
@@ -268,6 +383,33 @@ test("a crashed GM turn shows until the story moves on or the retry is claimed",
   // Other system lines are passed over; with no notice there is nothing.
   assert.equal(couchHaltedTurn([halt, { id: "m6", authorType: "system", content: "Renn joins the crew." }])?.id, "m3");
   assert.equal(couchHaltedTurn([passage, answer]), null);
+});
+
+test("the screens wait on the GM while it answers, not while the table owes it a roll", () => {
+  for (const status of ["thinking", "narrating", "rolling"]) assert.equal(gmAtWork(status), true, status);
+  for (const status of ["idle", "awaiting_rolls", "writing_chapter", "plotting_arc"]) assert.equal(gmAtWork(status), false, status);
+  assert.equal(gmStatusWords("thinking"), "The GM is thinking");
+  assert.equal(gmStatusWords("narrating"), "The GM is thinking");
+});
+
+test("a natural 20 passes a couch long shot, and no other check", () => {
+  const couch = { couchMode: true };
+  const nat20 = { total: 25, crit: "nat20" };
+  // DC 30 with +5: only the long-shot rule can pass it.
+  assert.equal(checkSuccess(couch, "skill_check", 30, nat20), true);
+  assert.equal(checkSuccess(couch, "ability_check", 25, { total: 22, crit: "nat20" }), true);
+  assert.equal(checkSuccess(couch, "saving_throw", 30, nat20), true);
+  assert.equal(checkSuccess(couch, "skill_check", 30, { total: 24, crit: undefined }), false);
+  // Ordinary checks go by the total alone.
+  assert.equal(checkSuccess(couch, "skill_check", 20, { total: 19, crit: "nat20" }), false);
+  assert.equal(checkSuccess(couch, "skill_check", 15, { total: 15, crit: "nat1" }), true);
+  // A lenient table's very_hard (DC 23) is still a long shot; a harsh table's hard (DC 22) is not.
+  assert.equal(checkSuccess({ couchMode: true, gm: { strictness: "lenient" } }, "skill_check", 23, { total: 22, crit: "nat20" }), true);
+  assert.equal(checkSuccess({ couchMode: true, gm: { strictness: "harsh" } }, "skill_check", 22, { total: 21, crit: "nat20" }), false);
+  // Not attacks, not other tables, and nothing to decide without a DC.
+  assert.equal(checkSuccess(couch, "attack", 30, nat20), false);
+  assert.equal(checkSuccess({ couchMode: false }, "skill_check", 30, nat20), false);
+  assert.equal(checkSuccess(couch, "skill_check", null, nat20), undefined);
 });
 
 console.log(`${passed} couch logic tests passed`);

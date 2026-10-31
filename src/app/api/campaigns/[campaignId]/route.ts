@@ -52,7 +52,12 @@ import { latestEventOfType, publishPersisted, publishWithSeq } from "@/lib/event
 import type { HandoutShown, TitleCard } from "@/lib/scene/state";
 import { narrationAudioFor } from "@/lib/tts";
 import { latestCouchAnswers } from "@/lib/couch/answers";
+import { latestCouchGroup } from "@/lib/couch/group-check";
+import { latestCouchTruce } from "@/lib/couch/truce";
+import { couchObjective } from "@/lib/couch/pacing";
+import { listSceneTags } from "@/lib/couch/whereabouts";
 import { couchNavigation } from "@/lib/couch/navigation";
+import { couchSite } from "@/lib/couch/site";
 import { publishCouchRules } from "@/lib/couch/rules";
 import { tableAuthors, workshopClassesFor } from "@/lib/db/homebrew";
 import { testFightSource } from "@/lib/db/test-fights";
@@ -133,6 +138,15 @@ export async function GET(
     tableWait: currentTableWait(campaignId),
     couchAnswers: campaign.gameSettings.couchMode ? latestCouchAnswers(campaignId) : null,
     couchNavigation: couchNavigation(campaign),
+    // A night played on a map: the site under the fog (src/lib/couch/site.ts).
+    couchSite: couchSite(campaign),
+    couchSceneTags: campaign.gameSettings.couchMode ? listSceneTags(campaignId) : [],
+    // A couch group check still waiting on dice (src/lib/couch/group-check.ts).
+    couchGroup: campaign.gameSettings.couchMode ? latestCouchGroup(campaignId) : null,
+    // A truce in a couch fight still waiting on answers (src/lib/couch/truce.ts).
+    couchTruce: campaign.gameSettings.couchMode ? latestCouchTruce(campaignId) : null,
+    // What the crew must do now (src/lib/couch/pacing.ts).
+    couchObjective: couchObjective(campaign),
     members: listMembers(campaignId),
     // Names and faces of the cast, for the transcript's speech lines.
     cast: publicCast(campaignId),

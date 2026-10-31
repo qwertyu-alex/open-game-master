@@ -2,21 +2,36 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
+import type { NarrationAudio } from "@/app/campaigns/[campaignId]/useNarrationAudio";
 import { CouchTvJoin } from "@/components/couch/CouchTvJoin";
+import { CouchTvIntro } from "@/components/couch/CouchTvIntro";
 import { CouchFace } from "@/components/couch/CouchParts";
 import { useCouchRoster } from "@/components/couch/useCouchRoster";
-import { unclaimedCount, type CouchCrewCard } from "@/components/couch/couch-logic";
+import { introRunning, unclaimedCount, type CouchCrewCard } from "@/components/couch/couch-logic";
 
-// The TV before the game (docs/couch-mode-spec.md 2.6): tonight's title,
-// logline and briefing over the cover, a QR big enough to scan from the
-// couch with the local-network address beside it, the crew greying out as
-// phones take them, and the lead's Begin. "Writing the scenario" while the
-// forge works.
-export function CouchTvLobby({ state, refresh }: { state: CampaignState; refresh: () => void }) {
+// The TV before the game (docs/couch-mode-spec.md 2.6): "Writing the
+// scenario" over a QR big enough to scan from the couch while the forge
+// works; then the introductions, the briefing and each crew member read
+// aloud (CouchTvIntro.tsx); then the choosing: the title, the QR, the crew
+// greying out as phones take them, and the lead's Begin.
+export function CouchTvLobby({
+  state,
+  refresh,
+  narration,
+  ttsOn,
+}: {
+  state: CampaignState;
+  refresh: () => void;
+  narration: NarrationAudio;
+  ttsOn: boolean;
+}) {
   const { campaign, me, sheets, members } = state;
+  // A forge's change (a portrait, an introduction moving on) is stamped on
+  // the campaign (src/lib/couch/forge.ts publishCouchChange).
+  const stamp = (campaign as { couchStamp?: unknown } | null)?.couchStamp;
   const signal = useMemo(
-    () => `${sheets.map((sheet) => `${sheet.id}:${sheet.userId}`).join("|")}#${members.length}`,
-    [sheets, members.length],
+    () => `${sheets.map((sheet) => `${sheet.id}:${sheet.userId}`).join("|")}#${members.length}#${String(stamp ?? "")}`,
+    [sheets, members.length, stamp],
   );
   const { roster, missing, loaded, refetch } = useCouchRoster(campaign?.id ?? "", { signal });
   const [busy, setBusy] = useState(false);
@@ -39,6 +54,9 @@ export function CouchTvLobby({ state, refresh }: { state: CampaignState; refresh
           name: sheet.name,
           crewRole: sheet.crewRole ?? "",
           backstory: sheet.backstory,
+          personality: "",
+          signatureItem: "",
+          ties: [],
           portraitUrl: sheet.portrait?.url ?? null,
           claimedBy: player ? { userId: player.userId, name: player.username } : null,
         };
@@ -104,6 +122,24 @@ export function CouchTvLobby({ state, refresh }: { state: CampaignState; refresh
     }
   }
 
+  if (roster && introRunning(roster)) {
+    return (
+      <>
+        <TvScene url={campaign.cover?.url ?? null} dim />
+        <div className="couch-tv-scrim" aria-hidden="true" />
+        <CouchTvIntro
+          campaignId={campaign.id}
+          roster={roster}
+          narration={narration}
+          ttsOn={ttsOn}
+          drives={mayBegin}
+          inviteCode={campaign.inviteCode ?? ""}
+          onMoved={refetch}
+        />
+      </>
+    );
+  }
+
   return (
     <>
       <TvScene url={campaign.cover?.url ?? null} dim />
@@ -129,6 +165,11 @@ export function CouchTvLobby({ state, refresh }: { state: CampaignState; refresh
                 </button>
               ) : null}
             </div>
+          ) : roster?.intro.total ? (
+            // The room has heard the briefing and met the crew: now they pick.
+            <p className="couch-tv-lobby-pick">
+              {open > 0 ? "Choose your character on your phone." : "Everyone has a character."}
+            </p>
           ) : briefing ? (
             <p className="couch-tv-lobby-brief">{briefing}</p>
           ) : null}

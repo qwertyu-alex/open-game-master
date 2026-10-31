@@ -1,9 +1,11 @@
 import type { Campaign } from "@/lib/db/campaigns";
-import { listPendingForTurn } from "@/lib/db/dm-turns";
+import { getPendingRoll, listPendingForTurn } from "@/lib/db/dm-turns";
 import { getRoll } from "@/lib/db/rolls";
 import { listSheets } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
 import { enqueueNarrationAudio } from "@/lib/tts";
+import { groupedPendingIds, landCouchGroupThrow } from "./group-check";
+import { couchRollItem } from "./item-show";
 import { COUCH_ROLL_PARTS, couchAttackRulings, couchRollCall, couchRollFeedback, couchRollVoiceId } from "./roll-feedback-logic";
 
 // Called around every model tool, so attacks, saves and damage get the
@@ -15,13 +17,20 @@ export function publishCouchRollFeedback(campaign: Campaign, rollIds: readonly s
   const sheets = listSheets(campaign.id);
   const rolls = rollIds.map(getRoll).filter((roll) => roll !== null);
   const rulings = couchAttackRulings(rolls, outcome);
+  // A throw that is a crew member's part of a group check fills the group's
+  // card instead (src/lib/couch/group-check.ts): its phone still gets the
+  // result, but the TV shows it in the card and nobody reads it aloud.
+  const pending = pendingId ? getPendingRoll(pendingId) : null;
+  const group = pending && rolls[0] ? landCouchGroupThrow(campaign, pending, rolls[0]) : null;
   for (const roll of rolls) {
     const id = roll.id;
     const read = couchRollFeedback(roll, sheets.find((sheet) => sheet.id === roll.characterId)?.name, reason, rulings.get(id));
     if (!read) continue;
-    const feedback = pendingId ? { ...read, pendingId } : read;
+    // The weapon swung, pictured on the card (src/lib/couch/item-show.ts).
+    const item = couchRollItem(campaign.id, roll, sheets);
+    const feedback = { ...read, ...(pendingId ? { pendingId } : {}), ...(item ? { item } : {}), ...(group ? { groupId: group.id } : {}) };
     publishPersisted(campaign.id, "couch_roll", feedback);
-    if (campaign.gameSettings.ttsEnabled) {
+    if (campaign.gameSettings.ttsEnabled && !group) {
       for (const part of pendingId ? (["result"] as const) : COUCH_ROLL_PARTS) {
         void enqueueNarrationAudio(campaign.id, couchRollVoiceId(id, part), part === "announce" ? feedback.announcement : feedback.result,
           [], campaign.gameSettings, null, { onDemand: true, narratorOnly: true });
@@ -42,8 +51,10 @@ const called: Set<string> = (globalThis.__odmCouchRollCalls ??= new Set<string>(
 
 export function announceCouchRollCalls(campaign: Campaign, turnId: string) {
   if (!campaign.gameSettings.couchMode || !campaign.gameSettings.ttsEnabled) return;
+  // A group check's rolls were called once, for the whole group.
+  const grouped = groupedPendingIds(turnId);
   const waiting = listPendingForTurn(turnId).filter((pending) =>
-    pending.status === "pending" && pending.visibility === "public" && !called.has(pending.id));
+    pending.status === "pending" && pending.visibility === "public" && !called.has(pending.id) && !grouped.has(pending.id));
   if (!waiting.length) return;
   const sheets = listSheets(campaign.id);
   for (const pending of waiting) {

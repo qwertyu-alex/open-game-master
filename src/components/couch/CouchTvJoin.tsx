@@ -46,6 +46,22 @@ export function CouchTvJoin({ inviteCode, titled = true }: { inviteCode: string;
   );
 }
 
+// Small, in a corner of the introductions: the room can still join while
+// the TV talks, and is told when choosing opens.
+export function CouchTvJoinCorner({ inviteCode, note }: { inviteCode: string; note: string }) {
+  const joinUrl = useJoinUrl(inviteCode);
+  return (
+    <aside className="couch-tv-join-corner" aria-label="Join on your phone">
+      <TvQr url={joinUrl} />
+      <span className="grid gap-1">
+        <span className="couch-label">Join on your phone</span>
+        {inviteCode ? <span className="couch-tv-join-corner-code">{inviteCode}</span> : null}
+        <span className="couch-tv-join-corner-note">{note}</span>
+      </span>
+    </aside>
+  );
+}
+
 // Ask the server for its public address so scanning works even when the TV
 // opened localhost and the phone is using mobile data.
 function useJoinUrl(inviteCode: string): string {

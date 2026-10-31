@@ -149,6 +149,30 @@ html[data-theme="light"] .couch-phone {
 }
 @keyframes couch-pulse { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
 
+/* The GM at work (gmAtWork in couch-logic.ts): the screen's edge breathes,
+   on the TV over the dimmed scene and on every phone, so the room can see
+   from anywhere that it is waiting on the GM and not on itself. Under the
+   dice and the roll sheet; it never takes a touch. */
+.couch-gm-edge {
+  --edge: max(2px, 0.18vw);
+  --glow: max(28px, 3vw);
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 var(--edge) color-mix(in srgb, var(--couch-accent) 60%, transparent),
+    inset 0 0 var(--glow) calc(var(--glow) / 8) color-mix(in srgb, var(--couch-accent) 22%, transparent);
+  animation: couch-fade-in 600ms ease both, couch-gm-breathe 2.6s ease-in-out 600ms infinite;
+}
+@keyframes couch-gm-breathe {
+  50% {
+    box-shadow:
+      inset 0 0 0 calc(var(--edge) / 2) color-mix(in srgb, var(--couch-accent) 22%, transparent),
+      inset 0 0 calc(var(--glow) / 2) 0 color-mix(in srgb, var(--couch-accent) 6%, transparent);
+  }
+}
+
 /* ---- the TV ---- */
 
 .couch-tv {
@@ -212,6 +236,38 @@ html[data-theme="light"] .couch-phone {
   visibility: visible;
   transition: opacity 900ms ease 200ms, transform 900ms cubic-bezier(0.2, 0.8, 0.2, 1) 200ms, visibility 0s;
 }
+/* An item a crew member used (item-show-logic.ts), in the find's column:
+   the object alone, still and whole in the top of the square, its name
+   under it in TV type. A fight hides the column, and so its name. */
+.couch-tv-insert[data-item] .couch-tv-art img {
+  inset: 7% 14% 36%;
+  width: 72%;
+  height: 57%;
+  object-fit: contain;
+  filter: drop-shadow(0 1.5vh 3vh rgba(0, 0, 0, 0.8));
+}
+.couch-tv-insert[data-item] .couch-tv-art img[data-loaded] { animation: couch-item-in 900ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes couch-item-in { from { opacity: 0; transform: translateY(2vh) scale(0.94); } to { opacity: 1; transform: none; } }
+.couch-tv-item {
+  position: absolute;
+  top: calc(var(--insert-w) * 0.64);
+  right: 0;
+  width: var(--insert-w);
+  display: grid;
+  justify-items: center;
+  gap: 0.6vh;
+  padding: 0 2vw;
+  text-align: center;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.95), 0 0 3px #000;
+  opacity: 0;
+  transform: translateY(1vh);
+  transition: opacity 600ms ease, transform 600ms ease;
+}
+.couch-tv-item[data-open] { opacity: 1; transform: none; transition-delay: 500ms; }
+.couch-tv-item strong { font-size: clamp(1.4rem, 2.2vw, 3rem); font-weight: 650; line-height: 1.15; text-wrap: balance; }
+.couch-tv-item span { font-size: clamp(1rem, 1.4vw, 1.9rem); color: rgba(225, 238, 230, 0.86); }
+.couch-tv-stage[data-fight] .couch-tv-item { display: none; }
+
 .couch-tv-scrim {
   position: absolute;
   inset: 0;
@@ -232,7 +288,46 @@ html[data-theme="light"] .couch-phone {
 }
 .couch-tv-title { display: grid; gap: 0.6vh; max-width: 45vw; }
 .couch-tv-title strong { font-size: max(1rem, 1.25vw); font-weight: 600; letter-spacing: 0.04em; }
-.couch-tv-gm { display: flex; align-items: center; gap: 0.6vw; font-size: max(0.95rem, 1.1vw); color: rgba(225, 238, 230, 0.8); }
+/* What the crew must do now (CouchTv.tsx CouchTvObjective): a small line in
+   the top-right corner, a reminder rather than a headline. */
+.couch-tv-objective {
+  display: grid;
+  justify-items: end;
+  gap: 0.2vh;
+  max-width: min(26rem, 24vw);
+  padding: 0.5vh 0.7vw;
+  border-radius: 0.5rem;
+  background: rgba(4, 8, 10, 0.6);
+  text-align: right;
+  animation: couch-fade-in 600ms ease both;
+}
+.couch-tv-objective .couch-label { font-size: max(0.65rem, 0.7vw); }
+.couch-tv-objective-text { font-size: max(0.85rem, 0.95vw); font-weight: 500; line-height: 1.25; opacity: 0.85; text-wrap: balance; }
+/* Everything the room watches, dimmed while the GM works (CouchTv.tsx). */
+.couch-tv-stage { position: absolute; inset: 0; transition: filter 700ms ease; }
+.couch-tv-stage[data-gm-busy] { filter: brightness(0.42) saturate(0.6); }
+/* What the GM is doing, a pill at the top centre over the dimmed scene. */
+.couch-tv-gm-slot {
+  position: absolute;
+  top: max(2.5vh, env(safe-area-inset-top));
+  left: 50%;
+  z-index: 9;
+  transform: translateX(-50%);
+}
+.couch-tv-gm {
+  display: flex;
+  align-items: center;
+  gap: 0.6vw;
+  padding: 0.8vh 1.3vw;
+  border: 1px solid color-mix(in srgb, var(--couch-accent) 40%, transparent);
+  border-radius: 999px;
+  background: rgba(6, 8, 10, 0.82);
+  color: var(--couch-accent);
+  font-size: max(1rem, 1.25vw);
+  font-weight: 600;
+  white-space: nowrap;
+  animation: couch-fade-in 600ms ease both;
+}
 .couch-tv .couch-pulse { width: max(8px, 0.6vw); height: max(8px, 0.6vw); }
 .couch-tv-side { display: grid; justify-items: end; gap: 2.2vh; min-width: 0; }
 .couch-tv-waiting { display: grid; justify-items: end; gap: 0.6vh; text-align: right; }
@@ -331,12 +426,27 @@ html[data-theme="light"] .couch-phone {
 }
 .couch-tv-member { display: flex; flex: 0 1 22vw; align-items: center; gap: 0.9vw; min-width: 0; }
 .couch-tv-member .couch-face { --face: max(3.4rem, 4.6vw); border-color: rgba(255, 255, 255, 0.18); }
-.couch-tv-member[data-waiting] .couch-face { box-shadow: 0 0 0 3px var(--couch-accent); }
+/* Whose turn it is: the face ringed and glowing, the name lit and marked,
+   readable from the couch. A crew member off scene who is asked is never
+   left dimmed. */
+.couch-tv-member[data-waiting] .couch-face { box-shadow: 0 0 0 3px var(--couch-accent), 0 0 2.2vw color-mix(in srgb, var(--couch-accent) 55%, transparent); }
+.couch-tv-member[data-waiting] { opacity: 1; }
+.couch-tv-member[data-waiting] .couch-tv-member-name { color: var(--couch-accent); }
+.couch-tv-member[data-waiting]:not([data-fight-turn]) .couch-tv-member-name::after { content: " · your turn"; font-weight: 600; }
 .couch-tv-member[data-down] .couch-face { filter: grayscale(1) brightness(0.6); }
 .couch-tv-member-text { display: grid; flex: 1 1 auto; gap: 0.5vh; min-width: 0; }
 .couch-tv-member-name { overflow: hidden; font-size: max(1.05rem, 1.35vw); font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .couch-tv-member-role { overflow: hidden; font-size: max(0.85rem, 0.95vw); color: rgba(225, 238, 230, 0.72); text-overflow: ellipsis; white-space: nowrap; }
 .couch-tv-member .couch-hp { height: max(6px, 0.5vw); background: rgba(255, 255, 255, 0.14); }
+/* Dead, not down: the card shrinks to a dark face over the word, at the end
+   of the strip, so the living keep the room until the player plays on as
+   someone else. The death card has already named them; the name stays for
+   screen readers. */
+.couch-tv-member[data-dead] { flex: 0 0 auto; flex-direction: column; gap: 0.4vh; order: 1; }
+.couch-tv-member[data-dead] .couch-face { --face: max(2.6rem, 3.2vw); filter: grayscale(1) brightness(0.4); }
+.couch-tv-member[data-dead] .couch-tv-member-text { justify-items: center; gap: 0; }
+.couch-tv-member[data-dead] .couch-tv-member-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.couch-tv-member-dead { font-size: max(0.75rem, 0.8vw); font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--couch-danger); }
 
 /* A roll, big enough to read from the couch. */
 .couch-tv-roll {
@@ -356,6 +466,30 @@ html[data-theme="light"] .couch-phone {
   animation: couch-roll-in 420ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
 }
 @keyframes couch-roll-in { from { opacity: 0; transform: translate(-50%, -1.5vh) scale(0.96); } to { opacity: 1; transform: translateX(-50%); } }
+/* The weapon swung (CouchRolls.tsx), at the card's left edge beside the
+   words and the number, lit by a hit and dimmed by a miss. */
+.couch-tv-roll[data-item] { width: min(50rem, 88vw); padding-left: calc(2.6vw + clamp(6rem, 9vw, 10rem)); }
+.couch-tv-roll-item {
+  position: absolute;
+  top: 50%;
+  left: 1.6vw;
+  width: clamp(6rem, 9vw, 10rem);
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid rgba(225, 238, 230, 0.18);
+  border-radius: 14px;
+  background: #000;
+  transform: translateY(-50%);
+  transition: border-color 400ms ease, box-shadow 400ms ease, filter 400ms ease;
+}
+.couch-tv-roll-item img { width: 100%; height: 100%; object-fit: contain; }
+.couch-tv-roll-item[data-good] { border-color: var(--couch-accent); box-shadow: 0 0 2.4vw rgba(143, 224, 181, 0.45); }
+.couch-tv-roll-item[data-bad] { filter: grayscale(0.85) brightness(0.6); animation: couch-item-miss 420ms ease both; }
+@keyframes couch-item-miss {
+  0%, 100% { transform: translateY(-50%); }
+  25% { transform: translate(-0.5vw, -50%); }
+  75% { transform: translate(0.5vw, -50%); }
+}
 .couch-tv-roll-lead { font-size: max(1.1rem, 1.5vw); color: rgba(225, 238, 230, 0.86); }
 .couch-tv-roll-total { font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: max(3rem, 5.5vw); font-weight: 700; line-height: 1; }
 .couch-tv-roll-verdict { font-size: max(1.05rem, 1.45vw); font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; }
@@ -381,7 +515,7 @@ html[data-theme="light"] .couch-phone {
 }
 @keyframes couch-die-settle { from { transform: scale(1.12); } to { transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) {
-  .couch-tv-roll, .couch-tv-roll .couch-die { animation: none !important; }
+  .couch-tv-roll, .couch-tv-roll .couch-die, .couch-tv-roll-item, .couch-tv-insert[data-item] img { animation: none !important; }
   .couch-tv-controls { transition: none; }
 }
 
@@ -398,20 +532,20 @@ html[data-theme="light"] .couch-phone {
   z-index: 20;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.35rem;
   max-width: calc(100% - 1.5rem);
   transition: opacity 400ms ease;
 }
 .couch-tv-control {
   display: inline-flex;
   align-items: center;
-  min-height: 44px;
-  padding: 0.5rem 0.7rem;
+  min-height: 32px;
+  padding: 0.3rem 0.55rem;
   border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 10px;
+  border-radius: 8px;
   background: rgba(0, 0, 0, 0.8);
   color: #e8eeea;
-  font-size: 0.8rem;
+  font-size: 0.7rem;
 }
 .couch-tv-control:hover { background: #141b1f; }
 .couch-tv-join-overlay { position: fixed; inset: 0; z-index: 70; background: rgba(0, 0, 0, 0.8); }
@@ -519,6 +653,104 @@ html[data-theme="light"] .couch-phone {
 .couch-tv-seat-claim { color: rgba(225, 238, 230, 0.8); }
 .couch-tv-begin { display: grid; justify-items: end; gap: 1vh; text-align: right; }
 .couch-tv-begin .couch-btn { min-height: max(56px, 6vh); padding: 0 2.4vw; font-size: max(1.15rem, 1.5vw); }
+.couch-tv-lobby-pick { font-size: max(1.5rem, 2.4vw); font-weight: 650; color: var(--couch-accent); }
+
+/* The introductions (CouchTvIntro.tsx): the briefing over the cover, then
+   each crew member, portrait left and who they are right, read from the
+   couch. The crew runs along the foot, the join code sits in a corner. */
+.couch-tv-intro {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 3vh;
+  /* Room at the foot for the host buttons, which hide while nobody moves the mouse. */
+  padding: max(5vh, env(safe-area-inset-top)) 5vw max(4vh + 44px, env(safe-area-inset-bottom));
+}
+.couch-tv-intro-briefing {
+  display: flex;
+  min-height: 0;
+  max-width: 64vw;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2.4vh;
+  animation: couch-intro-in 1.2s ease both;
+}
+.couch-tv-intro-brief {
+  max-width: 58ch;
+  font-size: max(1.15rem, 1.55vw);
+  line-height: 1.55;
+  color: rgba(232, 242, 236, 0.86);
+  white-space: pre-line;
+}
+.couch-tv-intro-crew {
+  display: grid;
+  min-height: 0;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.25fr);
+  align-items: center;
+  gap: 4vw;
+  padding-right: 18vw;
+  animation: couch-intro-in 1s ease both;
+}
+.couch-tv-intro-portrait {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  max-height: 72vh;
+  aspect-ratio: 1;
+  justify-self: end;
+  border: 1px solid var(--couch-line-strong);
+  border-radius: 22px;
+  background: rgba(6, 8, 10, 0.7);
+  box-shadow: 0 2vh 6vh rgba(0, 0, 0, 0.55);
+}
+.couch-tv-intro-portrait img { width: 100%; height: 100%; object-fit: cover; animation: couch-fade-in 1.2s ease both, couch-intro-close-in 40s ease-out both; }
+.couch-tv-intro-initial { display: grid; width: 100%; height: 100%; place-items: center; font-size: 14vh; font-weight: 700; color: var(--couch-accent); }
+.couch-tv-intro-painting { position: absolute; inset: auto 0 0; padding: 1.4vh 1vw; background: rgba(0, 0, 0, 0.6); font-size: max(0.95rem, 1.05vw); text-align: center; color: rgba(225, 238, 230, 0.8); }
+.couch-tv-intro-who { display: grid; min-width: 0; align-content: center; gap: 1.6vh; }
+.couch-tv-intro-name { font-size: clamp(2.4rem, 4.6vw, 6rem); font-weight: 700; line-height: 1.02; letter-spacing: -0.01em; text-wrap: balance; }
+.couch-tv-intro-role { font-size: max(1.2rem, 1.7vw); color: var(--couch-accent); text-wrap: balance; }
+.couch-tv-intro-story { max-width: 52ch; font-size: max(1.1rem, 1.45vw); line-height: 1.5; color: rgba(232, 242, 236, 0.88); }
+.couch-tv-intro-facts { display: grid; gap: 0.9vh; font-size: max(1rem, 1.25vw); line-height: 1.4; }
+.couch-tv-intro-facts > div { display: grid; grid-template-columns: 7.5em 1fr; gap: 1vw; }
+.couch-tv-intro-facts dt { color: var(--couch-accent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.8em; padding-top: 0.2em; }
+.couch-tv-intro-facts dd { color: rgba(232, 242, 236, 0.86); }
+.couch-tv-intro-ties { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.2vh 2vw; padding-top: 1vh; border-top: 1px solid rgba(255, 255, 255, 0.12); }
+.couch-tv-intro-ties li { display: flex; align-items: center; gap: 0.8vw; min-width: 0; }
+.couch-tv-intro-ties .couch-face { --face: max(2.6rem, 3.2vw); flex: none; }
+.couch-tv-intro-ties li > span { display: grid; min-width: 0; gap: 0.2vh; }
+.couch-tv-intro-tie-name { font-size: max(0.95rem, 1.05vw); font-weight: 650; }
+.couch-tv-intro-tie-line { font-size: max(0.85rem, 0.95vw); line-height: 1.35; color: rgba(225, 238, 230, 0.75); }
+.couch-tv-intro-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 2vw; }
+.couch-tv-intro-strip li { display: flex; align-items: center; gap: 0.7vw; transition: opacity 600ms ease; }
+.couch-tv-intro-strip .couch-face { --face: max(2.8rem, 3.6vw); }
+.couch-tv-intro-strip-name { font-size: max(0.95rem, 1.1vw); font-weight: 600; }
+.couch-tv-intro-strip li[data-state="next"] { opacity: 0.45; }
+.couch-tv-intro-strip li[data-state="met"] { opacity: 0.75; }
+.couch-tv-intro-strip li[data-state="now"] .couch-face { box-shadow: 0 0 0 3px var(--couch-accent); }
+.couch-tv-intro-strip li[data-state="now"] .couch-tv-intro-strip-name { color: var(--couch-accent); }
+.couch-tv-join-corner {
+  position: absolute;
+  top: max(4vh, env(safe-area-inset-top));
+  right: 3vw;
+  display: grid;
+  width: min(16vw, 15rem);
+  justify-items: center;
+  gap: 1.2vh;
+  padding: 1.2vw;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 16px;
+  background: rgba(6, 8, 10, 0.72);
+  text-align: center;
+}
+.couch-tv-join-corner .couch-tv-qr { width: 100%; height: auto; aspect-ratio: 1; padding: 0.5vw; border-radius: 10px; }
+.couch-tv-join-corner-code { font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: max(1.2rem, 1.6vw); font-weight: 650; letter-spacing: 0.16em; }
+.couch-tv-join-corner-note { font-size: max(0.8rem, 0.85vw); color: rgba(225, 238, 230, 0.72); }
+/* The shell's own controls hold the bottom left; these sit opposite. */
+.couch-tv-intro-controls { left: auto; right: max(0.75rem, env(safe-area-inset-right)); }
+@keyframes couch-intro-in { from { opacity: 0; transform: translateY(1.2vh); } to { opacity: 1; transform: none; } }
+@keyframes couch-intro-close-in { from { transform: scale(1.02); } to { transform: scale(1.12); } }
+
 .couch-tv-forging { display: flex; align-items: center; gap: 1vw; font-size: max(1.2rem, 1.7vw); color: rgba(225, 238, 230, 0.85); }
 
 @media (max-aspect-ratio: 1/1) {
@@ -526,12 +758,19 @@ html[data-theme="light"] .couch-phone {
   .couch-tv-pictures > .couch-tv-art { transition-property: top; }
   .couch-tv-pictures[data-split] > .couch-tv-art { top: 45vh; right: 0; }
   .couch-tv-insert { width: 100vw; height: 45vh; aspect-ratio: auto; border-left: 0; mask-image: none; }
+  .couch-tv-item { top: auto; bottom: calc(55vh + 1vh); width: 100vw; }
   .couch-tv-lobby { grid-template-columns: 1fr; grid-template-rows: auto auto auto; overflow-y: auto; }
   .couch-tv-qr { width: 60vw; height: 60vw; }
   .couch-tv-lobby-foot { flex-direction: column; align-items: stretch; }
   .couch-tv-seat { flex-basis: auto; }
   .couch-tv-crew { flex-wrap: wrap; }
   .couch-tv-member { flex-basis: 44vw; }
+  .couch-tv-intro { overflow-y: auto; }
+  .couch-tv-intro-briefing { max-width: none; }
+  .couch-tv-intro-crew { grid-template-columns: 1fr; padding-right: 0; }
+  .couch-tv-intro-portrait { width: min(60vw, 40vh); justify-self: center; }
+  .couch-tv-intro-ties { grid-template-columns: 1fr; }
+  .couch-tv-join-corner { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -542,8 +781,12 @@ html[data-theme="light"] .couch-phone {
   .couch-tv-insert[data-open] { transition: none; transform: none; }
   .couch-tv-subs p,
   .couch-tv-roll,
+  .couch-tv-gm,
+  .couch-gm-edge,
   .couch-pulse { animation: none; }
+  .couch-tv-stage { transition: none; }
 }
+html[data-effects="low"] .couch-gm-edge { animation: none; }
 html[data-effects="low"] .couch-tv-art img,
 html[data-effects="low"] .couch-tv-art img[data-loaded] { animation: none; opacity: 1; }
 html[data-effects="low"] .couch-tv-pictures > .couch-tv-art,
@@ -596,6 +839,68 @@ html[data-effects="low"] .couch-tv-insert[data-open] { transition: none; transfo
 .couch-tv-call-wait { display: flex; align-items: center; gap: 0.7vw; font-size: max(0.95rem, 1.15vw); color: rgba(225, 238, 230, 0.82); }
 .couch-tv-call-card .couch-btn { justify-self: start; min-height: max(48px, 5vh); font-size: max(1rem, 1.1vw); }
 
+/* A group check (CouchTvGroupCheck.tsx): one card, a place per crew member
+   that fills as their phone throws, and the verdict once the last is in. */
+.couch-tv-group {
+  position: absolute;
+  top: 7vh;
+  left: 50%;
+  z-index: 12;
+  display: grid;
+  justify-items: center;
+  gap: 1.3vh;
+  width: min(80rem, 92vw);
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 2.2vh 2.4vw;
+  border: 1px solid rgba(143, 224, 181, 0.4);
+  border-radius: 18px;
+  /* Nearly opaque: the subtitles run behind it and must not be read through it. */
+  background: rgba(5, 8, 10, 0.96);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  text-align: center;
+  transform: translateX(-50%);
+  animation: couch-roll-in 420ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+.couch-tv-group-what { font-size: max(1.6rem, 2.6vw); font-weight: 700; line-height: 1.1; color: var(--couch-accent); }
+.couch-tv-group .couch-tv-call-why { max-width: 56ch; }
+.couch-tv-group-crew { display: flex; flex-wrap: wrap; justify-content: center; gap: 1.2vw; width: 100%; }
+.couch-tv-group-member {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 0.6vh;
+  flex: 0 1 13vw;
+  min-width: 9rem;
+  padding: 1.6vh 1vw;
+  border: 1px solid rgba(225, 238, 230, 0.18);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  transition: border-color 300ms ease, background-color 300ms ease;
+}
+.couch-tv-group-member .couch-face { --face: max(3.4rem, 4.6vw); }
+.couch-tv-group-member strong { max-width: 100%; overflow: hidden; font-size: max(1rem, 1.3vw); text-overflow: ellipsis; white-space: nowrap; }
+.couch-tv-group-member[data-state="pass"] { border-color: var(--couch-accent); background: rgba(143, 224, 181, 0.08); animation: couch-die-settle 260ms ease-out both; }
+.couch-tv-group-member[data-state="fail"] { border-color: rgba(255, 138, 122, 0.6); background: rgba(255, 138, 122, 0.06); animation: couch-die-settle 260ms ease-out both; }
+.couch-tv-group-member[data-state="fail"] .couch-face { filter: grayscale(0.7) brightness(0.7); }
+.couch-tv-group-member[data-decider] { box-shadow: 0 0 2vw rgba(242, 196, 107, 0.45); border-color: #f2c46b; }
+.couch-tv-group-wait { display: flex; align-items: center; gap: 0.5vw; min-height: max(3rem, 4.4vw); font-size: max(0.95rem, 1.1vw); color: rgba(225, 238, 230, 0.75); }
+.couch-tv-group-total { font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: max(2.2rem, 3.4vw); font-weight: 700; line-height: 1.1; }
+.couch-tv-group-verdict { font-size: max(0.85rem, 1vw); font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; }
+.couch-tv-group-member[data-state="pass"] .couch-tv-group-verdict { color: var(--couch-accent); }
+.couch-tv-group-member[data-state="fail"] .couch-tv-group-verdict { color: var(--couch-danger); }
+.couch-tv-group-decider { font-size: max(0.8rem, 0.9vw); font-weight: 650; color: #f2c46b; }
+.couch-tv-group-result { font-size: max(1.5rem, 2.4vw); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.couch-tv-group-result[data-good] { color: var(--couch-accent); }
+.couch-tv-group-result[data-bad] { color: var(--couch-danger); }
+.couch-tv-group .couch-btn { min-height: max(48px, 5vh); font-size: max(1rem, 1.1vw); }
+/* The 3D dice land in the band under the card while it fills. */
+.couch-tv:has(.couch-tv-group) .couch-dice-tray { inset: 52vh 6vw 8vh; }
+@media (prefers-reduced-motion: reduce) {
+  .couch-tv-group, .couch-tv-group-member { animation: none !important; }
+}
+
 .couch-roll-sheet {
   position: fixed;
   inset: 0;
@@ -615,6 +920,7 @@ html[data-effects="low"] .couch-tv-insert[data-open] { transition: none; transfo
 .couch-roll-sheet-why { font-size: 1.05rem; line-height: 1.5; color: var(--couch-dim); overflow-wrap: anywhere; }
 .couch-roll-sheet-odds { font: 600 1.15rem/1.3 var(--font-geist-mono), ui-monospace, monospace; color: var(--couch-ink); }
 .couch-roll-sheet-edge { font-size: 0.95rem; color: var(--couch-warn); }
+.couch-roll-sheet-group { font-size: 0.95rem; font-weight: 600; color: var(--couch-accent); }
 .couch-roll-sheet-hint { font-size: 0.95rem; line-height: 1.45; color: var(--couch-dim); }
 .couch-roll-die {
   position: relative;
@@ -668,3 +974,10 @@ button.couch-roll-die:active:not(:disabled) { animation: couch-die-rattle 110ms 
   button.couch-roll-die,
   .couch-roll-die[data-busy] svg { animation: none !important; }
 }
+@media (prefers-reduced-motion: reduce) {
+  .couch-tv-intro-briefing,
+  .couch-tv-intro-crew,
+  .couch-tv-intro-portrait img { animation: none; }
+}
+/* A flaw is written to follow "flaw:", so it starts lower case; shown on its own, it gets a capital. */
+.couch-tv-intro-facts dd::first-letter { text-transform: uppercase; }

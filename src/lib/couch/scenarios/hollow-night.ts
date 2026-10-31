@@ -1,0 +1,245 @@
+import type { WrittenScenario } from "@/lib/couch/scenarios/types";
+
+// SPOILERS. The whole of a ready-made couch night: the truth, the threat,
+// every crew member's secret agenda and the hidden role. If you mean to play
+// it, stop reading here; the home screen shows its spoiler-free card
+// (src/lib/couch/scenario-cards.ts).
+
+export const HOLLOW_NIGHT: WrittenScenario = {
+  id: "hollow-night",
+  reply: {
+    scenario: {
+      title: "Hollow Night",
+      logline: "On a farming moon's harvest festival, everyone wears a carved mask, and by midnight some of the masks will not come off.",
+      briefing:
+        "Furrow Colony, Cassia Four. Three hundred farmers, twelve greenhouse domes and ten thousand hectares of lanterngourds, the orange crop that pays for everything. Tonight is Hollow Night, the colony's old Earth harvest festival: carved gourd lanterns on every doorstep, masks, a bonfire, and a parade out to the far fields. You are the night crew working the festival. Director Crane has asked you to keep things safe and cheerful, and to find Tobias Fenn, nine years old, dressed as a ghost, who went trick-or-treating at the far domes and has not come home. First frost is forecast for midnight. The combines roll at dawn.",
+      setting:
+        "Furrow, an agricultural colony of three hundred on the terraformed moon Cassia Four, 2179. Owned by Verdance Agricultural, which sells every gourd it grows.",
+      truth:
+        "Verdance spliced the lanterngourd with a native fungus to triple its yield. The fungus is a parasite: spores released when a ripe gourd is carved root in the sinuses, and over weeks the host's face stiffens into an orange rind while the head hollows and fills with a soft fungal light. On the first frost, hosts walk into the fields and plant themselves, and the gourds that grow from them yield best of all. Verdance learned this on the lost trial colony Furrow-2 and kept farming it. Director Crane knows and carved the first lantern of the festival himself. A third of the colony is infected. Their festival masks are their faces.",
+      threat:
+        "The rind: a sweet, rotting-pumpkin smell, orange dust on the lips, people who never take their mask off, faces stiff as carved peel, candlelight glowing behind their eyes. Late hosts are hollow, lit from inside, silent and patient, and burst into spore clouds when struck. Fire and the colony's defoliant kill it; scrubbing the spores off within the hour stops a new infection; bright frost slows the hosts but calls them to the fields.",
+      acts: [
+        {
+          title: "Hollow Night",
+          goal: "Work the festival, keep the peace, and find Tobias Fenn.",
+          setPieces: [
+            "The masked parade between the domes, hundreds of carved lanterns grinning in the dark.",
+            "A lantern on a doorstep with a child's milk tooth in the pulp.",
+            "A reveller who laughs as the crew try to pull off a mask that is not a mask.",
+          ],
+          escalation: "At midnight the bonfire gutters, the frost comes down, and the masked walk silently out toward the fields.",
+          clock: "First frost at midnight; the parade reaches the far fields at half past.",
+          twist: "Old Jory is no drunk fool: he is the last survivor of Furrow-2, he has seen this exact festival before, and the man who carved the first lantern there was Abel Crane.",
+        },
+        {
+          title: "Trick",
+          goal: "Learn what the gourds are, who is infected, and what Verdance knows.",
+          setPieces: [
+            "The seed lab and the Furrow-2 file: photographs of fields full of standing figures.",
+            "The cold store, its racks of spoiled gourds each holding the shape of a face.",
+            "A decontamination shower and a test none of the crew want to take.",
+          ],
+          escalation: "One of the crew finds orange dust on their own lips.",
+          clock: "The combines are scheduled to harvest the far fields at dawn.",
+          twist: "The Furrow-2 file ends with a Verdance memo listing Furrow's three hundred colonists as seed stock. The grain freighter's manifest has no berths for anybody: nobody leaves Cassia Four.",
+        },
+        {
+          title: "Treat",
+          goal: "Burn the fields, save who can be saved, or get off Furrow before the harvest.",
+          setPieces: [
+            "The far fields at night: thousands of lit gourds and the hollow standing still among them.",
+            "The combine harvesters rolling out of the barn in the dark.",
+            "The Verdance grain freighter descending, asking everyone politely to stay indoors.",
+          ],
+          escalation: "The hollow turn toward the domes, and the freighter's crew come down to collect the harvest.",
+          clock: "Dawn, and the freighter's departure.",
+          twist: "Tobias is still himself under the stuck sheet: he wandered out and was never planted, and a scraping can still save him before dawn. But the hollow stand round him in a ring, and the first combine is headed down that row.",
+        },
+      ],
+      cast: [
+        {
+          name: "Director Abel Crane",
+          role: "Colony director",
+          look: "Gaunt white man in his sixties, very tall, corn-silk white hair, a long black director's coat, straw on his boots.",
+          voice: "Soft, slow, rural American, kindly as a preacher.",
+          agenda: "A perfect harvest and a quiet night.",
+          secret: "He knows what the gourds are, and he carved the festival's first lantern.",
+        },
+        {
+          name: "Dr. Lucia Ferrante",
+          role: "Colony agronomist",
+          look: "Italian woman in her forties, black curls under a headscarf, green lab coat stained orange, gloves she never takes off.",
+          voice: "Quick, anxious, Italian accent.",
+          agenda: "Keep the yield up and her own conscience quiet.",
+          secret: "She ran the splicing, and she has been testing herself every morning.",
+        },
+        {
+          name: "Old Jory Penhallow",
+          role: "Groundskeeper and drunk",
+          look: "Wiry old white man, wild grey beard, patched oilskin, a bottle and a lantern, one glass eye.",
+          voice: "Cornish, slurred, sing-song.",
+          agenda: "Warn anyone who will listen.",
+          secret: "He is the only survivor of Furrow-2.",
+        },
+        {
+          name: "Tobias Fenn",
+          role: "Missing boy, nine",
+          look: "Small boy in a bedsheet ghost costume with two eyeholes, a carved lantern on a stick.",
+          voice: "Small, sing-song, calling from far away.",
+          agenda: "To show everyone the fields.",
+          secret: "His sheet has stuck to his face.",
+        },
+        {
+          name: "Mr. Pike",
+          role: "Verdance freighter master, on the radio",
+          look: "A pale man with slicked hair in a grey Verdance uniform, seen only on a screen.",
+          voice: "Flat, polite, mid-Atlantic.",
+          agenda: "Load the harvest and leave on schedule.",
+          secret: "His orders are to harvest the far fields whatever is standing in them.",
+        },
+        {
+          name: "Rufus Gale",
+          role: "Verdance harvest foreman, off the grain freighter",
+          look: "Big sunburnt white man in his fifties, a sealed yellow hazard suit with the hood thrown back, a respirator round his neck, a long steel hook-pole and a cattle prod.",
+          voice: "Booming, Australian, matey and cheerful.",
+          agenda: "Bring in the far fields at dawn, everything standing in them included, and leave nobody behind who saw it.",
+          secret: "He harvested Furrow-2 as well, and the freighter's refrigerated hold is fitted for people.",
+        },
+      ],
+      foes: [
+        { name: "Rind-masked reveller", what: "A colonist whose carved festival mask has become their face, candle-glow behind the eyeholes; they grab and hold without a word and puff orange spores when struck.", act: 1 },
+        { name: "Crane's field warden", what: "A loyal farmhand in oilskins and a gas mask, shotgun or cattle prod in hand, posted by the director to keep everyone out of the seed lab and the far fields.", act: 2 },
+        { name: "Rind-sick sheepdog", what: "One of the colony's sheepdogs, muzzle stiff with orange peel and eyes glowing like a lantern, hunting with its pack in silence through the gourd rows.", act: 2 },
+        { name: "Verdance picker", what: "A freighter harvest hand in a yellow hazard suit and respirator, with a flamer or a hook-pole, clearing anything that stands between the rows and the combines.", act: 3 },
+        { name: "Runaway combine", what: "A harvester the size of a house on autopilot, blade-toothed intake churning and headlights blazing; someone has to climb the ladder and pull the cut-off.", act: 3 },
+      ],
+      locations: [
+        { name: "The festival square", look: "A circle of greenhouse domes around a roaring bonfire, carved gourd lanterns on every step, masked figures dancing." },
+        { name: "The far fields", look: "Endless rows of glowing carved gourds under a frost-white sky, scarecrow-still figures standing among them." },
+        { name: "The seed lab", look: "A cramped lab of grow trays, sample jars of orange pulp and a humming refrigerator, papers pinned to every wall." },
+        { name: "The cold store", look: "A long refrigerated barn of racked gourds under blue light, frost on the floor, shapes pressed into the rinds." },
+        { name: "The combine barn", look: "A cavernous barn of enormous harvesting machines with blade-toothed intakes, hanging work lights." },
+        { name: "The landing field", look: "A floodlit pad at the edge of the fields where a huge grain freighter settles in its own dust." },
+      ],
+    },
+    styleLock:
+      "late-1970s science fiction film still, 35mm film grain, flickering candle-orange and cold frost-blue lighting, rural colony greenhouses and barns at night, carved gourd lanterns, deep shadows",
+    hiddenRole: {
+      crewMember: "Hester Vale",
+      role: "Already a host, and she knows it. The rind under her festival mask whispers that her drowned son is waiting in the gourd fields, and on the first frost she will go to him and bring others.",
+    },
+    crew: [
+      {
+        name: "Bram Okonjo",
+        gender: "Male",
+        career: "Roughneck",
+        crewRole: "Harvest-machine mechanic",
+        look: "Nigerian man in his forties, dark skin, shaved head, huge forearms, oil-black canvas overalls, a straw hat pushed back, a long-handled wrench over one shoulder.",
+        personality: "Easygoing, practical, slow to anger; flaw: in debt and ashamed of it.",
+        backstory: "He keeps Furrow's combines running and knows every blade of them. He owes the colony store more than a year's wages. Verdance pays a bonus for a full harvest.",
+        relationships: [
+          { to: "Hester Vale", line: "Has carried a torch for the constable for three years and never said so." },
+          { to: "Teodora Ilic", line: "She stitched his hand after a combine bit him." },
+          { to: "Juno Fenn", line: "Lets the kid ride in the combine cab; she is his little shadow." },
+          { to: "Lionel Ashby", line: "The man who decides if he gets his bonus." },
+        ],
+        signatureItem: "A long-handled wrench",
+        voice: "Nigerian man, forties, deep, warm and slow.",
+        agenda: [
+          "Get the combines ready for the dawn harvest: Verdance pays a bonus for a full crop, and you owe the colony store.",
+          "You saw what a combine's intake pulled out of the gourd rows. Keep it quiet until you have proof, and keep Hester out of the fields.",
+          "Burn the fields before the harvest, even if it ruins the colony and your bonus with it.",
+        ],
+      },
+      {
+        name: "Hester Vale",
+        gender: "Female",
+        career: "Officer",
+        crewRole: "Furrow's constable",
+        look: "White woman in her late thirties, auburn hair in a low knot, freckles, a tan constable's duster with a tin star, a carved wooden fox mask pushed up on her head, a stun baton.",
+        personality: "Steady, dry, quietly grieving; flaw: cannot let go.",
+        backstory: "Furrow's only constable for six years. Her son drowned in an irrigation channel two summers ago, and she has not missed a shift since. Everyone says she is doing so much better this autumn.",
+        relationships: [
+          { to: "Bram Okonjo", line: "Her friend; she knows how he feels and has never let on." },
+          { to: "Teodora Ilic", line: "The nurse who keeps trying to look at her sinuses." },
+          { to: "Juno Fenn", line: "Watches over the Fenn kids since their mother left." },
+          { to: "Lionel Ashby", line: "Does not trust the Verdance inspector an inch." },
+        ],
+        signatureItem: "A carved wooden fox mask",
+        voice: "Woman, late thirties, Scottish, low and calm.",
+        agenda: [
+          "Keep order at the festival: nobody takes their mask off in public and nobody leaves the domes before midnight.",
+          "Do not let anyone scrub, examine or unmask you, and steer the crew away from the seed lab.",
+          "Bring at least one other person into the fields with you before dawn.",
+        ],
+      },
+      {
+        name: "Teodora Ilic",
+        gender: "Female",
+        career: "Medic",
+        crewRole: "Colony nurse",
+        look: "Serbian woman in her fifties, grey-streaked black hair cut short, sharp cheekbones, a blue nurse's smock over a heavy knit cardigan, a penlight and a battered medical satchel.",
+        personality: "Brisk, sceptical, tender underneath; flaw: has to know.",
+        backstory: "The colony's nurse for ten years, and its doctor in all but name. This month she has seen a dozen sinus infections that will not clear, and an orange crust on every swab.",
+        relationships: [
+          { to: "Bram Okonjo", line: "Stitched his hand and has nagged him about it since." },
+          { to: "Hester Vale", line: "Worried about her; she has refused two check-ups." },
+          { to: "Juno Fenn", line: "Delivered her, fourteen years ago." },
+          { to: "Lionel Ashby", line: "He asked for her patient records and she said no." },
+        ],
+        signatureItem: "A battered medical satchel",
+        voice: "Serbian woman, fifties, clipped and brisk.",
+        agenda: [
+          "Find out why the infirmary has seen a dozen sinus infections this month that will not clear.",
+          "Get a sample from someone whose mask will not come off, without them knowing you took it.",
+          "Save the infected: there must be a way to scrape the rind out before it hollows them.",
+        ],
+      },
+      {
+        name: "Juno Fenn",
+        gender: "Female",
+        career: "Kid",
+        crewRole: "Fourteen-year-old farmhand, Tobias's big sister",
+        look: "Fourteen-year-old girl, brown skin and a mass of curly hair under a witch's hat, gangly, muddy boots, a patched barn coat over a homemade witch costume, a flashlight.",
+        personality: "Bold, stubborn, funny; flaw: will not wait for permission.",
+        backstory: "She and Tobias have looked after each other since their mother left the colony. She was supposed to take him trick-or-treating and let him go alone so she could see her friends.",
+        relationships: [
+          { to: "Bram Okonjo", line: "Her favourite grown-up; he lets her drive the combine." },
+          { to: "Hester Vale", line: "The constable keeps an eye on her, which is annoying." },
+          { to: "Teodora Ilic", line: "The nurse who delivered her and still calls her little bean." },
+          { to: "Lionel Ashby", line: "Thinks he is creepy." },
+        ],
+        signatureItem: "A big rubber flashlight",
+        voice: "Girl, fourteen, Texan, fast and fierce.",
+        agenda: [
+          "Find your little brother Tobias, who went trick-or-treating at the far domes and has not come home.",
+          "Tobias's lantern is still lit out in the fields, and you have heard him calling. Get out there, even if Hester forbids it.",
+          "Bring Tobias home, whatever he has become.",
+        ],
+      },
+      {
+        name: "Lionel Ashby",
+        gender: "Male",
+        career: "Company Agent",
+        crewRole: "Verdance quality inspector",
+        look: "White Englishman in his thirties, thin, neat side parting, round spectacles, an immaculate cream Verdance field jacket, a clipboard and a sample probe.",
+        personality: "Fussy, clever, cowardly; flaw: sees everything as a price.",
+        backstory: "Verdance sends him to certify the harvest each autumn. He has always found Furrow's yields remarkable and has never asked why.",
+        relationships: [
+          { to: "Bram Okonjo", line: "Decides the mechanic's bonus, and enjoys it." },
+          { to: "Hester Vale", line: "The constable who watches him like a fox watches a coop." },
+          { to: "Teodora Ilic", line: "Wants her patient records; she refused." },
+          { to: "Juno Fenn", line: "The farm girl who stares at him." },
+        ],
+        signatureItem: "A steel sample probe",
+        voice: "Englishman, thirties, precise, a little reedy.",
+        agenda: [
+          "Certify this harvest: get into the seed lab and confirm the yield figures before dawn.",
+          "The yield figures are impossible. Find the Furrow-2 file and copy it: it is worth more than your job.",
+          "Either sell the Furrow-2 file to Verdance's rivals, or make sure the grain freighter leaves with the harvest and with you aboard.",
+        ],
+      },
+    ],
+  },
+};

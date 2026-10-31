@@ -38,6 +38,7 @@ import { confirmsSwap, swapQuestion } from "@/lib/dm/concentration-confirm-logic
 import { tableAuthors } from "@/lib/db/homebrew";
 import { refuseDuringBreak } from "@/lib/dm/table-break";
 import { isSecretActionBody, secretActionResponse } from "@/lib/dm/secret-action-request";
+import { offScene, tagMessage } from "@/lib/couch/whereabouts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -124,13 +125,17 @@ export async function POST(
   // During a hold nobody may act until the lead releases. This read-modify-
   // write must stay await-free so it is atomic in Node.
   const floor = getFloor(campaignId);
+  // A couch crew member off scene (src/lib/couch/whereabouts.ts) sends their
+  // next move whenever they like: it is posted for the room, held for the
+  // GM's cut to their group, and neither takes the floor nor wakes the GM.
+  const awayFromScene = kind !== "ooc" && campaign.gameSettings.couchMode ? offScene(campaign, acting.id) : null;
   // A reaction is taken on somebody else's turn (SRD 5.1): a reaction card
   // passes the initiative floor, and the engine's canAct judges it below.
   // The same holds while a person plays the enemies' turns under a hold
   // (src/lib/dm/enemies-due.ts): that is when a Shield or an opportunity
   // attack is wanted most.
   const reactionOffTurn = intent?.card === "reaction" && combatOwnsFloor(floor);
-  if (!reactionOffTurn && !canAct(floor, user.id, kind)) {
+  if (!awayFromScene && !reactionOffTurn && !canAct(floor, user.id, kind)) {
     if (floor.mode === "hold") {
       // The enemies hold the floor only while some are still owed a turn
       // (src/lib/dm/enemies-due.ts); a hold over a fight with none due is
@@ -188,7 +193,7 @@ export async function POST(
     userId: user.id,
     selectedId: selected.id,
     characterId: parsed.data.characterId,
-    initiativeId: kind !== "ooc" && combatOwnsFloor(floor) ? currentPcId(getActiveEncounter(campaignId)) : undefined,
+    initiativeId: kind !== "ooc" && !awayFromScene && combatOwnsFloor(floor) ? currentPcId(getActiveEncounter(campaignId)) : undefined,
     reaction: intent?.card === "reaction",
     multiCharacter: campaign.gameSettings.multiCharacter,
   });
@@ -241,7 +246,7 @@ export async function POST(
     return Response.json({ resolved: true });
   }
   let spotlightStillWaiting = false;
-  if (kind !== "ooc" && floor.mode === "spotlight") {
+  if (kind !== "ooc" && !awayFromScene && floor.mode === "spotlight") {
     const responded =
       floor.userIds.includes(user.id) && !floor.respondedUserIds.includes(user.id)
         ? [...floor.respondedUserIds, user.id]
@@ -306,6 +311,12 @@ export async function POST(
     intent,
   });
   publishWithSeq(campaignId, seq, "message_added", { message });
+  if (campaign.gameSettings.couchMode && kind !== "ooc") {
+    tagMessage(campaign, message.id, sheet.id);
+    if (awayFromScene) {
+      return Response.json({ messageId: message.id, heldForScene: awayFromScene.placeName }, { status: 202 });
+    }
+  }
 
   // OOC table talk does not wake the DM; everything else requests a
   // narration turn, except while a spotlight still waits on other players:

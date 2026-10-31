@@ -121,7 +121,22 @@ export const EVENT_AUDIENCE: Readonly<Record<string, Audience>> = {
   table_pass: TABLE,
   couch_answers: TABLE,
   couch_roll: TABLE,
+  // A group check's card (src/lib/couch/group-check.ts): who threw and what
+  // they made, as each public roll in it already shows every seat.
+  couch_group: TABLE,
+  // A truce offered in a couch fight (src/lib/couch/truce.ts): who offered
+  // it and who answered how, which the TV reads aloud anyway.
+  couch_truce: TABLE,
+  couch_objective: TABLE,
+  // An item used in the open (src/lib/couch/item-show.ts): never a whisper's.
+  couch_item: TABLE,
   couch_navigation: TABLE,
+  // A night's map under the fog (src/lib/couch/site.ts): the players' view,
+  // what the TV shows anyway.
+  couch_site: TABLE,
+  // Which group of a split crew a message belongs to
+  // (src/lib/couch/whereabouts.ts): only what the room already reads.
+  couch_scene_tag: TABLE,
   // A disputed ruling and its outcome: who objected and to what is the
   // table's business, and the vote is the table's.
   ruling_disputed: TABLE,
