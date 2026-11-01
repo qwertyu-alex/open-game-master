@@ -5,6 +5,7 @@ import { textKey, words } from "@/lib/language/text-logic";
 import { normalizeGameSettings, type GameSettings } from "@/lib/schemas/game-settings";
 import type { CreateSheetInput, SheetAgenda } from "@/lib/schemas/sheet";
 import { OFF_LIMITS_MAX, SEED_MAX } from "@/lib/couch/limits";
+import { readBeats, type ForgedBeat } from "@/lib/couch/tension-logic";
 
 // The scenario forge (docs/couch-mode-spec.md 2.1): one model call writes a
 // whole couch-night one-shot, the scenario the GM keeps secret and the crew
@@ -104,6 +105,9 @@ export const forgeReplySchema = record({
         escalation: str(300),
         clock: str(200),
         twist: str(300),
+        // The act's deck of scares (src/lib/couch/tension-logic.ts): the GM
+        // plays the next one when the tension clock calls for it.
+        beats: z.unknown().optional().transform(readBeats),
       }),
     ),
     cast: list(
@@ -163,8 +167,8 @@ export type ForgedCrew = {
   hiddenRole: string;
 };
 
-// twist is optional: a night forged before acts had one has none.
-export type ForgedAct = { title: string; goal: string; setPieces: string[]; escalation: string; clock: string; twist?: string };
+// twist and beats are optional: a night forged before acts had them has none.
+export type ForgedAct = { title: string; goal: string; setPieces: string[]; escalation: string; clock: string; twist?: string; beats?: ForgedBeat[] };
 
 // Something the crew can fight, and the act (1 to 3) it comes in.
 export type ForgedFoe = { name: string; what: string; act: number };
@@ -280,7 +284,8 @@ export function readForge(raw: string, players: number): { ok: true; forge: Forg
         setting: scenario.setting,
         truth: scenario.truth,
         threat: scenario.threat,
-        acts: acts.slice(0, 3),
+        // A deck only where the act has one, so a night without reads as before.
+        acts: acts.slice(0, 3).map(({ beats, ...act }) => (beats.length ? { ...act, beats } : act)),
         cast: scenario.cast.filter((person) => person.name).slice(0, 6),
         // An act the model left out or wrote as a word comes in act 2, the
         // middle of the night.
@@ -301,7 +306,7 @@ export function readForge(raw: string, players: number): { ok: true; forge: Forg
 // Pieces of the reply's shape, so the prompt and the schema above say the
 // same fields.
 const REPLY_SHAPE =
-  '{"scenario":{"title":string,"logline":string,"briefing":string,"setting":string,"truth":string,"threat":string,"acts":[{"title":string,"goal":string,"setPieces":[string],"escalation":string,"clock":string,"twist":string}],"cast":[{"name":string,"role":string,"look":string,"voice":string,"agenda":string,"secret":string}],"foes":[{"name":string,"what":string,"act":1|2|3}],"locations":[{"name":string,"look":string}]},"styleLock":string,"hiddenRole":{"crewMember":string,"role":string}|null,"crew":[{"name":string,"gender":"Female"|"Male"|"Nonbinary","career":string,"crewRole":string,"look":string,"personality":string,"backstory":string,"relationships":[{"to":string,"line":string}],"signatureItem":string,"voice":string,"agenda":[string,string,string]}]}';
+  '{"scenario":{"title":string,"logline":string,"briefing":string,"setting":string,"truth":string,"threat":string,"acts":[{"title":string,"goal":string,"setPieces":[string],"escalation":string,"clock":string,"twist":string,"beats":[{"kind":"sign"|"human"|"strike","what":string}]}],"cast":[{"name":string,"role":string,"look":string,"voice":string,"agenda":string,"secret":string}],"foes":[{"name":string,"what":string,"act":1|2|3}],"locations":[{"name":string,"look":string}]},"styleLock":string,"hiddenRole":{"crewMember":string,"role":string}|null,"crew":[{"name":string,"gender":"Female"|"Male"|"Nonbinary","career":string,"crewRole":string,"look":string,"personality":string,"backstory":string,"relationships":[{"to":string,"line":string}],"signatureItem":string,"voice":string,"agenda":[string,string,string]}]}';
 
 // A reply this size holds the scenario and every crew member with room to
 // spare; a model that runs past it is cut off rather than left to write
@@ -315,16 +320,16 @@ export function forgeSystemPrompt(players: number, offLimits: string): string {
   return [
     `You write a cinematic sci-fi horror one-shot for one game night: one TV, ${players} ${players === 1 ? "player" : "players"} on their phones, two to three hours, three acts. Write the scenario AND the player crew, in the spirit of a late-1970s blue-collar space horror film: a working crew far from help, a Company that owns the ship and everyone on it, and something aboard that should not be.`,
     "Rules:",
-    "- Everything original. The threat is a creature or phenomenon of your own design, with its own anatomy, life cycle and tell-tale signs; never one from a film, game or book. Name no real franchise, company or trademark: the owner is \"the Company\" or a corporate name you invent, and ships and places get names of your own.",
+    "- Any universe is welcome. If the table's seed names an existing film, game, book or universe, build on it with its own creatures, companies, ships, places and names. Otherwise invent: a threat with its own anatomy, life cycle and tell-tale signs, a Company that owns the ship, and names of your own.",
     "- Underneath, the rules are D&D 5e at level 1: the threat itself is survived by fleeing, sealing, venting, burning or outwitting it, and a straight fight with it is a mistake. But the night is action-packed: every act has a fight or a chase with something the crew CAN fight (people with their own orders, machines gone wrong, the threat's young or its victims). Scarcity of air, ammo and time drives every act, and every act has a deadline that runs out on its own.",
     `- The crew: exactly ${players}, ordinary working people. career is one of Marine, Pilot, Medic, Roughneck, Company Agent, Scientist, Officer, Kid; a different one each where you can. crewRole is a public one-liner (under 100 characters) of who they are aboard, e.g. "Colonial Marine, the ship's sergeant".`,
     "- agenda: three secret personal agendas, one per act, each one concrete sentence a player can act on at the table. They pull the crew apart: one wants to save someone, one has orders that cost the others, one hides something. In every act at least two agendas collide head-on.",
       players > 1
       ? "- hiddenRole: exactly ONE crew member has one (a synthetic who does not know or does not say, or a Company plant): {\"crewMember\": their name, \"role\": a sentence on what they are and what they are for}. Their agendas serve it without saying it. The truth and the briefing never name who it is."
       : "- hiddenRole: null (a crew of one keeps no secret from itself).",
-    "- look: the fixed, concrete picture of the person, the same in every illustration: face, age, skin, hair, build, clothes, one prop. No names in it. backstory: public, three or four sentences, what the crew knows of them. personality: two or three traits and one flaw. relationships: one short line toward each other crew member, by name (a buddy, a rival, a debt). signatureItem: one personal object they carry, named in a few words (under 60 characters, no clauses: 'a cracked blue transit token'). voice: age, accent and texture for a narrator to cast. The TV introduces each crew member aloud to the whole room before anyone chooses, from their crewRole, backstory, personality, signatureItem and relationships: nothing in those gives away an agenda or the hidden role, though a detail the room only understands later is welcome.",
+    "- look: the fixed, concrete picture of the person, the same in every illustration: face, age, skin, hair, build, clothes, one prop. No names in it. backstory: public, three or four sentences, what the crew knows of them. personality: two or three traits and one flaw. relationships: one short line toward each other crew member, by name, each naming something concrete between them that can come due tonight (a debt owed, a promise made, a life saved, a lie told, a secret shared, a grudge kept), never only a feeling (not 'thinks she is too smooth'). At least one of each crew member's ties pulls against an agenda, theirs or the other's: chasing the agenda will cost that person, and the tie says the public half. signatureItem: one personal object they carry, named in a few words (under 60 characters, no clauses: 'a cracked blue transit token'). voice: age, accent and texture for a narrator to cast. The TV introduces each crew member aloud to the whole room before anyone chooses, from their crewRole, backstory, personality, signatureItem and relationships: nothing in those gives away an agenda or the hidden role, though a detail the room only understands later is welcome.",
     "- scenario.briefing: read aloud on the TV before play, 80 to 150 words, to the crew as \"you\", ending on the order or hook that starts act 1. No secrets in it. logline: one sentence. setting: the ship, station or colony, the year, and who owns it. truth: what is really going on, the threat, and who knew (GM only). threat: what it looks like and how it behaves, in a few sentences.",
-    "- acts: exactly three, each with a short spoiler-free title for the TV, a goal the crew can act on at once (get somewhere, fix or seal something, find someone, get out), two or three set pieces, the escalation, a clock or deadline, and a twist: a reveal mid-act that turns what the crew believed or wanted (an ally lying, the rescue is the trap, the Company has written them off, there is more than one). The twist never names who holds the hidden role. Act 1 starts in motion within minutes; act 3 lands the ending.",
+    "- acts: exactly three, each with a short spoiler-free title for the TV, a goal the crew can act on at once (get somewhere, fix or seal something, find someone, get out), two or three set pieces, the escalation, a clock or deadline, and a twist: a reveal mid-act that turns what the crew believed or wanted (an ally lying, the rescue is the trap, the Company has written them off, there is more than one). The twist never names who holds the hidden role. Act 1 starts in motion within minutes; act 3 lands the ending. beats: the act's deck of four or five scares the GM plays when the crew has gone quiet, each one sentence: kind sign (dread before the monster: a sound, a trace, a body, a system failing), human (someone who wants something from the crew now, with a deadline) or strike (something comes at them); at least one of each, signs first in act 1, more strikes later.",
     "- cast: four to six NPCs, each with a look, a voice, what they want and a secret. At least two meet the crew in person and want something from them now, and at least one turns on them or dies on screen. foes: four to six things the crew can fight, each with the act (1 to 3) it comes in, at least one per act and more later: name, and what it is, how it looks and how it fights in a sentence. locations: four to six places, each with one line of what the camera sees.",
     "- styleLock: one line of art direction every picture of this story shares (film stock, era, lighting, palette, interiors), for example: " + DEFAULT_STYLE_LOCK + ".",
     ...(limits ? [`- Off limits tonight, never in the story in any form, not even implied: ${limits}`] : []),

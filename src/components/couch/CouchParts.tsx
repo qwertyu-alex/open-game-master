@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { SheetAgenda } from "@/lib/schemas/sheet";
 import { actNumeral, healthView, maskSecret } from "@/components/couch/couch-logic";
+import { STRESS_MAX } from "@/lib/couch/stress-logic";
 
 // The small pieces both couch screens share (docs/couch-mode-spec.md 2.6,
 // 2.7): a face, a health bar, and the agenda that only shows while held.
@@ -87,6 +88,21 @@ export function CouchHp({ current, max, label }: { current: number; max: number;
       style={{ "--pct": `${pct}%` } as CSSProperties}
     >
       <i />
+    </div>
+  );
+}
+
+// Stress (src/lib/couch/stress-logic.ts): ten pips under the health bar,
+// lit as it climbs, amber from 4 and red from 7, so the room sees who is
+// close to cracking. Nothing while it is 0.
+export function CouchStress({ value, label = "Stress" }: { value: number; label?: string }) {
+  if (value <= 0) return null;
+  const tone = value >= 7 ? "high" : value >= 4 ? "mid" : "low";
+  return (
+    <div className="couch-stress" data-tone={tone} role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={STRESS_MAX} aria-valuenow={value} aria-valuetext={`${value} of ${STRESS_MAX}`}>
+      {Array.from({ length: STRESS_MAX }, (_, index) => (
+        <i key={index} data-on={index < value ? "" : undefined} />
+      ))}
     </div>
   );
 }

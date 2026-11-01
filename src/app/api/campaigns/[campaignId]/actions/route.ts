@@ -39,6 +39,7 @@ import { tableAuthors } from "@/lib/db/homebrew";
 import { refuseDuringBreak } from "@/lib/dm/table-break";
 import { isSecretActionBody, secretActionResponse } from "@/lib/dm/secret-action-request";
 import { offScene, tagMessage } from "@/lib/couch/whereabouts";
+import { panickedCrewIds } from "@/lib/couch/stress";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -118,6 +119,11 @@ export async function POST(
   const held = kind === "ooc" ? null : dominatedRefusal(campaignId, acting);
   if (held) {
     return Response.json({ error: held, dominated: true }, { status: 409 });
+  }
+  // A couch crew member whose panic takes their move sits it out
+  // (src/lib/couch/stress.ts). Table talk is free.
+  if (kind !== "ooc" && campaign.gameSettings.couchMode && panickedCrewIds(campaign).has(acting.id)) {
+    return Response.json({ error: `${acting.name} is panicking and sits out this move.`, panicking: true }, { status: 409 });
   }
   const intent = kind === "do" ? parseMessageIntent(parsed.data.intent) : null;
   // Floor control: during a spotlight only the named players may act (ooc is

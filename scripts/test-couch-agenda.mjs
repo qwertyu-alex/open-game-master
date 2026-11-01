@@ -15,6 +15,9 @@
 //   table reads;
 //   the NIGHT PACE line hurries an act that has run past its share of the
 //   evening, and asks for an objective when the act has none;
+//   an act break's recap is read as a few short points, however the GM or
+//   the host wrote it, and the earlier acts' recaps follow the GM as the
+//   story so far;
 //   the couch enemy menu is sci-fi, and fits a level-1 crew's budget;
 //   the lobby's gate exempts the TV and asks only for crew cards taken.
 import assert from "node:assert/strict";
@@ -31,6 +34,7 @@ const { tablePayload, payloadForViewer, viewerFor } = await import("../src/lib/t
 const { buildDmSystem, buildGameStateBlock } = await import("../src/lib/dm/prompt.ts");
 const { COUCH_RULES, couchAgendaBlock } = await import("../src/lib/couch/prompt-logic.ts");
 const { couchPacingLine, pacePhase, readObjective } = await import("../src/lib/couch/pacing-logic.ts");
+const { actBreakMs, actBreakSpeech, actRollCall, readActPoints, readActRecap, readActRecaps, RECAP_POINT_MAX, storySoFarLine } = await import("../src/lib/couch/act-break-logic.ts");
 const { COUCH_FOES, couchFoePicks } = await import("../src/lib/couch/foes-logic.ts");
 const { lobbyBlocker } = await import("../src/lib/dm/viewer.ts");
 
@@ -153,7 +157,7 @@ await test("the GM reads the couch rules above the turn heading, and only at a c
   const system = buildDmSystem(world.campaign(), []);
   assert.ok(system.includes(COUCH_RULES), "the rules ride the system prompt");
   assert.ok(system.indexOf(COUCH_RULES) < system.indexOf("THIS TURN") || !system.includes("THIS TURN"), "with the settings, where a cache keeps them");
-  for (const line of [/three acts/, /Level-locked at 1/, /dread, then violence/, /the Company always has a second agenda/, /DRIVE THE NIGHT \(these outrank the core rules on pacing\)/, /The world moves on its own/, /Skip what does not matter/, /Never ask anyone to confirm what they said/, /Fail forward/, /Never ask for the same roll again/, /Guide a stuck table/, /set_objective when an act opens/, /NIGHT PACE says over time/, /the outline's foes/, /The crew starts light/, /grant_item it when taken/, /Use send_whisper for things only one crew member perceives/, /\[whispers\], \[breathing heavily\], \[shouting\], \[panicked\]/, /never hint at a hidden role/, /easy \(the default\), a crew member's ordinary work/, /nearly_impossible, an insane ask/, /A natural 20 passes those last two/, /One roll per obstacle/, /againstEnemyId\/againstMonster/, /one group_check, never a request_roll each/]) {
+  for (const line of [/three acts/, /Level-locked at 1/, /dread, then violence/, /the Company always has a second agenda/, /DRIVE THE NIGHT \(these outrank the core rules on pacing\)/, /Play ALIEN's Game Mother; TENSION says what is due/, /Breathers are bait/, /One strike, one clear choice/, /Skip what does not matter/, /Never ask anyone to confirm what they said/, /Fail forward/, /Never ask for the same roll again/, /Guide a stuck table/, /set_objective when an act opens/, /NIGHT PACE says over time/, /the outline's foes/, /The crew starts light/, /grant_item it when taken/, /Use send_whisper for things only one crew member perceives/, /\[whispers\], \[breathing heavily\], \[shouting\], \[panicked\]/, /never hint at a hidden role/, /easy \(the default\), a crew member's ordinary work/, /nearly_impossible, an insane ask/, /A natural 20 passes those last two/, /One roll per obstacle/, /againstEnemyId\/againstMonster/, /one group_check, never a request_roll each/]) {
     assert.match(COUCH_RULES, line);
   }
   const plain = { ...world.campaign(), gameSettings: { ...world.campaign().gameSettings, couchMode: false } };
@@ -187,6 +191,53 @@ await test("the night's pace hurries an act past its share, but not a table on a
   assert.match(stale, /none on screen for this act/, "an objective from the act before is not this act's");
   assert.equal(readObjective({ text: "   ", act: 0 }), null);
   assert.equal(readObjective({ text: "x".repeat(300), clock: 7, act: -1 }).text.length, 100);
+});
+
+await test("an act break's recap is a few short points, and the earlier acts' follow the GM as the story so far", () => {
+  assert.deepEqual(readActRecap(["  The beacon  led them in. ", "", 7, "the beacon led them in.", "Rook died."]), ["The beacon led them in.", "Rook died."]);
+  // The host's Next act form sends one box: a point per line, bulleted or not.
+  assert.deepEqual(readActRecap("- The hold opened\n2) Dana lied about the cargo; the shuttle left without them"), [
+    "The hold opened",
+    "Dana lied about the cargo",
+    "the shuttle left without them",
+  ]);
+  assert.deepEqual(readActRecap("a\nb\nc\nd\ne"), ["a", "b", "c", "d"], "four at most");
+  const long = readActRecap(["x".repeat(400)])[0];
+  assert.equal(long.length, RECAP_POINT_MAX);
+  assert.ok(long.endsWith("…"));
+  assert.deepEqual(readActRecap(null), []);
+  assert.deepEqual(readActRecaps([["One"], "Two\nThree", 4]), [["One"], ["Two", "Three"], []]);
+  const recaps = [["The beacon led them in", "Rook died"], ["Dana took the radio"]];
+  assert.equal(storySoFarLine(recaps, 0), "", "nothing before act I");
+  assert.equal(storySoFarLine(recaps, 1), "THE STORY SO FAR (the room saw these at each act break; build on them): Act I: The beacon led them in; Rook died.");
+  assert.match(storySoFarLine(recaps, 2), /Act I: .*Rook died\. Act II: Dana took the radio\.$/);
+  assert.equal(storySoFarLine([[], []], 2), "", "a break without a recap adds nothing");
+  // Four points and five crew stay inside the title card's one-minute window.
+  assert.ok(actBreakMs(4, 5) < 50_000, `${actBreakMs(4, 5)}ms`);
+});
+
+await test("the act break calls the roll of story points and new agendas, and never says an agenda", () => {
+  const crewSheets = [
+    { id: "k", name: "Kara Voss", portrait: { url: "/k.png" }, agenda: { ...AGENDA, storyPoints: 3 } },
+    { id: "b", name: "Brakk Oduya", agenda: { acts: ["Find your brother."], act: 0, hiddenRole: "", storyPoints: 0 } },
+    { id: "d", name: "Dana", agenda: { ...AGENDA }, deathSaves: { dead: true } },
+    { id: "c", name: "Jonesy", isCompanion: true, agenda: { ...AGENDA } },
+    { id: "n", name: "No agenda" },
+  ];
+  const crew = actRollCall(crewSheets, readActPoints({ k: 2, d: 1, x: "lots", b: -1 }));
+  assert.deepEqual(crew, [
+    { characterId: "k", name: "Kara Voss", portraitUrl: "/k.png", earned: 2, total: 3 },
+    { characterId: "b", name: "Brakk Oduya", portraitUrl: null, earned: 0, total: 0 },
+  ], "the living crew with agendas, in order; the dead and companions sit out");
+  const speech = actBreakSpeech({ ended: "Act I", next: "Act II", points: ["The beacon led them in", "Rook died."], crew });
+  assert.equal(
+    speech,
+    "End of Act One. The story so far. The beacon led them in. Rook died. Story points for agendas pursued. Kara Voss, two. Brakk Oduya, none this act. Everyone now holds a new agenda for Act Two. Check your phone, and keep it to yourself.",
+  );
+  for (const words of AGENDA.acts) assert.ok(!speech.includes(words), "no agenda is read aloud");
+  assert.ok(!speech.includes(AGENDA.hiddenRole));
+  const quiet = actBreakSpeech({ ended: "Act II", next: "Act III", points: [], crew: crew.map((entry) => ({ ...entry, earned: 0 })) });
+  assert.match(quiet, /^End of Act Two\. No story points this act\. Everyone now holds a new agenda for Act Three\./);
 });
 
 await test("the couch enemy menu is sci-fi, fits a level-1 crew, and is what the GM is offered", async () => {
@@ -234,6 +285,15 @@ await test("a prompt whose answer the whole table reads leaves the agendas out, 
   const plain = { ...world.campaign(), gameSettings: { ...world.campaign().gameSettings, couchMode: false } };
   assert.doesNotMatch(buildGameStateBlock(state({ campaign: plain })), /CREW AGENDAS/);
   assert.equal(couchAgendaBlock([{ id: "x", name: "Nobody", isCompanion: false }]), "", "no agendas, no block");
+});
+
+await test("each crew member's ties ride on their agenda line, and the GM is told to call them due", () => {
+  const backstory = "Kit joined three months ago.\n\nTies: Tove Lindqvist, owes her for the Ceres job; Rory Hale, saw what Kit did on Vesta.";
+  const block = couchAgendaBlock([{ id: "k", name: "Kit Navarro", isCompanion: false, agenda: AGENDA, backstory }]);
+  assert.match(block, /\| ties: Tove Lindqvist, owes her for the Ceres job; Rory Hale, saw what Kit did on Vesta\./);
+  assert.doesNotMatch(couchAgendaBlock([{ id: "k", name: "Kit", isCompanion: false, agenda: AGENDA, backstory: "No ties here." }]), /ties:/);
+  assert.match(block, /each act call at least one due/);
+  assert.match(block, /spend a story point to make their failed check succeed/);
 });
 
 await test("a couch table runs on ship time: no fantasy calendar, daylight or weather in the game state", () => {

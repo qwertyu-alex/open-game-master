@@ -1,6 +1,31 @@
 {
-  "generatedAt": "2026-10-11T05:18:48.514Z",
+  "generatedAt": "2026-11-01T00:53:59.903Z",
   "tracks": {
+    "airlock": [
+      {
+        "file": "airlock.opus",
+        "title": "Airlock (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "airlock-2.opus",
+        "title": "Airlock (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "animal_scream": [
+      {
+        "file": "animal_scream.opus",
+        "title": "Animal scream (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
     "arcane": [
       {
         "file": "arcane.opus",
@@ -8,6 +33,54 @@
         "author": "jdagenet",
         "source": "https://opengameart.org/content/dreamscape-drone",
         "license": "CC BY (attribution required)"
+      }
+    ],
+    "asylum": [
+      {
+        "file": "asylum.opus",
+        "title": "Asylum (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "asylum-2.opus",
+        "title": "Asylum (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "attic": [
+      {
+        "file": "attic.opus",
+        "title": "Attic (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "attic-2.opus",
+        "title": "Attic (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "barn": [
+      {
+        "file": "barn.opus",
+        "title": "Barn (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "barn-2.opus",
+        "title": "Barn (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
       }
     ],
     "battle": [
@@ -26,6 +99,22 @@
         "license": "CC BY 4.0 (attribution required)"
       }
     ],
+    "bedchamber": [
+      {
+        "file": "bedchamber.opus",
+        "title": "Bedchamber (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "bedchamber-2.opus",
+        "title": "Bedchamber (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
     "bell": [
       {
         "file": "bell.opus",
@@ -33,6 +122,24 @@
         "author": "Unknown",
         "source": "https://opengameart.org/content/point-bell",
         "license": "OGA-BY (attribution required)"
+      }
+    ],
+    "bells_jangle": [
+      {
+        "file": "bells_jangle.opus",
+        "title": "Morris bells (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "bonfire_roar": [
+      {
+        "file": "bonfire_roar.opus",
+        "title": "Bonfire catches (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
       }
     ],
     "boss": [
@@ -51,6 +158,58 @@
         "license": "CC BY 4.0 (attribution required)"
       }
     ],
+    "braam": [
+      {
+        "file": "braam.opus",
+        "title": "Braam (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "branch_snap": [
+      {
+        "file": "branch_snap.opus",
+        "title": "Branch snaps (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "breath_close": [
+      {
+        "file": "breath_close.opus",
+        "title": "Breath on the neck (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "bridge": [
+      {
+        "file": "bridge.opus",
+        "title": "Bridge (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "bridge-2.opus",
+        "title": "Bridge (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "bulkhead_slam": [
+      {
+        "file": "bulkhead_slam.opus",
+        "title": "Bulkhead slams (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
     "calm": [
       {
         "file": "calm.opus",
@@ -67,6 +226,15 @@
         "license": "CC BY 4.0 (attribution required)"
       }
     ],
+    "camera_shutter": [
+      {
+        "file": "camera_shutter.opus",
+        "title": "Camera shutter (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
     "camp": [
       {
         "file": "camp.opus",
@@ -74,6 +242,31 @@
         "author": "Glaneur de sons",
         "source": "https://commons.wikimedia.org/wiki/File%3ACampfire%20sound%20ambience.ogg",
         "license": "CC BY (attribution required)"
+      }
+    ],
+    "candles_out": [
+      {
+        "file": "candles_out.opus",
+        "title": "Candles go out (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "cargo": [
+      {
+        "file": "cargo.opus",
+        "title": "Cargo hold (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "cargo-2.opus",
+        "title": "Cargo hold (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
       }
     ],
     "cave": [
@@ -85,6 +278,22 @@
         "license": "CC BY-SA (attribution and share-alike required)"
       }
     ],
+    "cellar": [
+      {
+        "file": "cellar.opus",
+        "title": "Cellar (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "cellar-2.opus",
+        "title": "Cellar (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
     "chain": [
       {
         "file": "chain.opus",
@@ -92,6 +301,15 @@
         "author": "Unknown",
         "source": "https://archive.org/details/SSE_Library_CHAINS",
         "license": "Public domain (CC0 or PD Mark)"
+      }
+    ],
+    "chant": [
+      {
+        "file": "chant.opus",
+        "title": "Chanting (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
       }
     ],
     "chase": [
@@ -110,6 +328,15 @@
         "license": "CC BY 4.0 (attribution required)"
       }
     ],
+    "child_laugh": [
+      {
+        "file": "child_laugh.opus",
+        "title": "A child laughs (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
     "city": [
       {
         "file": "city.opus",
@@ -117,6 +344,31 @@
         "author": "klankbeeld",
         "source": "https://freesound.org/people/klankbeeld/sounds/828224/",
         "license": "CC BY (attribution required)"
+      }
+    ],
+    "city_night": [
+      {
+        "file": "city_night.opus",
+        "title": "City at night (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "city_night-2.opus",
+        "title": "City at night (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "clock_strike": [
+      {
+        "file": "clock_strike.opus",
+        "title": "Clock strikes (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
       }
     ],
     "coast": [
@@ -137,6 +389,101 @@
         "license": "CC BY (attribution required)"
       }
     ],
+    "comms_static": [
+      {
+        "file": "comms_static.opus",
+        "title": "Comms burst (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "conservatory": [
+      {
+        "file": "conservatory.opus",
+        "title": "Conservatory (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "conservatory-2.opus",
+        "title": "Conservatory (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "cornfield": [
+      {
+        "file": "cornfield.opus",
+        "title": "Fields (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "cornfield-2.opus",
+        "title": "Fields (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "cosmic_calm": [
+      {
+        "file": "cosmic_calm.opus",
+        "title": "Cosmic: the inquiry (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "cosmic_danger": [
+      {
+        "file": "cosmic_danger.opus",
+        "title": "Cosmic: the cult (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "cosmic_dread": [
+      {
+        "file": "cosmic_dread.opus",
+        "title": "Cosmic: the abyss (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "cosmic_relief": [
+      {
+        "file": "cosmic_relief.opus",
+        "title": "Cosmic: daylight (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "cosmic_uneasy": [
+      {
+        "file": "cosmic_uneasy.opus",
+        "title": "Cosmic: the clue (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "creature_shriek": [
+      {
+        "file": "creature_shriek.opus",
+        "title": "Creature shriek (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
     "crow": [
       {
         "file": "crow.opus",
@@ -153,6 +500,22 @@
         "author": "hz37",
         "source": "https://freesound.org/people/hz37/sounds/393688/",
         "license": "Public domain (CC0 or PD Mark)"
+      }
+    ],
+    "cryo": [
+      {
+        "file": "cryo.opus",
+        "title": "Cryo deck (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "cryo-2.opus",
+        "title": "Cryo deck (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
       }
     ],
     "crypt": [
@@ -173,6 +536,15 @@
         "license": "CC BY (attribution required)"
       }
     ],
+    "decompression": [
+      {
+        "file": "decompression.opus",
+        "title": "Decompression (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
     "deep_forest": [
       {
         "file": "deep_forest.opus",
@@ -180,6 +552,22 @@
         "author": "udo noll",
         "source": "https://archive.org/details/aporee_46901_53269",
         "license": "CC BY-SA (attribution and share-alike required)"
+      }
+    ],
+    "derelict": [
+      {
+        "file": "derelict.opus",
+        "title": "Dead ship (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "derelict-2.opus",
+        "title": "Dead ship (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
       }
     ],
     "desert": [
@@ -191,6 +579,31 @@
         "license": "Public domain (CC0 or PD Mark)"
       }
     ],
+    "distant_laughter": [
+      {
+        "file": "distant_laughter.opus",
+        "title": "Laughter (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "docks": [
+      {
+        "file": "docks.opus",
+        "title": "Docks (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "docks-2.opus",
+        "title": "Docks (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
     "door_creak": [
       {
         "file": "door_creak.opus",
@@ -198,6 +611,15 @@
         "author": "fractilegames",
         "source": "https://opengameart.org/content/creaky-light-wooden-door",
         "license": "CC BY (attribution required)"
+      }
+    ],
+    "door_kick": [
+      {
+        "file": "door_kick.opus",
+        "title": "Door kicked in (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
       }
     ],
     "door_locked": [
@@ -243,6 +665,22 @@
         "license": "CC BY 4.0 (attribution required)"
       }
     ],
+    "ducts": [
+      {
+        "file": "ducts.opus",
+        "title": "Vents and ducts (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "ducts-2.opus",
+        "title": "Vents and ducts (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
     "dungeon": [
       {
         "file": "dungeon.opus",
@@ -250,6 +688,95 @@
         "author": "JaggedStone",
         "source": "https://opengameart.org/content/loopable-dungeon-ambience",
         "license": "Public domain (CC0 or PD Mark)"
+      }
+    ],
+    "elevator_ding": [
+      {
+        "file": "elevator_ding.opus",
+        "title": "Elevator arrives (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "engineering": [
+      {
+        "file": "engineering.opus",
+        "title": "Engineering (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "engineering-2.opus",
+        "title": "Engineering (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "eva": [
+      {
+        "file": "eva.opus",
+        "title": "Outside, in a suit (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "eva-2.opus",
+        "title": "Outside, in a suit (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "exo_storm": [
+      {
+        "file": "exo_storm.opus",
+        "title": "Alien surface (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "exo_storm-2.opus",
+        "title": "Alien surface (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "farmhouse": [
+      {
+        "file": "farmhouse.opus",
+        "title": "Farmhouse (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "farmhouse-2.opus",
+        "title": "Farmhouse (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "festival_night": [
+      {
+        "file": "festival_night.opus",
+        "title": "The festival (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "festival_night-2.opus",
+        "title": "The festival (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
       }
     ],
     "festive": [
@@ -266,6 +793,139 @@
         "author": "Kevin MacLeod (incompetech.com)",
         "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1300003",
         "license": "CC BY 4.0 (attribution required)"
+      }
+    ],
+    "flatline": [
+      {
+        "file": "flatline.opus",
+        "title": "Flatline (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "flute_wail": [
+      {
+        "file": "flute_wail.opus",
+        "title": "A pipe plays (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "fog_street": [
+      {
+        "file": "fog_street.opus",
+        "title": "Foggy street (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "fog_street-2.opus",
+        "title": "Foggy street (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "folk_aftermath": [
+      {
+        "file": "folk_aftermath.opus",
+        "title": "Folk: harvest (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "folk_calm": [
+      {
+        "file": "folk_calm.opus",
+        "title": "Folk: summer (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "folk_chase": [
+      {
+        "file": "folk_chase.opus",
+        "title": "Folk: the hunt (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "folk_danger": [
+      {
+        "file": "folk_danger.opus",
+        "title": "Folk: the procession (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "folk_dread": [
+      {
+        "file": "folk_dread.opus",
+        "title": "Folk: the old ways (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "folk_fight": [
+      {
+        "file": "folk_fight.opus",
+        "title": "Folk: the rite (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "folk_finale": [
+      {
+        "file": "folk_finale.opus",
+        "title": "Folk: the wicker (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "folk_hit": [
+      {
+        "file": "folk_hit.opus",
+        "title": "Ritual hit (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "folk_relief": [
+      {
+        "file": "folk_relief.opus",
+        "title": "Folk: away (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "folk_uneasy": [
+      {
+        "file": "folk_uneasy.opus",
+        "title": "Folk: the customs (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "footsteps_above": [
+      {
+        "file": "footsteps_above.opus",
+        "title": "Footsteps above (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
       }
     ],
     "forest": [
@@ -286,6 +946,15 @@
         "license": "CC BY-SA (attribution and share-alike required)"
       }
     ],
+    "glass_shatter": [
+      {
+        "file": "glass_shatter.opus",
+        "title": "Glass shatters (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
     "gong": [
       {
         "file": "gong.opus",
@@ -295,6 +964,96 @@
         "license": "CC BY (attribution required)"
       }
     ],
+    "gothic_aftermath": [
+      {
+        "file": "gothic_aftermath.opus",
+        "title": "Gothic: mourning (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "gothic_calm": [
+      {
+        "file": "gothic_calm.opus",
+        "title": "Gothic: the house at rest (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "gothic_chase": [
+      {
+        "file": "gothic_chase.opus",
+        "title": "Gothic: run (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "gothic_danger": [
+      {
+        "file": "gothic_danger.opus",
+        "title": "Gothic: it is coming (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "gothic_dread": [
+      {
+        "file": "gothic_dread.opus",
+        "title": "Gothic: dread (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "gothic_fight": [
+      {
+        "file": "gothic_fight.opus",
+        "title": "Gothic: confrontation (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "gothic_finale": [
+      {
+        "file": "gothic_finale.opus",
+        "title": "Gothic: the exorcism (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "gothic_hit": [
+      {
+        "file": "gothic_hit.opus",
+        "title": "Orchestral stab (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "gothic_relief": [
+      {
+        "file": "gothic_relief.opus",
+        "title": "Gothic: dawn (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "gothic_uneasy": [
+      {
+        "file": "gothic_uneasy.opus",
+        "title": "Gothic: something is wrong (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
     "graveyard": [
       {
         "file": "graveyard.opus",
@@ -302,6 +1061,49 @@
         "author": "NotFromUtrecht",
         "source": "https://commons.wikimedia.org/wiki/File%3AWelford%20Road%20Cemetery%20soundscape.ogg",
         "license": "CC BY-SA (attribution and share-alike required)"
+      }
+    ],
+    "gunfire": [
+      {
+        "file": "gunfire.opus",
+        "title": "Gunfire (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "gunshot": [
+      {
+        "file": "gunshot.opus",
+        "title": "Gunshot (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "hab": [
+      {
+        "file": "hab.opus",
+        "title": "Habitat (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "hab-2.opus",
+        "title": "Habitat (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "hatch_hiss": [
+      {
+        "file": "hatch_hiss.opus",
+        "title": "Hatch opens (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
       }
     ],
     "heal": [
@@ -320,6 +1122,15 @@
         "author": "bart",
         "source": "https://opengameart.org/content/heartbeat-sounds",
         "license": "Public domain (CC0 or PD Mark)"
+      }
+    ],
+    "helicopter": [
+      {
+        "file": "helicopter.opus",
+        "title": "Helicopter (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
       }
     ],
     "hit_crit": [
@@ -349,6 +1160,22 @@
         "license": "Public domain (CC0 or PD Mark)"
       }
     ],
+    "hive": [
+      {
+        "file": "hive.opus",
+        "title": "The nest (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "hive-2.opus",
+        "title": "The nest (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
     "horn": [
       {
         "file": "horn.opus",
@@ -356,6 +1183,63 @@
         "author": "StumpyStrust",
         "source": "https://opengameart.org/content/their-coming-generic-horn-sound",
         "license": "Public domain (CC0 or PD Mark)"
+      }
+    ],
+    "hotel_corridor": [
+      {
+        "file": "hotel_corridor.opus",
+        "title": "Hotel corridor (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "hotel_corridor-2.opus",
+        "title": "Hotel corridor (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "hull": [
+      {
+        "file": "hull.opus",
+        "title": "Ship corridor (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "hull-2.opus",
+        "title": "Ship corridor (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "hull_groan": [
+      {
+        "file": "hull_groan.opus",
+        "title": "Hull groan (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "interrogation": [
+      {
+        "file": "interrogation.opus",
+        "title": "Interrogation room (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "interrogation-2.opus",
+        "title": "Interrogation room (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
       }
     ],
     "jungle": [
@@ -376,6 +1260,40 @@
         "license": "Public domain (CC0 or PD Mark)"
       }
     ],
+    "keycard_beep": [
+      {
+        "file": "keycard_beep.opus",
+        "title": "Keycard (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "klaxon": [
+      {
+        "file": "klaxon.opus",
+        "title": "Alarm (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "lab": [
+      {
+        "file": "lab.opus",
+        "title": "Lab (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "lab-2.opus",
+        "title": "Lab (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
     "library": [
       {
         "file": "library.opus",
@@ -394,6 +1312,22 @@
         "license": "CC BY (attribution required)"
       }
     ],
+    "manor_hall": [
+      {
+        "file": "manor_hall.opus",
+        "title": "Manor hall (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "manor_hall-2.opus",
+        "title": "Manor hall (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
     "market": [
       {
         "file": "market.opus",
@@ -401,6 +1335,38 @@
         "author": "Emeka Ogboh",
         "source": "https://commons.wikimedia.org/wiki/File%3AIdumota%20Market%20(Emeka%20Ogboh).ogg",
         "license": "CC BY-SA (attribution and share-alike required)"
+      }
+    ],
+    "medbay": [
+      {
+        "file": "medbay.opus",
+        "title": "Medbay (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "medbay-2.opus",
+        "title": "Medbay (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "mess": [
+      {
+        "file": "mess.opus",
+        "title": "Mess hall (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "mess-2.opus",
+        "title": "Mess hall (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
       }
     ],
     "mine": [
@@ -412,6 +1378,22 @@
         "license": "CC BY-SA (attribution and share-alike required)"
       }
     ],
+    "moor": [
+      {
+        "file": "moor.opus",
+        "title": "Moor (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "moor-2.opus",
+        "title": "Moor (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
     "mountain": [
       {
         "file": "mountain.opus",
@@ -419,6 +1401,24 @@
         "author": "bitlab_coop",
         "source": "https://freesound.org/people/bitlab_coop/sounds/486894/",
         "license": "Public domain (CC0 or PD Mark)"
+      }
+    ],
+    "museum": [
+      {
+        "file": "museum.opus",
+        "title": "Museum (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "music_box": [
+      {
+        "file": "music_box.opus",
+        "title": "Music box (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
       }
     ],
     "mystery": [
@@ -446,6 +1446,72 @@
         "license": "CC BY (attribution required)"
       }
     ],
+    "nursery": [
+      {
+        "file": "nursery.opus",
+        "title": "Nursery (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "nursery-2.opus",
+        "title": "Nursery (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "office_late": [
+      {
+        "file": "office_late.opus",
+        "title": "Office after hours (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "office_late-2.opus",
+        "title": "Office after hours (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "parking_garage": [
+      {
+        "file": "parking_garage.opus",
+        "title": "Car park (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "parking_garage-2.opus",
+        "title": "Car park (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "phone_buzz": [
+      {
+        "file": "phone_buzz.opus",
+        "title": "Phone buzzes (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "piano_note": [
+      {
+        "file": "piano_note.opus",
+        "title": "A piano note (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
     "plains": [
       {
         "file": "plains.opus",
@@ -455,6 +1521,24 @@
         "license": "CC BY (attribution required)"
       }
     ],
+    "power_down": [
+      {
+        "file": "power_down.opus",
+        "title": "Power fails (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "procession_drum": [
+      {
+        "file": "procession_drum.opus",
+        "title": "Drums (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
     "rain": [
       {
         "file": "rain.opus",
@@ -462,6 +1546,22 @@
         "author": "Ogrebane",
         "source": "https://opengameart.org/content/rain-gutter-loop",
         "license": "Public domain (CC0 or PD Mark)"
+      }
+    ],
+    "ritual_chamber": [
+      {
+        "file": "ritual_chamber.opus",
+        "title": "Ritual chamber (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "ritual_chamber-2.opus",
+        "title": "Ritual chamber (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
       }
     ],
     "river": [
@@ -482,6 +1582,22 @@
         "license": "Public domain (CC0 or PD Mark)"
       }
     ],
+    "rooftop": [
+      {
+        "file": "rooftop.opus",
+        "title": "Rooftop (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "rooftop-2.opus",
+        "title": "Rooftop (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
     "ruins": [
       {
         "file": "ruins.opus",
@@ -491,6 +1607,103 @@
         "license": "CC BY (attribution required)"
       }
     ],
+    "safehouse": [
+      {
+        "file": "safehouse.opus",
+        "title": "Safehouse (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "safehouse-2.opus",
+        "title": "Safehouse (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "score_aftermath": [
+      {
+        "file": "score_aftermath.opus",
+        "title": "Score: the cost (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "score_calm": [
+      {
+        "file": "score_calm.opus",
+        "title": "Score: quiet (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "score_chase": [
+      {
+        "file": "score_chase.opus",
+        "title": "Score: run (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "score_danger": [
+      {
+        "file": "score_danger.opus",
+        "title": "Score: it is coming (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "score_dread": [
+      {
+        "file": "score_dread.opus",
+        "title": "Score: dread (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "score_fight": [
+      {
+        "file": "score_fight.opus",
+        "title": "Score: fight (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "score_finale": [
+      {
+        "file": "score_finale.opus",
+        "title": "Score: the big one (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "score_relief": [
+      {
+        "file": "score_relief.opus",
+        "title": "Score: breathing again (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "score_uneasy": [
+      {
+        "file": "score_uneasy.opus",
+        "title": "Score: something is off (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
     "scream": [
       {
         "file": "scream.opus",
@@ -498,6 +1711,54 @@
         "author": "Vinrax",
         "source": "https://opengameart.org/content/horror-scream1",
         "license": "Public domain (CC0 or PD Mark)"
+      }
+    ],
+    "seafloor": [
+      {
+        "file": "seafloor.opus",
+        "title": "Sea-floor station (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "seafloor-2.opus",
+        "title": "Sea-floor station (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "servants_stair": [
+      {
+        "file": "servants_stair.opus",
+        "title": "Servants' passages (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "servants_stair-2.opus",
+        "title": "Servants' passages (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "server_room": [
+      {
+        "file": "server_room.opus",
+        "title": "Server room (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "server_room-2.opus",
+        "title": "Server room (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
       }
     ],
     "sewer": [
@@ -516,6 +1777,33 @@
         "author": "iainmccurdy",
         "source": "https://freesound.org/people/iainmccurdy/sounds/645968/",
         "license": "CC BY (attribution required)"
+      }
+    ],
+    "silenced_shot": [
+      {
+        "file": "silenced_shot.opus",
+        "title": "Suppressed shot (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "siren_pass": [
+      {
+        "file": "siren_pass.opus",
+        "title": "Sirens (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "skitter": [
+      {
+        "file": "skitter.opus",
+        "title": "Skittering (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
       }
     ],
     "sorrow": [
@@ -579,6 +1867,54 @@
         "license": "Public domain (CC0 or PD Mark)"
       }
     ],
+    "steam_train": [
+      {
+        "file": "steam_train.opus",
+        "title": "Train (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "steam_train-2.opus",
+        "title": "Train (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "still_lake": [
+      {
+        "file": "still_lake.opus",
+        "title": "Lake (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "still_lake-2.opus",
+        "title": "Lake (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "stone_circle": [
+      {
+        "file": "stone_circle.opus",
+        "title": "Standing stones (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "stone_circle-2.opus",
+        "title": "Standing stones (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
     "storm": [
       {
         "file": "storm.opus",
@@ -586,6 +1922,38 @@
         "author": "Gregor Quendel",
         "source": "https://opengameart.org/content/thunder-lightning-ambience-field-recording",
         "license": "CC BY (attribution required)"
+      }
+    ],
+    "study": [
+      {
+        "file": "study.opus",
+        "title": "Study (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "study-2.opus",
+        "title": "Study (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "subway": [
+      {
+        "file": "subway.opus",
+        "title": "Subway (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "subway-2.opus",
+        "title": "Subway (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
       }
     ],
     "swamp": [
@@ -649,6 +2017,105 @@
         "license": "CC BY 4.0 (attribution required)"
       }
     ],
+    "three_knocks": [
+      {
+        "file": "three_knocks.opus",
+        "title": "Three knocks (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "thriller_aftermath": [
+      {
+        "file": "thriller_aftermath.opus",
+        "title": "Thriller: burned (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "thriller_calm": [
+      {
+        "file": "thriller_calm.opus",
+        "title": "Thriller: cover (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "thriller_chase": [
+      {
+        "file": "thriller_chase.opus",
+        "title": "Thriller: pursuit (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "thriller_danger": [
+      {
+        "file": "thriller_danger.opus",
+        "title": "Thriller: the clock (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "thriller_dread": [
+      {
+        "file": "thriller_dread.opus",
+        "title": "Thriller: the setup (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "thriller_fight": [
+      {
+        "file": "thriller_fight.opus",
+        "title": "Thriller: firefight (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "thriller_finale": [
+      {
+        "file": "thriller_finale.opus",
+        "title": "Thriller: endgame (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "thriller_hit": [
+      {
+        "file": "thriller_hit.opus",
+        "title": "Impact (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "thriller_relief": [
+      {
+        "file": "thriller_relief.opus",
+        "title": "Thriller: clean (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "thriller_uneasy": [
+      {
+        "file": "thriller_uneasy.opus",
+        "title": "Thriller: being watched (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
     "thud": [
       {
         "file": "thud.opus",
@@ -674,6 +2141,15 @@
         "author": "ramonmineiro",
         "source": "https://freesound.org/people/ramonmineiro/sounds/578072/",
         "license": "Public domain (CC0 or PD Mark)"
+      }
+    ],
+    "tracker_ping": [
+      {
+        "file": "tracker_ping.opus",
+        "title": "Motion tracker (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
       }
     ],
     "travel": [
@@ -726,6 +2202,15 @@
         "license": "Public domain (CC0 or PD Mark)"
       }
     ],
+    "tyre_screech": [
+      {
+        "file": "tyre_screech.opus",
+        "title": "Tyres screech (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
     "underwater": [
       {
         "file": "underwater.opus",
@@ -735,6 +2220,31 @@
         "license": "CC BY (attribution required)"
       }
     ],
+    "vent_clang": [
+      {
+        "file": "vent_clang.opus",
+        "title": "Something in the vents (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
+    "village_green": [
+      {
+        "file": "village_green.opus",
+        "title": "Village green (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "village_green-2.opus",
+        "title": "Village green (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      }
+    ],
     "waterfall": [
       {
         "file": "waterfall.opus",
@@ -742,6 +2252,15 @@
         "author": "Blight55",
         "source": "https://commons.wikimedia.org/wiki/File%3AWaterfall%20and%20birds%20sounds.wav",
         "license": "CC BY-SA (attribution and share-alike required)"
+      }
+    ],
+    "whispers": [
+      {
+        "file": "whispers.opus",
+        "title": "Whispers (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
       }
     ],
     "wind": [
@@ -776,6 +2295,22 @@
         "author": "Kevin MacLeod (incompetech.com)",
         "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100356",
         "license": "CC BY 4.0 (attribution required)"
+      }
+    ],
+    "woods_night": [
+      {
+        "file": "woods_night.opus",
+        "title": "Woods at night (take 1)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
+      },
+      {
+        "file": "woods_night-2.opus",
+        "title": "Woods at night (take 2)",
+        "author": "Generated with ElevenLabs for Open Game Master",
+        "source": "https://elevenlabs.io",
+        "license": "Generated for this project under the ElevenLabs terms"
       }
     ]
   }

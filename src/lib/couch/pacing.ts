@@ -3,6 +3,7 @@ import { getDatabase } from "@/lib/db/core";
 import { publishPersisted } from "@/lib/events";
 import { getCouchForge, setCouchObjective, startCouchActClock } from "@/lib/couch/store";
 import { couchPacingLine, readObjective, type CouchObjective } from "@/lib/couch/pacing-logic";
+import { storySoFarLine } from "@/lib/couch/act-break-logic";
 
 // The rim of the night's pace (src/lib/couch/pacing-logic.ts): the act
 // clock and the GM's replies since it started, read for every couch turn's
@@ -17,20 +18,21 @@ function repliesSince(campaignId: string, since: string): number {
 
 // "" off a couch night, before the night is forged, and during a fight,
 // which is the scene until it ends (COUCH_FIGHT_RULES): a fight is never
-// hurried by the act's clock.
+// hurried by the act's clock. From act II on, the story so far follows.
 export function couchPacingPrompt(campaign: Campaign, inFight: boolean): string {
   if (!campaign.gameSettings.couchMode || inFight) return "";
   const forge = getCouchForge(campaign.id);
   if (!forge || forge.status !== "ready") return "";
   const since = startCouchActClock(campaign.id);
   const minutes = (Date.now() - Date.parse(since)) / 60000;
-  return couchPacingLine({
+  const pace = couchPacingLine({
     act: forge.act,
     minutes: Number.isFinite(minutes) ? minutes : 0,
     replies: repliesSince(campaign.id, since),
     objective: forge.objective,
     nightMinutes: forge.forge?.scenario.minutes,
   });
+  return [pace, storySoFarLine(forge.recaps, forge.act)].filter(Boolean).join("\n");
 }
 
 // The objective on screen now: only the act in force's, so a new act starts

@@ -184,8 +184,8 @@ Afterwards:
 2. **Portraits.** One per crew member and one per named NPC, painted in
    parallel while the TV plays the briefing. These are the reference images
    for every later scene (2.4). Art from the forge must follow
-   `docs/art/token-readability.md` and `docs/art/creature-art-guidance.md`:
-   the creature is an original design, not a xenomorph.
+   `docs/art/token-readability.md`. Its creatures can come from any
+   universe the table names, or be invented.
 3. **Establishing shots.** One per act-1 location, painted ahead of time so
    turn 1 already has art.
 4. **Introductions, then claiming.** Before anyone picks, the TV reads the
@@ -230,10 +230,39 @@ one has orders to bring back a sample, one is hiding an infection.
   new agenda is revealed.
 - **Act changes.** A small GM tool, `advance_act`, moves everyone to the next
   agenda and shows an act title card on the TV (`SceneTitle.tsx` already
-  exists).
-- **Story points.** Pursuing your agenda earns a story point (the GM awards it
-  with a tool). Spending one lets you re-roll or shrug off one point of stress.
+  exists). Like ALIEN's cinematic scenarios, an act closes on its story
+  points: the GM passes 2 to 4 public, past-tense lines as `recap`, the TV
+  shows them as "End of Act I · The story so far" one at a time before the
+  new act's title (`CouchTvActBreak.tsx`), and the GM narrates on from the
+  break (a cut ahead, the new act in motion). The recaps are kept (`couch_forges.recaps_json`) and follow the
+  GM every later turn as THE STORY SO FAR (`src/lib/couch/act-break-logic.ts`).
+  After the story so far the card calls the crew one by one: the story
+  points each earned this act by chasing their agenda (counted in
+  `couch_forges.act_points_json` as `award_story_point` lands) and their
+  total, never what the agenda was, then "New agendas are on your phones".
+  The narrator reads the whole card aloud on its own lane, so the GM's
+  narration picks up at the cut into the new act and does not repeat it.
+- **Story points.** ALIEN's cinematic rule (Starter Set rulebook, p. 26 and
+  35): at the end of each act the GM judges every crew member once, in
+  `advance_act`'s `earned`, and whoever took specific actions toward that
+  act's agenda despite personal risk or sacrifice earns one story point.
+  Nobody holds more than three. The GM is not offered a tool to award points
+  mid-act: it gave one on every turn of a single scene's job (three in three
+  minutes); the host's tool panel keeps `award_story_point` for corrections.
+  Spending one turns your own failed check or save into a
+  success, the dice as they fell: the one way a player overrides the dice.
+  The phone's failed result offers "Make it succeed · 1 story point" beside
+  the push, in the same 15-second window, even at full stress; the TV reads
+  "Success · story point", and the GM's roll result carries the success and
+  a note to narrate it (`spendCouchStoryPoint` in `src/lib/couch/push.ts`).
   This is the hook that makes players actually chase their agendas.
+- **Ties.** Each crew member's ties name something concrete between them
+  and each other crew member that can come due tonight (a debt, a promise,
+  a life saved, a lie, a secret, a grudge), never a mood, and at least one
+  of each person's ties pulls against an agenda. Ties are public (the TV
+  shows them at the introductions); the GM reads them on each crew member's
+  agenda line and is told to call one due each act and to put the owed
+  person in the way of an agenda that pulls against them.
 - **Private GM whispers.** `send_whisper` (`src/lib/dm/whispers.ts`) already
   exists and gets a prominent place on the phone: "the motion tracker shows
   something only you can see." A player can also whisper the GM from the phone,
@@ -242,11 +271,32 @@ one has orders to bring back a sample, one is hiding an infection.
   crew member's portrait, then their agendas one act at a time, whether they
   pulled it off, story points, and the hidden role. This is the moment the
   room is waiting for.
+  Built as the closing (`src/lib/couch/finale.ts`, `finale-logic.ts`): the
+  GM calls `end_night` in act III, outside a fight, in the reply that
+  narrates the ending; the night ends once that passage is out, and the
+  host's End the night (a TV host button, or End session) ends it at once.
+  One story-model call over the transcript and the secret outline writes
+  the headline, the recap, a verdict on each agenda, a highlight and an
+  award each, and the GM's graded review; the facts (fates, agendas, story
+  points, hidden roles, dice, the clock) are the server's, so a reply that
+  fails still closes the night. The TV (`CouchTvFinale.tsx`) waits for the
+  closing passage's voice, then steps through the end card, each recap
+  beat, each crew member, what was really going on, the review and a board
+  that stays; the laptop's arrow keys step through it. The night's own
+  scene pictures carry it: the model picks the picture for each beat and
+  each crew member's moment from the numbered pictures in the transcript
+  (an even spread of the night where it picks none), the last scene sits
+  behind the end card and a wall of the night behind the review. The
+  narrator reads every step but the board (`finaleSpeech`, clips rendered
+  ahead by `src/lib/couch/finale-voice.ts`), and a voiced step moves on
+  when its clip ends. Each phone (`CouchPhoneFinale.tsx`) shows its
+  player's own night, the review and the crew with the beats' pictures,
+  with the story a tap away.
 - **A night that keeps moving** (added after "Unto Us", 2026-10-30, where
   act I took 85 minutes and docking a pod took twenty replies). The couch
   rules (`src/lib/couch/prompt-logic.ts` COUCH_RULES, "DRIVE THE NIGHT")
-  outrank the core rules on pacing: the world acts on its own every two or
-  three replies, routine steps are skipped, a failed roll lands a
+  outrank the core rules on pacing: the world acts on its own (see
+  Pressure, below), routine steps are skipped, a failed roll lands a
   complication rather than "time slips by", a stuck table is handed a lead
   and concrete options, and every act brings people who want something, a
   fight with the outline's foes and the act's twist. Every turn the GM reads
@@ -254,6 +304,48 @@ one has orders to bring back a sample, one is hiding an infection.
   replies against its share (40, 55 and 50 minutes), and from "late" on an
   order to end the act, never during a fight. The clock starts with the act
   (`couch_forges.act_since`).
+- **Pressure** (added after the same night, from the ALIEN RPG's Game
+  Mother advice: dread before terror, keep the monster hidden, breathers
+  that let the crew lower its guard, the next challenge waiting when it
+  does; and from tables that played it: pressure piled on pressure freezes
+  a table). The rules say it in one line ("Play ALIEN's Game Mother"), and a
+  TENSION line beside NIGHT PACE counts it (`src/lib/couch/tension*.ts`):
+  the GM's replies since dice last threatened the crew. Only dice that can
+  hurt restart it: an attack, a fight, damage, `apply_hazard`, a chase, a
+  condition on a crew member. A warning, an alarm or a `spring_beat` does
+  not ("Crew Expendable", 2026-10-31: the GM logged eleven prose strikes,
+  each an alarm that reset the clock, and in seventy-five minutes the crew
+  lost no hit points). Each act has a threshold (4, 3 and 2 replies):
+  below it a **breather** (catch breath, plan, plant one sign) and then a
+  **build** (a sign of the threat, or someone pressing a demand with a
+  deadline); at it, **strike due**: one thing comes at the crew, one clear
+  choice for a named crew member, landing with dice. Two replies past it the
+  line turns **overdue**: stop warning, the thing warned of happens now with
+  `apply_hazard` or a surprise attack, and it can wound, drop or kill. Act
+  III has no breather. A round where every answer was a pass, and an act
+  NIGHT PACE calls over time, get their strike now. The build line forbids
+  repeating a warning (announced twice, it lands). TENSION is silent in a
+  fight, which is the strike itself.
+  - **Failure costs.** A crew member's failed check or save, and a failed
+    group check, come back to the GM with a cost: if what they risked was
+    physical, it hurts, with `apply_hazard` or `apply_damage`, in that
+    reply; a wound described with no damage is not a cost.
+  - **The deck.** The forge writes each act four or five beats, one sentence
+    each, tagged sign, human or strike (`ForgedAct.beats`); the ready-made
+    "Dead Air" and "Unto Us" carry hand-written ones. TENSION names the next
+    unplayed beat the phase wants; `spring_beat` with its number marks it
+    played (`couch_forges.beats_used_json`) and nothing more: a strike beat
+    still lands with dice. A night without a deck improvises from the act's
+    escalation, set pieces and foes.
+  - **The quiet room.** When the GM has spoken and nobody has posted for
+    three minutes, the server writes a table note ("The room has gone
+    quiet.") and wakes the GM, whose TENSION then says so: the world acts
+    and the reply ends on a choice for a named crew member. At most two in
+    a row before someone speaks, so a break is not played through; never
+    during a fight, a roll on a phone, a table break, the introductions, or
+    before anyone has spoken; and a room silent ten minutes past due has
+    left. The clock is armed when each narration lands and after a restart
+    (`armCouchQuiet`, `rearmCouchQuiet`).
 - **The objective on every screen.** `set_objective` (`src/lib/dm/couch-tools.ts`)
   puts what the crew must do now on the TV, small in the top-right corner
   (without its clock), and, with its clock, on each phone at the head of the
@@ -281,22 +373,38 @@ one has orders to bring back a sample, one is hiding an infection.
 ### 2.3 Stress and panic: a light Year Zero layer
 
 The 5e engine stays underneath, because its checks, HP and damage are tested.
-On top of it goes the one ALIEN mechanic that makes the dread work:
+On top of it goes the one ALIEN mechanic that makes the dread work, run by
+the server so it never waits on the GM to remember a rule
+(`src/lib/couch/stress*.ts`, `push.ts`):
 
-- Each crew member has **Stress, from 0 to 10**, on the phone card and the TV
-  strip.
-- Stress goes **up** when you push a roll, see something horrible, take a hit,
-  or a crewmate panics nearby. A GM tool, `adjust_stress`, does it.
-- **Stress dice.** When a stressed character makes a check, the server also
-  rolls Stress-many d6. Each 6 adds +2 to the check (adrenaline). Any 1 sets off
-  a **panic roll**: d6 + Stress against a short panic table (freeze, drop
-  something, scream, flee, lash out, catatonic). The result goes back to the GM
-  in the tool result, and the TV shows it big.
-- **Push.** After a failed check, the phone offers "Push it (+1 stress)" for one
-  re-roll.
-- Stress drops when the GM grants a calm moment.
-- Hook: the request_roll resolver in the `src/lib/dm/catalog-roll.ts` area
-  (find the exact spot when building).
+- Each crew member has **Stress, from 0 to 10**: ten pips under the health
+  bar on the TV's crew card (amber from 4, red from 7) and "Stress N" beside
+  health on the phone's You tab. Kept in `couch_stress`.
+- **It rises on its own**: +1 for every wound that gets through
+  (`pc-damage.ts`), +1 to everyone else when a crew member drops or dies, +1
+  for a push. The GM adds +1 or +2 for a horror seen and takes 1 off for real
+  rest with `adjust_stress`; TENSION's build and breather lines remind it.
+  The GM reads a STRESS line every turn while anyone has any.
+- **Stress dice.** On a crew member's check or save (never an attack, damage
+  or initiative) the server throws one d6 per point beside the d20, where the
+  phone's throw resolves (`pending-rolls` route). Each 6 adds +2 as a
+  modifier on the total, so the stored roll, its success and every readout
+  agree; the TV reads the stress dice with the result.
+- **Panic.** Any 1 sets off a panic roll, d6 + stress, on a short table:
+  holds it together, jumpy (+1), drops it, freezes, screams (everyone else
+  +1, and the threat hears), then the three that take the character out of
+  their player's hands: bolts and lashes out (one move lost), catatonic (two).
+  The GM reads the result in the roll's answer and narrates it; the TV shows
+  a card ("Teddy Malloy panics", "Bolts"). While moves are lost the TV's card
+  says "Panicking", the phone hides the action box behind a banner, the table
+  does not wait on them and the server refuses their moves; the GM's replies
+  count the lost moves off.
+- **Push.** After a failed check or save (not a group check, not at 10), the
+  phone's result offers "Push it · +1 stress" for 15 seconds (beside a story
+  point to spend, 2.2), and the GM's
+  turn waits for the answer: a push throws again with the new stress and
+  answers the GM's call with the new roll; "Take the failure", or the window
+  running out, lets the turn go on.
 
 ### 2.4 A picture every turn, with the same faces
 
@@ -396,6 +504,15 @@ backend that speaks ElevenLabs.
 - **Autoplay.** The TV needs one tap or click before the browser will play
   sound. The TV's lobby screen shows a big "Tap to start sound" before the
   briefing.
+- **Who is talking.** While an NPC, creature or crew member's line is heard,
+  the TV shows their face and name over the subtitles, and a crew member's
+  tile in the strip lights. Each clip's length is read from its MP3 frames
+  (`src/lib/mp3-logic.ts`) into cues: who is heard from when to when
+  (`src/lib/narration-cues-logic.ts`). The cues are sent as the clips land
+  (`tts_cues`), with `tts_ready`, and in the snapshot for the newest takes,
+  and saved beside each take as `<message>.cues.json`. The TV reads the cue
+  under the narration clock (`CouchTvSpeaker.tsx`). A line only gets a face
+  when its speaker has a voice of their own; the narrator has none.
 
 ### 2.6 The TV view
 
@@ -417,8 +534,8 @@ dice sound where WebGL is missing), then faces, modifiers, total and verdict. Co
 queue; private rolls stay off the TV. Reduced motion removes the tumble; muted
 or failed speech falls back to readable timing. Phones keep a rules reference,
 a reminder of when checks happen, and recent public roll results. Narration
-explains the scene consequence after the server's numeric readout. Story points
-remain a progress counter; the briefing does not promise spending or stress.
+explains the scene consequence after the server's numeric readout. A story
+point can be spent on a failed check or save (2.2), which the briefing says.
 
 Implemented item pictures (`src/lib/couch/item-show*.ts`): the TV shows the
 pictures the phones' Gear section uses (painted icons, or the night's own
@@ -464,8 +581,29 @@ chrome-free TV route, but it shows no story text and plays no sound.
     GM is thinking…" or "Dice are rolling…". The dice stay bright.
   - Roll and panic results as big animated cards (`RollToast` exists).
   - Act title cards.
-- **Ambience.** On, automatic and TV-only (`ambienceAuto`). A low drone and
-  ship hum sell the genre. The music follows the scene's mood
+- **Ambience.** On, automatic and TV-only (`ambienceAuto`). A couch night
+  plays its own sound pack (`src/lib/couch/sound-catalog.ts`, pack
+  `scifi_horror`), never the fantasy library: 16 places (`hull`,
+  `engineering`, `bridge`, `medbay`, `cryo`, `ducts`, `airlock`, `eva`,
+  `derelict`, `hive`, `hab`, `mess`, `lab`, `cargo`, `exo_storm`,
+  `seafloor`, plus a few shared outdoor sounds), a hybrid-orchestral score
+  with one cue per mood (`score_*`), and 14 stings (motion tracker, klaxon,
+  braam…). The GM's place and sound tools list only the pack
+  (`src/lib/couch/sound-logic.ts`), a place filed under an upstream kind is
+  heard as the nearest couch one, and a place with no kind is `hull`. The
+  files are generated once with ElevenLabs and loudness-matched per layer
+  (`scripts/generate-ambience.mjs --backend elevenlabs --pack scifi_horror`).
+  Five more genre packs are made and wait for a night of their genre
+  (`src/lib/couch/sound-packs/`): `gothic_horror` (haunted manor: organ,
+  harpsichord, music box), `thriller` (conspiracy: synths, ticking strings),
+  `folk_horror` (village cult: hurdy-gurdy, fiddle, analog synths),
+  `cosmic_horror` (1920s investigators: theremin, low choir) and
+  `survival_horror` (zombies: guitar, cello, industrial drums). Each has its
+  places, a score cue per mood (`${prefix}_${mood}`) and stings, and may
+  share sounds with the upstream library or another pack. Today every night
+  plays `scifi_horror` (`couchSoundPack`); the forge choosing a genre is
+  what switches it.
+  The music follows the scene's mood
   (`src/lib/couch/mood.ts`): the GM names it with `set_mood` (calm, relief,
   uneasy, aftermath, dread, danger, chase, fight), attacks and damage raise
   it on their own, and each act sets a floor until the GM speaks. It climbs
@@ -559,10 +697,9 @@ dropped out.
 
 Add a `scifi-horror` preset beside the others in `src/lib/genres.ts`:
 dmFlavor, portraitStyle, sceneStyle, nameHints, and careers instead of
-classes. Use original names (the Company, an original creature, original ship
-classes): shipped content must not reproduce the ALIEN franchise's creatures or
-trademarks (`docs/art/creature-art-guidance.md`). On the night, nothing stops
-you typing whatever premise you like into the seed box.
+classes. Franchise names are allowed: a night can build on any existing
+universe, its creatures, companies and ships. Type whatever premise you like
+into the seed box; with no seed the forge invents its own.
 
 Tone lines for the GM: "slow dread, then violence; scarcity of ammo, air and
 time; the Company always has a second agenda; let the crew distrust each
@@ -718,7 +855,7 @@ not ended by the roll that ordered it. The side lasts for that fight; the
 fight ends when either side is down. On the TV the turned crew
 member is a foe card with their own face (then their fight pictures,
 painted from their portrait), red in the turn order and "Fighting the crew"
-in the strip, and the move banner reads "Against the crew". Their phone's
+on their card, and the move line reads "Against the crew". Their phone's
 fight strip lists the crew as the other side ("you against the crew"). The
 closing card names the winners ("Brakk Oduya wins") rather than saying the
 crew won. Both GM rule blocks say how (`COUCH_RULES`, `COUCH_FIGHT_RULES`):
@@ -733,25 +870,56 @@ from the engine's own ruling on the throw (`parkedAttackOutcome`). Surprise
 costs the first turn only: a surprised crew member at the head of the order
 used to lose round 2's turn as well (`encounter-tools.ts` `advancePointer`).
 
-**On the TV** (`CouchTvFight.tsx`, `couch-fight.css`):
+**On the TV** (`CouchTvFight.tsx`, `couch-fight.css`), laid out like a
+turn-based game in zones that never overlap, so the room reads who fights
+whom at a glance and nothing covers the faces in the scene:
 
 - a slow red edge, so the room can tell a fight from the story;
 - the scene picture steps into the space left of the creatures and pulls
   back from its usual overhang, so none of it sits under a card; its edge
   feathers into a blurred, darkened copy of the same picture behind the
   creatures' column (a find shown beside the place gives way meanwhile);
-- the turn order top right: crew faces and the creatures' pictures, the one
-  acting lit, the fallen greyed, and the round;
-- whose move it is over the scene, "Kara's move · say it on your phone ·
-  then Brakk", or the creature's turn in red; it gives way while the GM
-  answers or a roll is called;
-- each creature down the right: its picture, name, health in words
-  (Unhurt, Hurt, Bloodied, Near death, Down) and four pips, never a number;
-  a blow flashes the card, a fall stamps it;
-- the crew strip marks "your move" and "next", and a crew member who is hit
-  flashes red;
-- subtitles, the answers and the dice move left of the creatures, and the
-  answers give way to a roll call rather than sit under it;
+- the turn order across the top centre: crew faces and the creatures'
+  pictures, the one acting lit, the fallen greyed, and the round; the
+  objective and "Waiting on" are set aside until the fight ends;
+- the enemy side down the right under "Enemies · 2 of 3 standing": each
+  creature's picture, name, health in words (Unhurt, Hurt, Bloodied, Near
+  death, Down) and four pips, never a number, and "Their move" on the one
+  acting; a blow flashes the card, a fall stamps it;
+- the crew's side along the bottom: a card each with no role line, the one
+  moving lit and larger ("Your move"), the next marked "Next", one hit in
+  the fight outlined red and marked "Hit" for five seconds, one elsewhere
+  dimmed with the room they are in;
+- whose move it is in the bottom right corner under the creatures, "Kara,
+  what do you do? · Say it on your phone · then Brakk", or "Hunter 1 moves ·
+  Then Brakk" in red; it gives way while the GM answers or a roll is
+  called;
+- where everyone stands, in the clear middle (`CouchTvFightMap.tsx`,
+  `src/lib/couch/fight-map*.ts`, GET `/api/campaigns/[id]/couch/fight-map`):
+  the fight's own battle map cropped to the fighters, with walls, water and
+  rough ground, each crew member and creature as their picture on their
+  square, each creature's reach dashed red, where the crew member whose
+  move it is can walk in green (their speed, rough ground at double cost,
+  never through a wall or a creature), and a line from them to each
+  creature with the distance ("20 ft", or "In reach"), so the room can
+  tell a swing from a shot. The TV signs in as the host, who plays no
+  character, so the board's own projection would show it no creature; the
+  route returns only the crew in the fight and the creatures still
+  standing that the GM has not hidden, which the TV names anyway. What
+  happens plays on it, every effect from an outcome the server resolved:
+  an attack lunges (melee) or flies (ranged) and lands "Hit", "Critical!"
+  or "Miss" with the target shaking; a spell bursts in its damage's
+  colour; a heal, a condition and a fall say so over the figure; a figure
+  on a new square slides there over a fading trail with "Moves 15 ft", or
+  "Runs 45 ft" past its speed; a check thrown in the fight plays on the
+  thrower (talk ripples for Persuasion, Deception, Intimidation; a sneak
+  fades them; Athletics and Acrobatics leap; a search sweeps; a save
+  braces) with what they did and whether it worked. With reduced motion
+  each effect fades in place instead;
+- the story as one sentence at a time under the grid, no earlier
+  passage (the voice reads all of it, the phones hold it); the answers and
+  the dice move left of the creatures, and the answers give way to a roll
+  call rather than sit under it;
 - when the fight ends, a card for 16 seconds: how it ended, how many
   rounds, what each crew member dealt and took and their natural 20s, over
   the creature's down picture, stamped.
@@ -783,9 +951,9 @@ hurt it is. Every scene picture during a fight takes the creature's current
 picture as a reference (`scene-shot.ts` `sceneShotCast`), so the beast in
 the scene is the one on the card. At most 12 kinds a night, two tries each.
 
-There is no setting: a fight is how a fight plays. The prompt keeps a
-creature an original design, never one from a film, game or book, and never
-turns a person into a monster.
+There is no setting: a fight is how a fight plays. The prompt paints a
+creature as the story describes it, from any universe, and never turns a
+person into a monster.
 
 ### 2.12 Death, and playing on
 
@@ -838,6 +1006,41 @@ A whole crew dying is the same: every player takes someone over, and the
 story carries on with them.
 
 ---
+
+### 2.13 Hidden effects, the ship's harm and ambushes
+
+The surprises an ALIEN night is remembered for: the parasite planted an act
+ago, the vent that blows while someone is still in the lock, the friendly
+NPC who opens fire. All harm is **damage**, never a scripted death: it can
+kill only the way 5e kills (failed death saves, damage taken while dying,
+massive damage), so the dice keep the last word.
+
+- **Hidden effects** (`src/lib/couch/hidden-effects*.ts`, the GM's
+  `hidden_effect` tool). The GM plants a secret in one crew member: a name
+  for the TV ("Parasite"), the truth (the GM's alone), and two to four
+  stages, each a symptom the room can notice, the last the payoff. At most
+  three grow at once. Each turn the GM reads a secret HIDDEN EFFECTS block
+  (left out of an answer the whole table reads): truth, stage, symptom, and
+  the replies spent at that stage. After `everyReplies` (six by default) the
+  next symptom is due, then the payoff. `advance` moves it on, `reveal` puts
+  a card on the TV once (name over the host's name), `cure` ends it at a
+  cost, and `payoff`, only at the last stage, reveals it and, with damage
+  dice, hurts its host through the damage engine (`applyPcDamage`).
+  Nothing reaches the phones: even the host learns of it only through what
+  the GM narrates or whispers. Kept in `couch_hidden_effects`.
+- **The ship's harm.** `apply_hazard` (vents, fire, vacuum, falls, a
+  bespoke hazard with its own dice, save and DC) is offered on every couch
+  turn, not only when a player names fire. The GM warns before a hazard
+  that could kill.
+- **Dying outside a fight** (`src/lib/couch/dying.ts`). The engine rolls
+  death saves only on combat turns, so a crew member a hazard or a payoff
+  dropped outside a fight would lie dying forever. On a couch night each GM
+  turn outside a fight rolls one death save for each dying crew member
+  before the GM reads the table, and `COUCH_DEATH_RULE` says so: the crew
+  has a few replies to stabilise or heal them.
+- **Ambushes.** The rules allow NPCs to attack without warning, and TENSION's
+  strike names it (`start_encounter` with `surprised: party`), beside the
+  ship hurting the crew and a hidden effect paying off.
 
 ## Part 3: one turn, end to end
 

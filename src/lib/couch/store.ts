@@ -3,6 +3,7 @@ import type { Forge } from "@/lib/couch/forge-logic";
 import { isCouchMood, type MoodState } from "@/lib/couch/mood-logic";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import { readObjective, type CouchObjective } from "@/lib/couch/pacing-logic";
+import { readActPoints, readActRecaps } from "@/lib/couch/act-break-logic";
 
 // A couch night's forge and its crew cards (docs/couch-mode-spec.md 2.1).
 //
@@ -48,6 +49,17 @@ export type CouchForgeRow = {
   actSince: string;
   // What every screen shows the crew is trying to do now (set_objective).
   objective: CouchObjective | null;
+  // When anything last came at the crew (src/lib/couch/tension.ts): "" until
+  // the first strike, when the act clock stands in for it.
+  pressureAt: string;
+  // The deck beats already played, as "act.index" (tension-logic.ts beatId).
+  beatsUsed: string[];
+  // The story points of each act that has ended, by act index
+  // (src/lib/couch/act-break-logic.ts), as the GM wrote them at the break.
+  recaps: string[][];
+  // Story points awarded in the act in force, by sheet id: the act break's
+  // roll call (src/lib/couch/act-break-logic.ts actRollCall).
+  actPoints: Record<string, number>;
   updatedAt: string;
 };
 
@@ -142,6 +154,23 @@ function db() {
     if (!columns.some((column) => column.name === "objective_json")) {
       database.exec(`ALTER TABLE couch_forges ADD COLUMN objective_json TEXT NOT NULL DEFAULT ''`);
     }
+    // And the tension clock: a night under way counts from its act clock
+    // until something next comes at the crew, with its whole deck unplayed.
+    if (!columns.some((column) => column.name === "pressure_at")) {
+      database.exec(`ALTER TABLE couch_forges ADD COLUMN pressure_at TEXT NOT NULL DEFAULT ''`);
+    }
+    if (!columns.some((column) => column.name === "beats_used_json")) {
+      database.exec(`ALTER TABLE couch_forges ADD COLUMN beats_used_json TEXT NOT NULL DEFAULT ''`);
+    }
+    // And the act breaks' recaps: a night under way has none for the acts
+    // it already turned.
+    if (!columns.some((column) => column.name === "recaps_json")) {
+      database.exec(`ALTER TABLE couch_forges ADD COLUMN recaps_json TEXT NOT NULL DEFAULT ''`);
+    }
+    // And the act's awards: a night under way counts from its next award.
+    if (!columns.some((column) => column.name === "act_points_json")) {
+      database.exec(`ALTER TABLE couch_forges ADD COLUMN act_points_json TEXT NOT NULL DEFAULT ''`);
+    }
     ensured.add(database);
   }
   return database;
@@ -160,6 +189,10 @@ type ForgeRow = {
   intro_step: number;
   act_since: string | null;
   objective_json: string | null;
+  pressure_at: string | null;
+  beats_used_json: string | null;
+  recaps_json: string | null;
+  act_points_json: string | null;
   updated_at: string;
 };
 
@@ -179,6 +212,8 @@ type CrewRow = {
   sheet_id: string | null;
 };
 
+const readIds = (value: unknown): string[] => (Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : []);
+
 function mapForge(row: ForgeRow): CouchForgeRow {
   return {
     campaignId: row.campaign_id,
@@ -193,6 +228,10 @@ function mapForge(row: ForgeRow): CouchForgeRow {
     introStep: row.intro_step ?? INTRO_OPEN,
     actSince: row.act_since ?? "",
     objective: readObjective(parseJson<unknown>(row.objective_json || "null", null)),
+    pressureAt: row.pressure_at ?? "",
+    beatsUsed: readIds(parseJson<unknown>(row.beats_used_json || "[]", [])),
+    recaps: readActRecaps(parseJson<unknown>(row.recaps_json || "[]", [])),
+    actPoints: readActPoints(parseJson<unknown>(row.act_points_json || "{}", {})),
     updatedAt: row.updated_at,
   };
 }
@@ -234,7 +273,7 @@ export function beginCouchForge(campaignId: string, input: { players: number; se
          VALUES (?, 'forging', '', ?, ?, ?, ?, '', 0, 0, ?, ?)
          ON CONFLICT (campaign_id) DO UPDATE SET status = 'forging', error = '', players = excluded.players,
            seed = excluded.seed, off_limits = excluded.off_limits, scenario_id = excluded.scenario_id, forge_json = '', act = 0,
-           intro_step = 0, act_since = '', objective_json = '', updated_at = excluded.updated_at`,
+           intro_step = 0, act_since = '', objective_json = '', pressure_at = '', beats_used_json = '', recaps_json = '', act_points_json = '', updated_at = excluded.updated_at`,
       )
       .run(campaignId, input.players, input.seed, input.offLimits, input.scenarioId ?? "", now, now);
   })();
@@ -283,11 +322,17 @@ export function finishCouchForge(
   return listCouchCrew(campaignId);
 }
 
-// A new act starts its clock and clears the objective, which belonged to
-// the act before.
-export function setCouchAct(campaignId: string, act: number): void {
+// A new act starts its clock and clears the objective and the act's awards,
+// which belonged to the act before; the recap is the story points of the
+// act that ended.
+export function setCouchAct(campaignId: string, act: number, recap: string[] = []): void {
   const now = nowIso();
-  db().prepare(`UPDATE couch_forges SET act = ?, act_since = ?, objective_json = '', updated_at = ? WHERE campaign_id = ?`).run(act, now, now, campaignId);
+  const recaps = [...(getCouchForge(campaignId)?.recaps ?? [])];
+  while (recaps.length < act - 1) recaps.push([]);
+  recaps[act - 1] = recap;
+  db()
+    .prepare(`UPDATE couch_forges SET act = ?, act_since = ?, objective_json = '', recaps_json = ?, act_points_json = '', updated_at = ? WHERE campaign_id = ?`)
+    .run(act, now, JSON.stringify(recaps.slice(0, Math.max(0, act))), now, campaignId);
 }
 
 // The first turn of a night (or of a night already under way when the act
@@ -300,6 +345,26 @@ export function startCouchActClock(campaignId: string): string {
 
 export function setCouchObjective(campaignId: string, objective: CouchObjective): void {
   db().prepare(`UPDATE couch_forges SET objective_json = ?, updated_at = ? WHERE campaign_id = ?`).run(JSON.stringify(objective), nowIso(), campaignId);
+}
+
+// A story point awarded: counted toward the act break's roll call.
+export function addCouchActPoint(campaignId: string, sheetId: string): void {
+  const forge = getCouchForge(campaignId);
+  if (!forge) return;
+  const points = { ...forge.actPoints, [sheetId]: (forge.actPoints[sheetId] ?? 0) + 1 };
+  db().prepare(`UPDATE couch_forges SET act_points_json = ? WHERE campaign_id = ?`).run(JSON.stringify(points), campaignId);
+}
+
+// Something came at the crew: the tension clock starts over.
+export function markCouchPressure(campaignId: string): void {
+  db().prepare(`UPDATE couch_forges SET pressure_at = ? WHERE campaign_id = ?`).run(nowIso(), campaignId);
+}
+
+// A deck beat was played; playing it twice changes nothing.
+export function markCouchBeatPlayed(campaignId: string, id: string): void {
+  const used = getCouchForge(campaignId)?.beatsUsed ?? [];
+  if (used.includes(id)) return;
+  db().prepare(`UPDATE couch_forges SET beats_used_json = ? WHERE campaign_id = ?`).run(JSON.stringify([...used, id]), campaignId);
 }
 
 // The TV moves its introductions on from the step it was showing. Only from

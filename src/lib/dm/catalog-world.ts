@@ -7,6 +7,7 @@ import { DEED_SEVERITIES } from "@/lib/dm/companion-values-logic";
 import type { CatalogEntry } from "@/lib/dm/catalog-types";
 import { cueOptions, sceneOptions } from "@/lib/ambience/catalog";
 import { COUCH_MOODS } from "@/lib/couch/mood-logic";
+import { BEAT_KINDS, BEATS_PER_ACT } from "@/lib/couch/tension-logic";
 import { RELATIONSHIP_BEAT_NAMES } from "@/lib/dm/relationship-logic";
 import { TOLD_GENDERS } from "@/lib/gender";
 import {
@@ -710,8 +711,11 @@ export const TABLE_ADJUDICATIONS: CatalogEntry[] = [
     name: "advance_act",
     label: "Next act",
     category: "story",
-    summary: "Turns a couch one-shot to its next act: each player's phone gets their next secret agenda.",
-    fields: [{ name: "title", label: "Under the act number", kind: "text", placeholder: "The Hold Opens" }],
+    summary: "Turns a couch one-shot to its next act: the TV shows the story so far, and each player's phone gets their next secret agenda.",
+    fields: [
+      { name: "recap", label: "Story so far (one point per line)", kind: "longtext", placeholder: "The beacon led the crew to the derelict" },
+      { name: "title", label: "Under the act number", kind: "text", placeholder: "The Hold Opens" },
+    ],
   },
   {
     name: "set_objective",
@@ -727,7 +731,7 @@ export const TABLE_ADJUDICATIONS: CatalogEntry[] = [
     name: "award_story_point",
     label: "Story point",
     category: "story",
-    summary: "One story point to a crew member for chasing their secret agenda.",
+    summary: "One story point to a crew member by hand (three held at most). The GM awards them itself at each act break.",
     fields: [{ name: "characterId", label: "Crew member", kind: "character", required: true }],
   },
   {
@@ -745,6 +749,48 @@ export const TABLE_ADJUDICATIONS: CatalogEntry[] = [
     fields: [
       { name: "characterIds", label: "Who", kind: "characters" },
       { name: "place", label: "Or where", kind: "text" },
+    ],
+  },
+  {
+    name: "end_night",
+    label: "End the night",
+    category: "story",
+    summary: "Ends a couch one-shot in its last act: after this passage the TV runs the closing and the phones stop.",
+    fields: [{ name: "ending", label: "How it ended", kind: "text", required: true, placeholder: "Two made the shuttle; the Company got its sample" }],
+  },
+  {
+    name: "hidden_effect",
+    label: "Hidden effect",
+    category: "story",
+    summary: "A secret growing in a couch crew member (a parasite, an infection): plant it, move it on, reveal it, cure it or pay it off.",
+    fields: [
+      {
+        name: "action",
+        label: "Do",
+        kind: "select",
+        required: true,
+        options: ["plant", "advance", "reveal", "cure", "payoff"].map((action) => ({ value: action, label: action[0].toUpperCase() + action.slice(1) })),
+      },
+      { name: "characterId", label: "Crew member (plant)", kind: "character" },
+      { name: "effectId", label: "Effect id", kind: "text" },
+      { name: "name", label: "Called", kind: "text", placeholder: "Parasite" },
+      { name: "truth", label: "What it really is", kind: "text" },
+      { name: "damage", label: "Payoff damage", kind: "text", placeholder: "4d10" },
+    ],
+  },
+  {
+    name: "spring_beat",
+    label: "Pressure beat",
+    category: "story",
+    summary: "Logs a couch one-shot's pressure beat: a deck beat by number, or a sign, a demand or a strike.",
+    fields: [
+      { name: "beat", label: "Deck beat", kind: "number", min: 1, max: BEATS_PER_ACT },
+      {
+        name: "kind",
+        label: "Or its kind",
+        kind: "select",
+        options: BEAT_KINDS.map((kind) => ({ value: kind, label: kind[0].toUpperCase() + kind.slice(1) })),
+      },
     ],
   },
   {

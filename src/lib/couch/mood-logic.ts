@@ -24,18 +24,10 @@ const INTENSITY: Record<CouchMood, number> = {
   fight: 4,
 };
 
-// Music cue ids from src/lib/ambience/catalog.ts. A fight in the last act is
-// the big one.
-const CUE: Record<CouchMood, string> = {
-  calm: "calm",
-  relief: "triumph",
-  uneasy: "mystery",
-  aftermath: "sorrow",
-  dread: "dread",
-  danger: "tension",
-  chase: "chase",
-  fight: "battle",
-};
+// The night's score (src/lib/couch/sound-catalog.ts): every pack names its
+// cues `${prefix}_${mood}`, and a fight in the last act is its finale. The
+// sci-fi pack's prefix is "score".
+export const DEFAULT_SCORE_PREFIX = "score";
 
 // Until the GM names a mood in an act, the act's own: slow dread, then worse.
 const ACT_FLOOR: readonly CouchMood[] = ["uneasy", "uneasy", "dread"];
@@ -63,8 +55,8 @@ export function moodIntensity(mood: CouchMood): number {
   return INTENSITY[mood];
 }
 
-export function moodCue(mood: CouchMood, act: number): string {
-  return mood === "fight" && act >= ACT_FLOOR.length - 1 ? "boss" : CUE[mood];
+export function moodCue(mood: CouchMood, act: number, scorePrefix = DEFAULT_SCORE_PREFIX): string {
+  return `${scorePrefix}_${mood === "fight" && act >= ACT_FLOOR.length - 1 ? "finale" : mood}`;
 }
 
 // What the scene sits at when nothing is happening: the GM's word in this

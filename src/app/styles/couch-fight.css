@@ -1,9 +1,9 @@
 /* A fight on a couch night (docs/couch-mode-spec.md 2.11,
-   src/components/couch/CouchTvFight.tsx). The story waits until the fight
-   is over, and the TV says so: a slow red edge, who acts in what order top
-   right, whose move it is over the scene, and each creature big down the
-   right with the picture the night painted of it. Health is words and lit
-   pips. The danger red is the couch's own (--couch-danger); the crew keep
+   src/components/couch/CouchTvFight.tsx), laid out like a turn-based game
+   in zones that never overlap: a slow red edge, the turn order across the
+   top, the creatures down the right, the crew's cards along the bottom,
+   whose move it is in the bottom right corner, and one line of the story
+   in the clear middle. Health is words and lit pips. The danger red is the couch's own (--couch-danger); the crew keep
    the phosphor green. Everything is sized for the far side of the room. */
 
 .couch-tv { --foe-w: 25vw; --play-mid: calc((100vw - var(--foe-w) - 3vw) / 2); }
@@ -67,59 +67,95 @@
 .couch-tv:has(.couch-fight-foes) .couch-tv-roll { left: var(--play-mid); }
 .couch-tv:has(.couch-fight-foes) .couch-dice-tray { right: calc(var(--foe-w) + 4vw); }
 
-/* ---- who acts, in order (in the top bar's right side) ---- */
-.couch-fight-order { display: grid; justify-items: end; gap: 0.9vh; }
-.couch-fight-order .couch-label { color: color-mix(in srgb, var(--couch-danger) 75%, #fff); }
-.couch-fight-order ol { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.9vw; max-width: 44vw; }
-.couch-fight-seat { display: grid; justify-items: center; gap: 0.5vh; transition: opacity 400ms ease, filter 400ms ease; }
-.couch-fight-seat .couch-face { --face: max(2.6rem, 3.3vw); border-color: rgba(255, 255, 255, 0.2); transition: transform 300ms ease, box-shadow 300ms ease; }
-.couch-fight-seat[data-kind="enemy"] .couch-face { border-color: color-mix(in srgb, var(--couch-danger) 55%, transparent); }
-.couch-fight-seat[data-current] .couch-face { box-shadow: 0 0 0 3px var(--couch-accent), 0 0 22px color-mix(in srgb, var(--couch-accent) 55%, transparent); transform: scale(1.14); }
-.couch-fight-seat[data-kind="enemy"][data-current] .couch-face { box-shadow: 0 0 0 3px var(--couch-danger), 0 0 22px color-mix(in srgb, var(--couch-danger) 55%, transparent); }
-.couch-fight-seat[data-out] { opacity: 0.4; filter: grayscale(1); }
-.couch-fight-seat-name { max-width: 6vw; overflow: hidden; font-size: max(0.75rem, 0.85vw); color: rgba(225, 238, 230, 0.8); text-overflow: ellipsis; white-space: nowrap; }
-.couch-fight-seat[data-current] .couch-fight-seat-name { color: #fff; font-weight: 650; }
-
-/* ---- whose move it is, over the scene ---- */
-.couch-fight-turn {
+/* ---- who acts, in order, across the top ---- */
+/* Centred over the scene, with the title kept short beside it. */
+.couch-tv-stage[data-fight] .couch-tv-title { max-width: 22vw; }
+.couch-fight-order {
   position: absolute;
-  top: 10.5vh;
-  left: var(--play-mid);
+  top: max(2vh, env(safe-area-inset-top));
+  left: 50%;
   display: flex;
   align-items: center;
-  gap: 1.1vw;
-  max-width: 62vw;
-  padding: 1.2vh 2vw 1.2vh 1.2vh;
-  border: 1px solid color-mix(in srgb, var(--couch-accent) 55%, transparent);
+  gap: 1.2vw;
+  max-width: 52vw;
+  padding: 0.9vh 1.6vw;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 999px;
-  background: rgba(5, 8, 10, 0.86);
-  box-shadow: 0 0 40px color-mix(in srgb, var(--couch-accent) 18%, transparent);
+  background: rgba(4, 8, 10, 0.74);
   transform: translateX(-50%);
-  animation: couch-fight-turn-in 500ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
 }
-@keyframes couch-fight-turn-in { from { opacity: 0; transform: translate(-50%, -1.2vh) scale(0.96); } to { opacity: 1; transform: translateX(-50%); } }
-.couch-fight-turn .couch-face { --face: max(3rem, 3.8vw); border-radius: 999px; }
-.couch-fight-turn-text { display: grid; gap: 0.3vh; min-width: 0; }
-.couch-fight-turn strong { overflow: hidden; font-size: max(1.4rem, 2.2vw); font-weight: 700; line-height: 1.1; text-overflow: ellipsis; white-space: nowrap; }
-.couch-fight-turn-text > span { font-size: max(0.95rem, 1.15vw); color: rgba(225, 238, 230, 0.82); }
+.couch-fight-order .couch-label { flex: none; color: color-mix(in srgb, var(--couch-danger) 75%, #fff); white-space: nowrap; }
+.couch-fight-order ol { display: flex; align-items: flex-start; gap: 0.9vw; min-width: 0; overflow: hidden; }
+.couch-fight-seat { display: grid; flex: none; justify-items: center; gap: 0.5vh; transition: opacity 400ms ease, filter 400ms ease; }
+.couch-fight-seat .couch-face { --face: max(2.4rem, 2.9vw); border-color: color-mix(in srgb, var(--couch-accent) 45%, transparent); transition: transform 300ms ease, box-shadow 300ms ease; }
+.couch-fight-seat[data-kind="enemy"] .couch-face { border-color: color-mix(in srgb, var(--couch-danger) 60%, transparent); }
+.couch-fight-seat[data-current] .couch-face { box-shadow: 0 0 0 3px var(--couch-accent), 0 0 22px color-mix(in srgb, var(--couch-accent) 55%, transparent); transform: scale(1.18); }
+.couch-fight-seat[data-kind="enemy"][data-current] .couch-face { box-shadow: 0 0 0 3px var(--couch-danger), 0 0 22px color-mix(in srgb, var(--couch-danger) 55%, transparent); }
+.couch-fight-seat[data-out] { opacity: 0.4; filter: grayscale(1); }
+.couch-fight-seat-name { max-width: 6vw; overflow: hidden; font-size: max(0.75rem, 0.8vw); color: rgba(225, 238, 230, 0.75); text-overflow: ellipsis; white-space: nowrap; }
+.couch-fight-seat[data-current] .couch-fight-seat-name { margin-top: 0.4vh; color: #fff; font-weight: 700; }
+
+/* ---- whose move it is, bottom right beside the crew ---- */
+/* In the creatures' column, under them: the crew card it names is lit, so
+   these words only say what to do. */
+.couch-fight-turn {
+  position: absolute;
+  right: 3vw;
+  bottom: max(2.6vh, env(safe-area-inset-bottom));
+  display: grid;
+  justify-items: end;
+  gap: 0.6vh;
+  width: var(--foe-w);
+  text-align: right;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.95);
+  animation: couch-fight-prompt-in 500ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+@keyframes couch-fight-prompt-in { from { opacity: 0; transform: translateY(1.2vh); } to { opacity: 1; transform: none; } }
+/* A card arriving in the column's slot rises into it. */
+@keyframes couch-fight-slot-in { from { opacity: 0; transform: translateY(1.6vh) scale(0.97); } to { opacity: 1; transform: none; } }
+.couch-fight-turn strong { font-size: max(1.5rem, 2.4vw); font-weight: 750; line-height: 1.05; text-wrap: balance; }
+.couch-fight-turn > span { font-size: max(0.95rem, 1.15vw); color: rgba(225, 238, 230, 0.85); }
 .couch-fight-turn[data-kind="crew"] strong { color: var(--couch-accent); }
-.couch-fight-turn[data-kind="enemy"] { border-color: color-mix(in srgb, var(--couch-danger) 60%, transparent); box-shadow: 0 0 40px color-mix(in srgb, var(--couch-danger) 22%, transparent); }
 .couch-fight-turn[data-kind="enemy"] strong { color: var(--couch-danger); }
-.couch-fight-turn[data-kind="rolling"] { display: grid; justify-items: center; gap: 0.4vh; padding: 1.4vh 2.4vw; border-radius: 18px; text-align: center; }
 .couch-fight-turn[data-kind="rolling"] strong { color: var(--couch-warn); }
 
 /* ---- the creatures, down the right ---- */
-.couch-fight-foes {
+/* The right-hand column: the creatures on top, and under them the slot for
+   one card at a time (a roll called or thrown, a truce). The creatures give
+   up height to the card; nothing in a fight sits over the grid. The column
+   lives outside the stage so a roll stays bright while the GM works; the
+   creatures dim with the stage instead. */
+.couch-fight-side {
   position: absolute;
   top: 16vh;
   right: 3vw;
   bottom: calc(var(--crew-h, 15vh) + 2vh);
+  z-index: 9;
+  display: flex;
+  flex-direction: column;
+  gap: 1.6vh;
+  width: var(--foe-w);
+}
+.couch-fight-foes {
+  /* Sized by what the slot leaves, so its cards can size to it. */
+  container-type: size;
+  flex: 1 1 0;
+  min-height: 0;
   display: grid;
   align-content: start;
   gap: 1.6vh;
-  width: var(--foe-w);
   overflow: hidden;
+  transition: filter 400ms ease;
 }
+.couch-fight-foes[data-gm-busy] { filter: brightness(0.42) saturate(0.6); }
+/* One creature: its picture gives up height first, keeping its name and
+   health in view (about 23vh of label, words and pips around it). */
+.couch-fight-foes[data-layout="solo"] .couch-fight-foe-art {
+  aspect-ratio: auto;
+  height: min(calc(var(--foe-w) - 1.8vw), calc(100cqh - 23vh));
+  min-height: 6vh;
+}
+.couch-fight-foes-label { grid-column: 1 / -1; justify-self: end; color: color-mix(in srgb, var(--couch-danger) 75%, #fff); }
 .couch-fight-foes[data-layout="grid"] { grid-template-columns: 1fr 1fr; gap: 1.2vh 0.8vw; }
 /* Five to eight: two compact columns, so the whole fight fits. */
 .couch-fight-foes[data-layout="list"] { grid-template-columns: 1fr 1fr; gap: 1vh 0.6vw; }
@@ -152,6 +188,8 @@
   background: radial-gradient(circle at 50% 40%, #1b1012, #050608 70%);
 }
 .couch-fight-foes[data-layout="pair"] .couch-fight-foe-art { width: 11vw; }
+/* Three or four: wider than tall, so two rows fit above the crew. */
+.couch-fight-foes[data-layout="grid"] .couch-fight-foe-art { aspect-ratio: 4 / 3; }
 .couch-fight-foes[data-layout="list"] .couch-fight-foe-art { width: 3.8vw; border-radius: 10px; }
 .couch-fight-foe-art img {
   width: 100%;
@@ -219,9 +257,29 @@
 @keyframes couch-fight-stamp { from { opacity: 0; transform: rotate(-8deg) scale(2.2); } to { opacity: 1; transform: rotate(-8deg) scale(1); } }
 
 .couch-fight-foe-text { display: grid; gap: 0.6vh; min-width: 0; }
+/* The creature whose turn it is says so on its card, in the foes' red. */
+.couch-fight-foe-tag,
+.couch-tv-member-tag {
+  justify-self: start;
+  padding: 0.25vh 0.5vw;
+  border-radius: 6px;
+  font: 700 max(0.65rem, 0.72vw) / 1.3 var(--font-geist-mono), ui-monospace, monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.couch-fight-foe-tag { background: var(--couch-danger); color: #000; }
 .couch-fight-foe h3 { overflow: hidden; font-size: max(1.1rem, 1.55vw); font-weight: 700; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; }
 .couch-fight-foes[data-layout="grid"] .couch-fight-foe h3,
 .couch-fight-foes[data-layout="list"] .couch-fight-foe h3 { font-size: max(0.95rem, 1.1vw); }
+/* A pack shares a name up to its number ("Hunter 2"), so a narrow card
+   wraps to a second line rather than cut the number off. */
+.couch-fight-foes:is([data-layout="pair"], [data-layout="grid"], [data-layout="list"]) .couch-fight-foe h3 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+}
 .couch-fight-foe-state { display: flex; align-items: center; gap: 0.7vw; font-size: max(1rem, 1.25vw); font-weight: 600; white-space: nowrap; }
 .couch-fight-foes[data-layout="grid"] .couch-fight-foe-state,
 .couch-fight-foes[data-layout="list"] .couch-fight-foe-state { gap: 0.5vw; font-size: max(0.9rem, 1vw); }
@@ -241,11 +299,252 @@
 .couch-fight-foe[data-tone="dying"] .couch-fight-foe-state,
 .couch-fight-foe[data-tone="down"] .couch-fight-foe-state { color: var(--couch-danger); }
 
-/* ---- the crew strip in a fight ---- */
+/* ---- where everyone stands (CouchTvFightMap.tsx) ----
+   The fight's squares in the clear middle, between the turn order and the
+   story's line: as big as fits there, the right shape for the crop. The
+   scene darkens behind it so the board reads. */
+.couch-fight-map {
+  --map-box-h: calc(100vh - 15vh - var(--crew-h, 15vh) - 13vh);
+  --map-box-w: calc(100vw - var(--foe-w) - 10vw);
+  position: absolute;
+  top: 14vh;
+  left: 3vw;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 0.8vh;
+  width: var(--map-box-w);
+  height: var(--map-box-h);
+  animation: couch-fade-in 600ms ease both;
+}
+.couch-tv-stage:has(.couch-fight-map) .couch-tv-art img { filter: brightness(0.5); }
+.couch-fight-map-board {
+  position: relative;
+  container-type: size;
+  width: min(100%, calc((var(--map-box-h) - 3.4vh) * var(--cols) / var(--rows)));
+  aspect-ratio: var(--cols) / var(--rows);
+  border: 1px solid color-mix(in srgb, var(--couch-accent) 22%, transparent);
+  border-radius: 14px;
+  background: rgba(4, 10, 8, 0.9);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 2vh 5vh rgba(0, 0, 0, 0.55);
+}
+.couch-fight-map-ground { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+/* The squares: a faint grid, walls solid, the rest by what they are. */
+.couch-fight-map-board::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--couch-accent) 13%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--couch-accent) 13%, transparent) 1px, transparent 1px);
+  background-size: calc(100% / var(--cols)) calc(100% / var(--rows));
+}
+.couch-fight-map-ground rect[data-ground="#"] { fill: #3a4a42; stroke: #56695e; stroke-width: 0.04; }
+.couch-fight-map-ground rect[data-ground="|"] { fill: #2c3832; stroke: #56695e; stroke-width: 0.04; stroke-dasharray: 0.15 0.1; }
+.couch-fight-map-ground rect[data-ground="+"] { fill: color-mix(in srgb, var(--couch-warn) 35%, transparent); }
+.couch-fight-map-ground rect[data-ground="~"] { fill: rgba(70, 130, 190, 0.28); }
+.couch-fight-map-ground rect[data-ground=","],
+.couch-fight-map-ground rect[data-ground="^"] { fill: rgba(255, 255, 255, 0.05); }
+.couch-fight-map-ground rect[data-ground=" "] { fill: #020403; }
+.couch-fight-map-move { fill: color-mix(in srgb, var(--couch-accent) 13%, transparent); }
+.couch-fight-map-reach { fill: color-mix(in srgb, var(--couch-danger) 9%, transparent); stroke: color-mix(in srgb, var(--couch-danger) 70%, transparent); stroke-width: 0.06; stroke-dasharray: 0.22 0.14; }
+.couch-fight-map-reach[data-acting] { fill: color-mix(in srgb, var(--couch-danger) 18%, transparent); stroke: var(--couch-danger); animation: couch-fight-map-pulse 1.4s ease-in-out infinite; }
+@keyframes couch-fight-map-pulse { 50% { opacity: 0.55; } }
+.couch-fight-map-ray line { stroke: var(--couch-warn); stroke-width: 0.07; stroke-dasharray: 0.3 0.2; stroke-linecap: round; }
+.couch-fight-map-ray text {
+  font: 700 0.42px var(--font-geist-mono), ui-monospace, monospace;
+  fill: var(--couch-warn);
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.9);
+  stroke-width: 0.14px;
+}
+.couch-fight-map-ray[data-close] line { stroke: var(--couch-danger); }
+.couch-fight-map-ray[data-close] text { fill: #ffb3ad; }
+.couch-fight-map-trail {
+  stroke: rgba(235, 245, 240, 0.85);
+  stroke-width: 0.1;
+  stroke-dasharray: 0.12 0.18;
+  stroke-linecap: round;
+  animation: couch-fight-map-trail 2.6s ease-out both;
+}
+@keyframes couch-fight-map-trail { 0%, 55% { opacity: 1; } 100% { opacity: 0; } }
+
+/* The figures: a portrait on its square, sliding to a new one. */
+.couch-fight-map-token {
+  --cell: calc(100cqw / var(--cols));
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  width: calc(var(--cell) * 0.92);
+  transform: translate(-50%, calc(var(--cell) * -0.46));
+  transition: left 900ms cubic-bezier(0.3, 0.7, 0.3, 1), top 900ms cubic-bezier(0.3, 0.7, 0.3, 1);
+}
+.couch-fight-map-figure { display: block; border-radius: 999px; }
+.couch-fight-map-token .couch-face {
+  --face: calc(var(--cell) * 0.86);
+  border: max(2px, calc(var(--cell) * 0.06)) solid var(--couch-accent);
+  box-shadow: 0 0.4vh 1vh rgba(0, 0, 0, 0.7);
+}
+.couch-fight-map-token[data-kind="enemy"] .couch-face { border-color: var(--couch-danger); }
+.couch-fight-map-token[data-current] { z-index: 2; }
+.couch-fight-map-token[data-current] .couch-face { box-shadow: 0 0 0 max(2px, calc(var(--cell) * 0.05)) #fff, 0 0 calc(var(--cell) * 0.5) var(--couch-accent); }
+.couch-fight-map-token[data-kind="enemy"][data-current] .couch-face { box-shadow: 0 0 0 max(2px, calc(var(--cell) * 0.05)) #fff, 0 0 calc(var(--cell) * 0.5) var(--couch-danger); }
+.couch-fight-map-token[data-down] .couch-face { filter: grayscale(1) brightness(0.5); }
+.couch-fight-map-name {
+  margin-top: 0.2vh;
+  max-width: calc(var(--cell) * 2);
+  overflow: hidden;
+  font-size: max(0.7rem, min(0.85vw, calc(var(--cell) * 0.26)));
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 0 4px #000, 0 0 4px #000;
+}
+.couch-fight-map-token[data-current] .couch-fight-map-name { color: var(--couch-accent); }
+.couch-fight-map-token[data-kind="enemy"][data-current] .couch-fight-map-name { color: #ffb3ad; }
+
+/* What a figure does, on the figure. */
+.couch-fight-map-figure[data-anim="lunge"] { animation: couch-fight-map-lunge 520ms cubic-bezier(0.4, 0, 0.2, 1) both; }
+@keyframes couch-fight-map-lunge {
+  40% { transform: translate(calc(var(--tx) * var(--cell) * 0.55), calc(var(--ty) * var(--cell) * 0.55)) scale(1.12); }
+}
+.couch-fight-map-figure[data-anim="shake"] { animation: couch-fight-map-shake 520ms ease both; }
+@keyframes couch-fight-map-shake {
+  0%, 100% { transform: none; filter: none; }
+  15% { transform: translateX(calc(var(--cell) * -0.12)); filter: brightness(1.8) sepia(1) hue-rotate(-40deg) saturate(5); }
+  35% { transform: translateX(calc(var(--cell) * 0.1)); }
+  55% { transform: translateX(calc(var(--cell) * -0.07)); }
+  75% { transform: translateX(calc(var(--cell) * 0.04)); }
+}
+.couch-fight-map-figure[data-anim="act"] { animation: couch-fight-map-act 1.6s ease both; }
+.couch-fight-map-figure[data-anim="act"][data-look="leap"] { animation-name: couch-fight-map-leap; animation-duration: 900ms; }
+@keyframes couch-fight-map-leap {
+  35% { transform: translateY(calc(var(--cell) * -0.7)) scale(1.08); }
+  60% { transform: translateY(0) scale(1.05, 0.92); }
+  75% { transform: translateY(calc(var(--cell) * -0.12)); }
+}
+.couch-fight-map-figure[data-anim="act"][data-look="sneak"] { animation-name: couch-fight-map-sneak; animation-duration: 2s; }
+@keyframes couch-fight-map-sneak { 30%, 70% { opacity: 0.25; transform: scale(0.88); } }
+@keyframes couch-fight-map-act { 0%, 100% { transform: none; } 20% { transform: scale(1.14); } }
+/* Talk ripples out from the speaker; a search sweeps round them; bracing
+   rings them like a shield; anything else pulses once. */
+.couch-fight-map-figure[data-anim="act"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  pointer-events: none;
+}
+.couch-fight-map-figure { position: relative; }
+.couch-fight-map-figure[data-look="talk"]::after { border: max(2px, calc(var(--cell) * 0.05)) solid var(--couch-warn); animation: couch-fight-map-ripple 700ms ease-out 3 both; }
+.couch-fight-map-figure[data-look="search"]::after { background: conic-gradient(from 0deg, transparent 0 70%, color-mix(in srgb, var(--couch-accent) 70%, transparent)); animation: couch-fight-map-sweep 800ms linear 2 both; inset: calc(var(--cell) * -0.5); }
+.couch-fight-map-figure[data-look="brace"]::after { border: max(3px, calc(var(--cell) * 0.08)) solid #8fc7ff; animation: couch-fight-map-shield 1.4s ease both; inset: calc(var(--cell) * -0.15); }
+.couch-fight-map-figure[data-look="other"]::after { border: max(2px, calc(var(--cell) * 0.05)) solid #fff; animation: couch-fight-map-ripple 900ms ease-out both; }
+@keyframes couch-fight-map-ripple { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(2.2); } }
+@keyframes couch-fight-map-sweep { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+@keyframes couch-fight-map-shield { 0% { opacity: 0; transform: scale(1.5); } 30%, 70% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+
+/* Effects between squares: a shot flies, a blade slashes, a spell or a
+   death bursts, and the outcome rises over the target. */
+.couch-fight-map-fx { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+.couch-fight-map-fx > span { --cell: calc(100cqw / var(--cols)); --cellh: calc(100cqh / var(--rows)); position: absolute; translate: -50% -50%; }
+.couch-fight-map-shot {
+  width: calc(var(--cell) * 0.32);
+  aspect-ratio: 1;
+  border-radius: 999px;
+  background: radial-gradient(circle, #fff 0 25%, var(--tone) 55%, transparent 72%);
+  box-shadow: 0 0 calc(var(--cell) * 0.4) var(--tone);
+  animation: couch-fight-map-shot 420ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+@keyframes couch-fight-map-shot {
+  from { transform: none; opacity: 1; }
+  92% { opacity: 1; }
+  to { transform: translate(calc(var(--dx) * var(--cell)), calc(var(--dy) * var(--cellh))); opacity: 0; }
+}
+.couch-fight-map-slash {
+  width: calc(var(--cell) * 1.3);
+  height: calc(var(--cell) * 1.3);
+  background:
+    linear-gradient(135deg, transparent 44%, #fff 48%, var(--tone) 51%, transparent 56%),
+    linear-gradient(45deg, transparent 46%, color-mix(in srgb, var(--tone) 80%, #fff) 50%, transparent 54%);
+  animation: couch-fight-map-slash 520ms ease-out both;
+}
+@keyframes couch-fight-map-slash {
+  from { opacity: 0; clip-path: inset(0 100% 100% 0); }
+  25% { opacity: 1; }
+  60% { clip-path: inset(0 0 0 0); opacity: 1; }
+  to { opacity: 0; clip-path: inset(0 0 0 0); }
+}
+.couch-fight-map-burst {
+  width: calc(var(--cell) * 1.6);
+  aspect-ratio: 1;
+  border-radius: 999px;
+  border: calc(var(--cell) * 0.08) solid var(--tone);
+  background: radial-gradient(circle, color-mix(in srgb, var(--tone) 55%, transparent), transparent 65%);
+  animation: couch-fight-map-burst 700ms ease-out both;
+}
+@keyframes couch-fight-map-burst { from { opacity: 1; transform: scale(0.2); } to { opacity: 0; transform: scale(1.4); } }
+.couch-fight-map-word {
+  font: 800 max(1rem, min(1.6vw, calc(var(--cell) * 0.5))) / 1 var(--font-geist-sans), system-ui, sans-serif;
+  letter-spacing: 0.02em;
+  color: var(--tone);
+  white-space: nowrap;
+  text-shadow: 0 0 6px #000, 0 0 3px #000, 0 2px 0 #000;
+  animation: couch-fight-map-word 2.2s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes couch-fight-map-word {
+  0% { opacity: 0; transform: translateY(calc(var(--cell) * -0.3)) scale(0.6); }
+  12% { opacity: 1; transform: translateY(calc(var(--cell) * -0.8)) scale(1.15); }
+  20% { transform: translateY(calc(var(--cell) * -0.85)) scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(calc(var(--cell) * -1.3)); }
+}
+
+.couch-fight-map-legend { display: flex; gap: 1.6vw; font: 600 max(0.7rem, 0.78vw) var(--font-geist-mono), ui-monospace, monospace; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(225, 238, 230, 0.75); }
+.couch-fight-map-legend span[data-key]::before { content: ""; display: inline-block; width: 1.1em; height: 0.75em; margin-right: 0.45em; vertical-align: -0.05em; border-radius: 3px; }
+.couch-fight-map-legend span[data-key="reach"]::before { border: 2px dashed var(--couch-danger); background: color-mix(in srgb, var(--couch-danger) 15%, transparent); }
+.couch-fight-map-legend span[data-key="move"]::before { background: color-mix(in srgb, var(--couch-accent) 30%, transparent); }
+
+/* ---- the crew's side, along the bottom ----
+   A card each, left of the corner that says whose move it is: the one
+   moving lit and larger, the next one marked, the one just hit outlined in
+   red for a few seconds, the ones elsewhere dimmed. */
+.couch-tv-stage[data-fight] .couch-tv-crew { right: calc(var(--foe-w) + 5vw); justify-content: flex-start; align-items: stretch; gap: 1.2vw; }
 .couch-tv-member { position: relative; }
-.couch-tv-member[data-fight-turn="now"] .couch-face { box-shadow: 0 0 0 3px var(--couch-accent), 0 0 26px color-mix(in srgb, var(--couch-accent) 50%, transparent); }
-.couch-tv-member[data-fight-turn="now"] .couch-tv-member-name::after { content: " · your move"; color: var(--couch-accent); }
-.couch-tv-member[data-fight-turn="next"] .couch-tv-member-name::after { content: " · next"; color: rgba(225, 238, 230, 0.6); font-weight: 500; }
+.couch-tv-member[data-in-fight] {
+  flex: 0 1 17vw;
+  padding: 1vh 1vw 1vh 0.8vw;
+  border: 1px solid color-mix(in srgb, var(--couch-accent) 22%, transparent);
+  border-radius: 16px;
+  background: rgba(6, 14, 10, 0.82);
+  transition: border-color 400ms ease, box-shadow 400ms ease, opacity 400ms ease;
+}
+.couch-tv-member[data-in-fight] .couch-face { --face: max(3rem, 3.8vw); }
+.couch-tv-member[data-in-fight][data-fight-turn="now"] { flex-basis: 21vw; border: 2px solid var(--couch-accent); background: rgba(10, 30, 20, 0.92); box-shadow: 0 0 2.6vw color-mix(in srgb, var(--couch-accent) 35%, transparent); }
+.couch-tv-member[data-in-fight][data-fight-turn="now"] .couch-face { --face: max(3.8rem, 5vw); }
+.couch-tv-member[data-in-fight][data-fight-turn="now"] .couch-tv-member-name { font-size: max(1.3rem, 1.75vw); }
+.couch-tv-member[data-in-fight][data-away] { opacity: 0.5; }
+.couch-tv-member[data-in-fight][data-dead] { padding: 0; border: 0; background: none; }
+.couch-tv-member[data-in-fight] .couch-tv-member-hit { left: 0.8vw; border-radius: 999px; }
+.couch-tv-member-tags { display: flex; gap: 0.4vw; min-height: max(1.1rem, 1.3vw); }
+.couch-tv-member-tag[data-tone="accent"] { background: var(--couch-accent); color: #000; }
+.couch-tv-member-tag[data-tone="danger"] { background: var(--couch-danger); color: #000; }
+.couch-tv-member-tag[data-tone="plain"] { background: rgba(255, 255, 255, 0.16); color: #fff; }
+.couch-tv-member-hit-tag { animation: couch-fight-struck 5s ease both; }
+.couch-tv-member-struck {
+  position: absolute;
+  inset: -2px;
+  border: 2px solid var(--couch-danger);
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: 0 0 2.4vw color-mix(in srgb, var(--couch-danger) 45%, transparent);
+  animation: couch-fight-struck 5s ease both;
+}
+@keyframes couch-fight-struck-still { 0%, 85% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes couch-fight-struck { 0% { opacity: 0; transform: scale(1.06); } 6% { opacity: 1; transform: none; } 85% { opacity: 1; } 100% { opacity: 0; } }
 .couch-tv-member-hit {
   position: absolute;
   left: 0;
@@ -269,7 +568,9 @@
 .couch-fight-foes[data-layout="list"] .couch-fight-foe-turned { display: none; }
 .couch-tv-member[data-against] .couch-face { border-color: var(--couch-danger); box-shadow: 0 0 0 2px color-mix(in srgb, var(--couch-danger) 70%, transparent); }
 .couch-tv-member[data-against][data-fight-turn="now"] .couch-face { box-shadow: 0 0 0 3px var(--couch-danger), 0 0 26px color-mix(in srgb, var(--couch-danger) 50%, transparent); }
-.couch-tv-member[data-against][data-fight-turn="now"] .couch-tv-member-name::after { color: var(--couch-danger); }
+.couch-tv-member[data-in-fight][data-against] { border-color: color-mix(in srgb, var(--couch-danger) 55%, transparent); }
+.couch-tv-member[data-in-fight][data-against][data-fight-turn="now"] { border-color: var(--couch-danger); box-shadow: 0 0 2.6vw color-mix(in srgb, var(--couch-danger) 35%, transparent); background: rgba(30, 8, 8, 0.92); }
+.couch-tv-member[data-in-fight][data-against][data-fight-turn="now"] .couch-tv-member-name { color: var(--couch-danger); }
 .couch-tv-member .couch-tv-member-against { color: var(--couch-danger); font-weight: 600; }
 .couch-phone-fight[data-against] { border-color: var(--couch-danger); }
 
@@ -322,13 +623,21 @@
 .couch-fight-over-crit { color: var(--couch-warn); font-weight: 600; }
 
 @media (max-aspect-ratio: 1/1) {
-  /* A TV route opened on a tall screen: the creatures sit across the top
-     third instead of down the side. */
+  /* A TV route opened on a tall screen, top to bottom: the order, the grid
+     the full width of the screen, the creatures (and the column's card
+     slot) in a band across, the prompt, the story line, the crew. */
   .couch-tv { --foe-w: 0vw; }
   .couch-tv-stage[data-fight] .couch-tv-pictures > .couch-tv-art { right: 0; mask-image: none; }
-  .couch-fight-foes { top: auto; right: 3vw; left: 3vw; bottom: calc(var(--crew-h, 15vh) + 22vh); width: auto; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
-  .couch-fight-foes .couch-fight-foe-art { max-height: 18vh; }
+  .couch-fight-map { --map-box-w: 94vw; --map-box-h: 29vh; top: 11vh; }
+  .couch-fight-side { top: 42vh; right: 3vw; left: 3vw; bottom: calc(var(--crew-h, 15vh) + 22vh); width: auto; }
+  .couch-fight-foes { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 1.2vh 2vw; }
+  .couch-fight-foes-label { flex: 0 0 100%; text-align: right; }
+  .couch-fight-foes > .couch-fight-foe { flex: 1 1 0; min-width: 0; }
+  .couch-fight-foes .couch-fight-foe-art { max-height: 14vh; }
+  .couch-fight-foes[data-layout="solo"] .couch-fight-foe-art { height: calc(100cqh - 12vh); max-height: none; }
   .couch-fight-over { flex-direction: column; }
+  .couch-tv-stage[data-fight] .couch-tv-crew { right: 0; flex-wrap: wrap; }
+  .couch-fight-turn { right: 3vw; left: 3vw; bottom: calc(var(--crew-h, 15vh) + 13vh); width: auto; justify-items: center; text-align: center; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -344,6 +653,20 @@
   .couch-fight-over-art { animation: none !important; }
   .couch-fight-hit,
   .couch-tv-member-hit { animation-duration: 1ms; }
+  /* The board's effects still say what happened, and still go away, but
+     nothing flies, slides, shakes or leaps: each fades in place. */
+  .couch-fight-map-token { transition: none; }
+  .couch-fight-map-figure[data-anim],
+  .couch-fight-map-shot,
+  .couch-fight-map-slash,
+  .couch-fight-map-burst,
+  .couch-fight-map-word,
+  .couch-fight-map-trail { animation-name: couch-fight-struck-still; }
+  .couch-fight-map-figure::after { animation: none !important; display: none; }
+  .couch-fight-map-reach[data-acting] { animation: none; }
+  /* The hit mark still has to go away again: it fades without moving. */
+  .couch-tv-member-struck,
+  .couch-tv-member-hit-tag { animation-name: couch-fight-struck-still; }
 }
 html[data-effects="low"] .couch-fight-edge { animation: none; }
 
@@ -364,6 +687,9 @@ html[data-effects="low"] .couch-fight-edge { animation: none; }
 .couch-phone-fight li { display: flex; align-items: center; gap: 10px; min-height: 28px; font-size: 1rem; }
 .couch-phone-fight-name { flex: 1 1 auto; min-width: 0; overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .couch-phone-fight-state { flex: none; min-width: 5.5em; text-align: right; font-weight: 600; }
+.couch-phone-fight-far { flex: none; padding: 2px 8px; border-radius: 999px; background: var(--couch-raise); font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 0.85rem; color: var(--couch-dim); }
+.couch-phone-fight-far[data-near] { background: color-mix(in srgb, var(--couch-danger) 18%, transparent); color: var(--couch-danger); font-family: inherit; font-weight: 600; }
+.couch-phone-fight-move { font-size: 0.9rem; color: var(--couch-accent); }
 .couch-phone-fight .couch-fight-pips { gap: 3px; }
 .couch-phone-fight .couch-fight-pips > i { width: 12px; height: 8px; background: var(--couch-raise); }
 .couch-phone-fight li[data-tone="unhurt"] .couch-fight-pips > i[data-on] { background: var(--couch-accent); }
@@ -382,19 +708,14 @@ html[data-effects="low"] .couch-fight-edge { animation: none; }
    Where the move banner sits, and in its place while the phones answer:
    who offered it, and each answer as it comes in. */
 .couch-truce-tv {
-  position: absolute;
-  top: 10.5vh;
-  left: var(--play-mid);
   display: grid;
-  gap: 1.4vh;
-  width: min(56vw, 56rem);
-  padding: 2vh 2.2vw;
+  gap: 1.2vh;
+  padding: 1.8vh 1.4vw;
   border: 1px solid color-mix(in srgb, var(--couch-warn) 60%, transparent);
   border-radius: 24px;
   background: rgba(5, 8, 10, 0.9);
   box-shadow: 0 0 48px color-mix(in srgb, var(--couch-warn) 20%, transparent);
-  transform: translateX(-50%);
-  animation: couch-fight-turn-in 500ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+  animation: couch-fight-slot-in 500ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
 }
 .couch-truce-tv[data-status="accepted"] { border-color: var(--couch-accent); box-shadow: 0 0 48px color-mix(in srgb, var(--couch-accent) 24%, transparent); }
 .couch-truce-tv[data-status="refused"] { border-color: var(--couch-danger); box-shadow: 0 0 48px color-mix(in srgb, var(--couch-danger) 24%, transparent); }
@@ -431,3 +752,39 @@ html[data-effects="low"] .couch-fight-edge { animation: none; }
 .couch-truce-phone-terms { font-style: italic; }
 .couch-truce-phone-line { color: var(--couch-dim); font-size: 0.95rem; }
 .couch-truce-phone-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
+
+/* ---- the column's card slot (CouchTvFight.tsx) ----
+   A roll's card (CouchRolls.tsx puts it here in a fight) and a truce, one
+   at a time, the width of the column. Their own placement over the scene
+   is for nights without a fight. */
+.couch-fight-slot { display: grid; flex: none; gap: 1.2vh; max-height: 62%; min-height: 0; }
+.couch-fight-slot:not(:has(> :not(:empty))) { display: none; }
+.couch-fight-slot-rolls { display: grid; gap: 1.2vh; min-height: 0; }
+.couch-fight-slot-rolls:empty { display: none; }
+.couch-tv .couch-fight-slot :is(.couch-tv-roll, .couch-tv-call) {
+  position: relative;
+  top: auto;
+  left: auto;
+  z-index: auto;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  max-height: none;
+  transform: none;
+  animation: couch-fight-slot-in 420ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+.couch-tv .couch-fight-slot .couch-tv-roll { padding: 1.8vh 1.4vw; }
+.couch-tv .couch-fight-slot .couch-tv-roll[data-item] { padding-left: calc(1.4vw + 7vw); }
+.couch-tv .couch-fight-slot .couch-tv-roll-item { left: 1vw; width: 6.4vw; }
+.couch-tv .couch-fight-slot .couch-tv-roll-total { font-size: max(2.6rem, 4.4vw); }
+.couch-tv .couch-fight-slot .couch-tv-call { overflow: hidden; }
+.couch-tv .couch-fight-slot .couch-tv-call-list { flex-direction: column; flex-wrap: nowrap; gap: 1vh; }
+.couch-tv .couch-fight-slot .couch-tv-call-card { flex: none; max-width: none; gap: 1vh; padding: 1.6vh 1.2vw; }
+.couch-tv .couch-fight-slot .couch-tv-call-who .couch-face { --face: max(2.6rem, 3vw); }
+.couch-tv .couch-fight-slot .couch-tv-call-who strong { font-size: max(1.1rem, 1.4vw); }
+.couch-tv .couch-fight-slot .couch-tv-call-why { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-size: max(0.95rem, 1.05vw); }
+.couch-tv .couch-fight-slot .couch-tv-call-facts b { font-size: max(1.3rem, 1.8vw); }
+.couch-tv .couch-fight-slot .couch-truce-tv-text strong { font-size: max(1.2rem, 1.6vw); }
+.couch-tv .couch-fight-slot .couch-truce-tv-terms { font-size: max(0.95rem, 1.1vw); }
+.couch-tv .couch-fight-slot .couch-truce-tv-head .couch-face { --face: max(2.6rem, 3vw); }
+.couch-tv .couch-fight-slot .couch-truce-tv-answers li { font-size: max(0.95rem, 1.1vw); }

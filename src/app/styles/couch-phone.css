@@ -115,6 +115,8 @@ html[data-theme="light"][data-backdrop="off"] body { background: #eef1ed; }
   font: 500 0.7rem var(--font-geist-mono), ui-monospace, monospace;
 }
 .couch-tab-hp .couch-hp { width: 3rem; height: 5px; flex: none; }
+.couch-tab-stress { color: var(--couch-warn); }
+.couch-tab-stress[data-high] { color: var(--couch-danger); font-weight: 700; }
 /* Something waits in that tab: a new passage, a whisper, your turn, an
    unread agenda. */
 .couch-dot {
@@ -369,6 +371,20 @@ html[data-couch-keyboard] .couch-dock {
 .couch-objective-label { color: var(--couch-accent); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 .couch-objective-text { color: var(--couch-ink); font-weight: 600; }
 .couch-objective-clock { color: var(--couch-warn); font-size: 0.82rem; font-weight: 600; }
+/* A panic taking this player's move (src/lib/couch/stress.ts): where the
+   action box was, why it is gone. */
+.couch-panic {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-left: 3px solid var(--couch-danger);
+  border-radius: 0 10px 10px 0;
+  background: var(--couch-surface);
+  font-size: 0.92rem;
+}
+.couch-panic strong { color: var(--couch-danger); }
+.couch-panic span { color: var(--couch-dim); }
 .couch-turn { display: grid; gap: 0.25rem; padding-inline: 0.35rem; }
 .couch-turn-row { display: flex; min-height: 26px; align-items: center; justify-content: space-between; gap: 0.75rem; }
 .couch-turn-head {

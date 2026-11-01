@@ -1,6 +1,6 @@
 import { emptyTurnLine, type EmptyTurnPlayer } from "@/lib/dm/empty-turn";
 import { markSceneSeen, tagMessage } from "@/lib/couch/whereabouts";
-import { couchSiteMap, recordSiteMove, siteMoveCheck, siteTools, siteZone, SITE_TOOL_NAMES } from "@/lib/couch/site";
+import { couchSiteMap, recordSiteMove, siteMoveCheck, siteToolsFor, siteZone, SITE_TOOL_NAMES } from "@/lib/couch/site";
 import { couchMove, couchNavigation, couchSpotlight, couchWhereaboutsPrompt, placeCouchMovers, publishCouchNavigation, type CouchMove } from "@/lib/couch/navigation";
 import { handleCouchGroupCheck, takeCouchGroupAnswers } from "@/lib/couch/group-check";
 import { legendaryLairLines } from "@/lib/dm/legendary-tools";
@@ -86,7 +86,7 @@ import { requestTokens, sharedPrefixTokens } from "@/lib/dm/request-fit";
 import { OOC_ANSWER_INSTRUCTION, OOC_UNANSWERED_PREFIX, oocAnswer, oocQuestionPending } from "@/lib/dm/ooc-question";
 import { releaseHarnessConversation } from "@/lib/harness/bridge";
 import { toMcpTools } from "@/lib/harness/render";
-import { getDmStatus, setDmStatus } from "@/lib/dm/status";
+import { getDmStatus, setDmStatus, setDmTurnPrivate } from "@/lib/dm/status";
 import {
   extractToolCalls,
   resolveSheetRef,
@@ -211,6 +211,7 @@ import { placeArrival } from "@/lib/db/overworld-arrival";
 import { filePlace } from "@/lib/dm/place-filing";
 import { normalizeDirection, normalizeDistance, placeTree } from "@/lib/overworld/places";
 import { sceneIds } from "@/lib/ambience/catalog";
+import { couchSoundPack, couchSoundTool } from "@/lib/couch/sound-logic";
 import { compactHistoryInBackground } from "@/lib/dm/compaction";
 import { createDeltaBatcher } from "@/lib/dm/delta-buffer";
 import {
@@ -261,6 +262,12 @@ import { COUCH_TOOL_NAMES, couchTools } from "@/lib/dm/couch-tools";
 import { noteCouchMoodTool, settleCouchMood } from "@/lib/couch/mood";
 import { couchFoePicks } from "@/lib/couch/foes-logic";
 import { couchPacingPrompt } from "@/lib/couch/pacing";
+import { armCouchQuiet, couchTensionPrompt, noteCouchTensionTool } from "@/lib/couch/tension";
+import { FAILED_CHECK_COST, couchFailedCheckCost } from "@/lib/couch/tension-logic";
+import { rollCouchDeathSaves } from "@/lib/couch/dying";
+import { couchHiddenEffectsPrompt } from "@/lib/couch/hidden-effects";
+import { couchStressPrompt } from "@/lib/couch/stress";
+import { settleCouchEnding } from "@/lib/couch/finale";
 import { MOUNT_TOOL_NAMES, mountTools } from "@/lib/dm/mount-tools";
 import { describeGround, GEAR_TOOL_NAMES, handleItemTool } from "@/lib/dm/gear-tool";
 import { effectTools, EFFECT_TOOL_NAMES } from "@/lib/dm/effect-tools";
@@ -605,6 +612,9 @@ export async function startDmTurn(campaignId: string) {
     return;
   }
 
+  // Whispers and nothing public since the GM last spoke: the turn answers
+  // them privately, and the table is not held for it.
+  setDmTurnPrivate(campaignId, pendingWhispers.length > 0 && (!history.length || history[history.length - 1].authorType === "dm"));
   setDmStatus(campaignId, "thinking");
   // Everything between here and the first model call used to run
   // unguarded: a throw anywhere in the prompt build left the table on "DM
@@ -653,6 +663,11 @@ async function openTurn(
   // A companion's leaving (issue 503): decided and acted on before the
   // context is read, so the prompt sees the party as it now stands.
   const leavingNotes = oocOnly ? [] : settleCompanionLeaving(campaign);
+  // A couch crew member dying outside a fight rolls their save now, so the
+  // GM reads the result (src/lib/couch/dying.ts).
+  if (!oocOnly && campaign.gameSettings.couchMode) {
+    rollCouchDeathSaves(campaign);
+  }
   const context = loadContext(campaign);
   // Combat can never wedge on missing initiative: when nothing is pending,
   // stragglers are auto-rolled before the prompt is built.
@@ -857,6 +872,10 @@ async function openTurn(
       couchNavigation: couchNavigation(campaign),
       couchWhereabouts: couchWhereaboutsPrompt(campaign),
       couchPacing: couchPacingPrompt(campaign, Boolean(encounterNow)),
+      couchTension: couchTensionPrompt(campaign, Boolean(encounterNow)),
+      // Secret, so never in an answer the whole table reads.
+      couchHidden: oocOnly ? "" : couchHiddenEffectsPrompt(campaign, context.sheets),
+      couchStress: couchStressPrompt(campaign, context.sheets),
       recentEventsByCharacter: new Map(
         [...listRecentEventsForCampaign(campaignId, 3)].map(([characterId, events]) => [
           characterId,
@@ -1050,16 +1069,21 @@ export async function resumeDmTurn(campaignId: string, turnId: string) {
     if (grouped?.pendingIds.has(pending.id)) {
       continue;
     }
+    // A couch crew member can spend a story point to make a failed check
+    // succeed (src/lib/couch/push.ts), which the stored roll records.
+    const passed = pending.dc === null ? null : campaign.gameSettings.couchMode && roll.success !== null ? roll.success : roll.total >= pending.dc;
     turn.conversation.push({
       role: "tool",
       ...(pending.toolCallId ? { tool_call_id: pending.toolCallId } : {}),
       content: JSON.stringify({
         total: roll.total,
         dice: roll.breakdown.terms,
-        ...(pending.dc !== null ? { dc: pending.dc, success: roll.total >= pending.dc } : {}),
+        ...(pending.dc !== null ? { dc: pending.dc, success: passed } : {}),
         ...(roll.breakdown.crit ? { crit: roll.breakdown.crit } : {}),
         rolledBy: pending.status === "submitted" ? "the player, with physical dice" : "the server",
         note: ROLL_RESULT_NOTE,
+        // A couch crew member's failed check costs them (src/lib/couch/tension-logic.ts).
+        ...(campaign.gameSettings.couchMode && couchFailedCheckCost(pending.kind, pending.dc, passed) ? { cost: FAILED_CHECK_COST } : {}),
         // What the server already did with this roll (initiative locked,
         // damage applied); the model must narrate from it, not repeat it.
         ...(pending.combatNote ? { combat: pending.combatNote } : {}),
@@ -1200,8 +1224,13 @@ export function dmTurnTools(
   leanTools: boolean,
 ): unknown[] {
   const tools = allTurnTools(campaign, inEncounter, imageEnabled, leanTools);
-  return campaign.gameSettings.couchMode
-    ? tools.filter((tool) => !COUCH_DROPPED_TOOLS.has((tool as { function?: { name?: string } }).function?.name ?? ""))
+  // A couch night's places and cues are its sound pack's
+  // (src/lib/couch/sound-logic.ts), not the fantasy library's.
+  const pack = couchSoundPack(campaign);
+  return pack
+    ? tools
+        .filter((tool) => !COUCH_DROPPED_TOOLS.has((tool as { function?: { name?: string } }).function?.name ?? ""))
+        .map((tool) => couchSoundTool(tool, pack))
     : tools;
 }
 
@@ -1265,7 +1294,7 @@ function allTurnTools(
     ...(campaign.gameSettings.couchMode ? couchTools.filter((tool) => inEncounter || tool.function.name !== "offer_truce") : []),
     // A night played on a map: its doors, foes, finds and the motion
     // tracker (src/lib/couch/site.ts).
-    ...(couchSiteMap(campaign) ? siteTools : []),
+    ...siteToolsFor(couchSiteMap(campaign)),
     // Mounting and dismounting cost half a turn's movement in a fight
     // (mount-tools.ts), so a rider who is up can get down mid-round; a table
     // with nobody mounted carries neither tool into a fight (issue #424).
@@ -2541,6 +2570,12 @@ async function resolveModelCall(
     } catch (error) {
       console.error(`[couch] mood failed for turn ${turn.id}:`, error);
     }
+    // And the tension clock hears the same blows (src/lib/couch/tension.ts).
+    try {
+      noteCouchTensionTool(context.campaign, toolCall.name, toolCall.rawArguments, outcome);
+    } catch (error) {
+      console.error(`[couch] tension failed for turn ${turn.id}:`, error);
+    }
   }
   return outcome;
 }
@@ -3098,7 +3133,7 @@ export function handleLocationCall(
   // A kind of place off the sound list is no sound rather than a refusal,
   // for the same reason: a refused move_party left a table's narration in a
   // village the map never reached. The note names the list for next time.
-  const beds = sceneIds();
+  const beds = sceneIds(couchSoundPack(campaign));
   const sceneOffList = args.scene !== undefined && !beds.includes(String(args.scene));
   const scene = args.scene === undefined || sceneOffList ? undefined : String(args.scene);
   const sceneNote = sceneOffList
@@ -3129,6 +3164,7 @@ export function handleLocationCall(
   let setOutFrom: string | null = null;
   let split = "";
   let couchMovers: CouchMove | null = null;
+  let siteNote = "";
   if (toolName === "move_party") {
     const name = typeof args.name === "string" ? args.name.trim() : "";
     if (!name) {
@@ -3146,7 +3182,7 @@ export function handleLocationCall(
     const couch = couchMove(campaign, zone?.name ?? name, args.characterIds);
     if (couch && "error" in couch) return couch;
     couchMovers = couch && "movers" in couch ? (couch as CouchMove) : null;
-    if (site) recordSiteMove(campaign, site.path);
+    if (site) siteNote = recordSiteMove(campaign, site.path);
     const onRecord = getLocationByName(campaign.id, zone?.name ?? name);
     location = upsertCurrentLocation({
       campaignId: campaign.id,
@@ -3261,6 +3297,7 @@ export function handleLocationCall(
           : "Recorded. Continue the scene.") +
       filedNote +
       (split ? ` ${split}` : "") +
+      (siteNote ? ` ${siteNote}` : "") +
       sceneNote,
     // Consumed by advance() as the chapter-break and inline-map signals,
     // then stripped before the result reaches the model.
@@ -3489,6 +3526,15 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string, spoken: re
   if (settleTableWait(campaignId)) {
     wakeDm(campaignId);
   }
+  // A couch room that stays silent after this narration wakes the GM to
+  // play the next beat (src/lib/couch/tension.ts).
+  if (context.campaign.gameSettings.couchMode) {
+    try {
+      armCouchQuiet(campaignId);
+    } catch (error) {
+      console.error(`[couch] quiet clock failed for turn ${turn.id}:`, error);
+    }
+  }
 
   if (message.imageRequest && imageProducerReady(context.campaign.settings)) {
     // Both go through fulfillAutoImage's imagesAvailable gate; the couch
@@ -3507,6 +3553,16 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string, spoken: re
       message.speech,
       context.campaign.gameSettings,
     );
+  }
+  // The GM called end_night this turn: with its closing passage out (and
+  // its voice queued), the night ends and the closing is written
+  // (src/lib/couch/finale.ts).
+  if (context.campaign.gameSettings.couchMode) {
+    try {
+      settleCouchEnding(context.campaign);
+    } catch (error) {
+      console.error(`[couch] ending the night failed for turn ${turn.id}:`, error);
+    }
   }
 
   turn.status = "done";

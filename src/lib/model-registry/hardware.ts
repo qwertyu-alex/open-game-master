@@ -66,7 +66,7 @@ export function readAmdSysfs(root = "/sys/class/drm"): { vramGb: number; gttGb: 
   let found = false;
   let cards: string[] = [];
   try {
-    cards = fs.readdirSync(root).filter((card) => /^card\d+$/.test(card));
+    cards = fs.readdirSync(/*turbopackIgnore: true*/ root).filter((card) => /^card\d+$/.test(card));
   } catch {
     return null;
   }

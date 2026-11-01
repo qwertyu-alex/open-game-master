@@ -257,7 +257,9 @@ export function installedCounts(tracks = installedTracks()): Record<AmbienceLaye
   const counts = {} as Record<AmbienceLayer, LayerCount>;
   for (const layer of ["bed", "music", "sting"] as const) {
     const cues = cuesForLayer(layer);
-    const mine = tracks.filter((track) => cueById(track.cueId)?.layer === layer);
+    // A pack's files (src/lib/couch/sound-catalog.ts) are not this list's.
+    const ids = new Set(cues.map((cue) => cue.id));
+    const mine = tracks.filter((track) => ids.has(track.cueId));
     counts[layer] = {
       installed: new Set(mine.map((track) => track.cueId)).size,
       total: cues.length,

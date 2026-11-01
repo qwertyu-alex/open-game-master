@@ -73,6 +73,14 @@ function artOf(row: ArtRow): FightArt {
   };
 }
 
+// Each painted foe's whole picture by art key, for the overhead map's
+// tokens (src/lib/couch/site.ts): a foe fought once wears its face there.
+export function paintedFoes(campaignId: string): Map<string, string> {
+  const faces = new Map<string, string>();
+  for (const [key, row] of listRows(campaignId)) if (row.whole_url) faces.set(key, row.whole_url);
+  return faces;
+}
+
 function recordTry(campaignId: string, key: string, name: string): void {
   db()
     .prepare(

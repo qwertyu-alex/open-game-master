@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { isPrivateBackendHost } from "@/lib/backend-host";
 import { PaidAiRefusedError, paidAiAllowedNow } from "@/lib/shared-host";
 import { recordUsage } from "@/lib/usage/ledger";
-import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { publishEphemeral, publishPersisted } from "@/lib/events";
 import { publishMediaStatus } from "@/lib/dm/images";
@@ -20,7 +20,9 @@ import {
 import type { Speaker, SpokenLine } from "@/lib/dm/speech";
 import { closeLiveNarration, openLiveNarration, pushLiveNarration, renderSpeech } from "@/lib/tts-render";
 import { castUnvoiced, voiceRoster, type RosterEntry } from "@/lib/tts-roster";
+import { mp3Seconds } from "@/lib/mp3-logic";
 import { baseCreatureName, planSpeech, speechRequests, type CastVoice } from "@/lib/tts-segments";
+import { narrationCues, normalizeNarrationCues, type NarrationCue } from "@/lib/narration-cues-logic";
 import { textKey } from "@/lib/language/text-logic";
 
 // Narration TTS on the server's speech backend (src/lib/tts-backend.ts: the
@@ -49,6 +51,11 @@ function stripForSpeech(text: string): string {
 
 export function narrationAudioPath(campaignId: string, messageId: string): string {
   return path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "generated-audio", campaignId, `${messageId}.mp3`);
+}
+
+// Who is heard when in a take (narrationCues), beside its audio.
+function narrationCuesPath(campaignId: string, messageId: string): string {
+  return narrationAudioPath(campaignId, messageId).replace(/\.mp3$/, ".cues.json");
 }
 
 // Where a take is listened to. The files are served to be kept for a year,
@@ -170,6 +177,7 @@ export function enqueueNarrationAudio(
       const url = narrationAudioUrl(campaignId, messageId, version);
       const live = openLiveNarration(campaignId, messageId);
       let clips: Buffer[];
+      let cues: NarrationCue[] = [];
       try {
         let roster: RosterEntry[] = [];
         try {
@@ -200,8 +208,19 @@ export function enqueueNarrationAudio(
         // Out of credits or turned away, ElevenLabs hands the rest of the
         // passage to a Kokoro on this server, when one answers.
         const render = audioTags ? { standIn: (error: unknown) => elevenLabsStandIn(error, backend) } : {};
-        clips = await renderSpeech(speechRequests(plan, { audioTags }), backend, (audio, index) => {
+        const requests = speechRequests(plan, { audioTags });
+        const seconds: number[] = [];
+        clips = await renderSpeech(requests, backend, (audio, index) => {
           pushLiveNarration(live, audio);
+          // The TV shows whose line is being heard. Cues grow clip by clip,
+          // so a table listening to the stream knows the faces so far;
+          // sent only when a clip has someone to show.
+          seconds.push(mp3Seconds(audio));
+          const grown = narrationCues(requests.slice(0, index + 1), seconds);
+          if (grown.length && requests[index].speaker) {
+            cues = grown;
+            publishEphemeral(campaignId, "tts_cues", { messageId, cues });
+          }
           if (index === 0) {
             // The first words exist: the table may start listening now.
             // "live" tells a client that fetches its audio whole (the apps,
@@ -230,9 +249,10 @@ export function enqueueNarrationAudio(
       const file = narrationAudioPath(campaignId, messageId);
       mkdirSync(path.dirname(file), { recursive: true });
       writeFileSync(file, Buffer.concat(clips));
+      writeFileSync(narrationCuesPath(campaignId, messageId), JSON.stringify(cues));
       closeLiveNarration(messageId, live, "done");
       narrationLists.delete(campaignId);
-      publishPersisted(campaignId, "tts_ready", { messageId, url });
+      publishPersisted(campaignId, "tts_ready", { messageId, url, cues });
     },
     `tts:${campaignId}`,
   );
@@ -271,6 +291,25 @@ export function narrationAudioFor(campaignId: string, messageIds: string[]): Rec
   const out: Record<string, string> = {};
   for (const id of messageIds) {
     if (all[id]) out[id] = all[id];
+  }
+  return out;
+}
+
+// The cues of the newest takes among these messages: what a reloaded TV needs
+// to show faces on a replay. Older passages are replayed rarely enough to
+// go without; their audio still plays.
+const CUED_TAKES = 12;
+
+export function narrationCuesFor(campaignId: string, messageIds: string[]): Record<string, NarrationCue[]> {
+  const audio = listNarrationAudio(campaignId);
+  const out: Record<string, NarrationCue[]> = {};
+  for (const id of messageIds.filter((messageId) => audio[messageId]).slice(-CUED_TAKES)) {
+    try {
+      const cues = normalizeNarrationCues(JSON.parse(readFileSync(narrationCuesPath(campaignId, id), "utf8")));
+      if (cues.length) out[id] = cues;
+    } catch {
+      // A take from before cues existed, or none written: no faces.
+    }
   }
   return out;
 }

@@ -5,15 +5,20 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { EncounterSummary } from "@/lib/dm/encounter-summary";
 import { CouchFace } from "@/components/couch/CouchParts";
 import { CouchTvTruce } from "@/components/couch/CouchTruce";
+import { distanceWords } from "@/lib/couch/fight-map-logic";
 import { fightOpponents, fightOver, type CouchFight, type FightEnemy, type FightSeat } from "@/lib/couch/fight-logic";
 import type { CouchTruce } from "@/lib/couch/truce-logic";
 
-// The TV in a fight (docs/couch-mode-spec.md 2.11). The story waits while
-// the fight is on, so the screen says so: whose move it is, in what order
-// everyone acts, and each creature big down the right with the picture the
-// night painted of it, swapped for its hurt and down pictures as it takes
-// damage. Health is words and lit pips, never a number. When the fight ends
-// the TV holds up how it went before the story picks up again.
+// The TV in a fight (docs/couch-mode-spec.md 2.11), laid out like a
+// turn-based game so the room reads who fights whom at a glance: the turn
+// order across the top, the enemy side down the right (each creature with
+// the picture the night painted of it, swapped for its hurt and down
+// pictures as it takes damage), the crew's side along the bottom, and whose
+// move it is in the bottom right corner. The story shrinks to one line in
+// the clear middle. Each part has its own zone, so none covers another or
+// the faces in the scene. Health is words and lit pips, never a number.
+// When the fight ends the TV holds up how it went before the story picks up
+// again.
 
 export type FightArtMap = Record<string, Partial<Record<"whole" | "hurt" | "down", string>>>;
 
@@ -54,7 +59,7 @@ export function useFightArt(campaignId: string, fightKey: string): FightArtMap {
   return art;
 }
 
-function enemyArt(art: FightArtMap, enemy: Pick<FightEnemy, "artKey" | "stage" | "portrait">): string | null {
+export function enemyArt(art: FightArtMap, enemy: Pick<FightEnemy, "artKey" | "stage" | "portrait">): string | null {
   const set = art[enemy.artKey] ?? {};
   // A stage still being painted shows the picture before it, under the
   // card's own treatment for how hurt it is. A crew member on the other side
@@ -71,34 +76,50 @@ export function CouchTvFightHud({
   sheets,
   gmBusy,
   rollsWaiting,
+  diceHold = false,
   truce = null,
+  slotRef,
 }: {
   fight: CouchFight;
   art: FightArtMap;
   sheets: readonly CharacterSheet[];
   gmBusy: boolean;
+  // A roll is called or on its card: the slot is the roll's.
   rollsWaiting: boolean;
+  // Dice are in the air: the creatures' cards keep what they showed until
+  // the dice land, so the number comes before the wound.
+  diceHold?: boolean;
   // A truce the crew is answering (src/lib/couch/truce.ts): it takes the
   // move's place, even while the GM narrates the offer.
   truce?: CouchTruce | null;
+  // The card slot under the creatures, where CouchRolls puts a roll's card.
+  slotRef?: (element: HTMLElement | null) => void;
 }) {
   const living = fight.enemies.filter((enemy) => enemy.tone !== "down" && enemy.tone !== "fled").length;
   const layout = fight.enemies.length === 1 ? "solo" : fight.enemies.length === 2 ? "pair" : fight.enemies.length <= 4 ? "grid" : "list";
   return (
     <>
       <div className="couch-fight-edge" aria-hidden="true" />
-      <section className="couch-fight-foes" data-layout={layout} aria-label={`In the fight: ${living} of ${fight.enemies.length} still standing`}>
-        {fight.enemies.map((enemy) => (
-          <FoeCard key={enemy.id} enemy={enemy} src={enemyArt(art, enemy)} />
-        ))}
-      </section>
+      {/* The right-hand column: the creatures, and under them one card at a
+          time (a roll called or thrown, then a truce), which the creatures
+          make room for. Nothing in a fight sits over the grid. */}
+      <div className="couch-fight-side">
+        <section className="couch-fight-foes" data-layout={layout} data-gm-busy={gmBusy ? "" : undefined} aria-label={`In the fight: ${living} of ${fight.enemies.length} still standing`}>
+          <span className="couch-label couch-fight-foes-label" aria-hidden="true">
+            {fight.enemies.length === 1 ? "Enemy" : living === fight.enemies.length ? `Enemies · ${living}` : `Enemies · ${living} of ${fight.enemies.length} standing`}
+          </span>
+          {fight.enemies.map((enemy) => (
+            <FoeCard key={enemy.id} enemy={enemy} art={art} hold={diceHold} />
+          ))}
+        </section>
+        <div className="couch-fight-slot">
+          <div className="couch-fight-slot-rolls" ref={slotRef} />
+          {rollsWaiting || !truce ? null : <CouchTvTruce truce={truce} sheets={sheets} />}
+        </div>
+      </div>
       {/* The move the room is waiting on, while nothing else holds the eye:
-          not while the GM answers, and not while a roll is called. */}
-      {rollsWaiting ? null : truce ? (
-        <CouchTvTruce truce={truce} sheets={sheets} />
-      ) : !gmBusy ? (
-        <FightTurn fight={fight} sheets={sheets} art={art} />
-      ) : null}
+          not while the GM answers, a roll is up or a truce is asked. */}
+      {rollsWaiting || truce || gmBusy ? null : <FightTurn fight={fight} />}
     </>
   );
 }
@@ -133,19 +154,23 @@ function OrderSeat({ seat, sheets, enemy, art }: { seat: FightSeat; sheets: read
 
 // A first name under a face; a pack keeps its number ("Hunter 2"), or the
 // order would name the same creature twice.
-function seatName(name: string): string {
+export function seatName(name: string): string {
   const words = name.trim().split(/\s+/);
   const number = words.length > 1 && /^#?\d+$/.test(words.at(-1) ?? "") ? ` ${words.at(-1)}` : "";
   return `${words[0]}${number}`;
 }
 
-function FoeCard({ enemy, src }: { enemy: FightEnemy; src: string | null }) {
+function FoeCard({ enemy: live, art, hold }: { enemy: FightEnemy; art: FightArtMap; hold: boolean }) {
   // A blow that lands flashes the card; one that fells it stamps it. Only a
   // change seen on this screen, so a reload does not replay the last hit.
-  const [seen, setSeen] = useState({ pips: enemy.pips, hits: 0 });
-  if (seen.pips !== enemy.pips) {
-    setSeen({ pips: enemy.pips, hits: enemy.pips < seen.pips ? seen.hits + 1 : seen.hits });
+  // While dice are in the air the card keeps what it showed: the wound
+  // lands with the number, not before it.
+  const [seen, setSeen] = useState({ enemy: live, hits: 0 });
+  if (!hold && seen.enemy !== live) {
+    setSeen({ enemy: live, hits: live.pips < seen.enemy.pips ? seen.hits + 1 : seen.hits });
   }
+  const enemy = seen.enemy;
+  const src = enemyArt(art, enemy);
   return (
     <article className="couch-fight-foe" data-tone={enemy.tone} data-acting={enemy.acting ? "" : undefined} data-crew={enemy.crewId ? "" : undefined}>
       <div className="couch-fight-foe-art">
@@ -159,6 +184,7 @@ function FoeCard({ enemy, src }: { enemy: FightEnemy; src: string | null }) {
         {enemy.tone === "down" || enemy.tone === "fled" ? <span className="couch-fight-stamp">{enemy.words}</span> : null}
       </div>
       <div className="couch-fight-foe-text">
+        {enemy.acting ? <span className="couch-fight-foe-tag">Their move</span> : null}
         <h3>{enemy.name}</h3>
         {enemy.crewId ? <p className="couch-fight-foe-turned">Turned on the crew</p> : null}
         <p className="couch-fight-foe-state">
@@ -173,39 +199,34 @@ function FoeCard({ enemy, src }: { enemy: FightEnemy; src: string | null }) {
   );
 }
 
-function FightTurn({ fight, sheets, art }: { fight: CouchFight; sheets: readonly CharacterSheet[]; art: FightArtMap }) {
+// Whose move it is, in the bottom right corner beside the crew: the crew
+// card it names is lit too, so the words only say what to do.
+function FightTurn({ fight }: { fight: CouchFight }) {
   const turn = fight.turn;
   if (fight.rolling) {
     return (
       <div className="couch-fight-turn" data-kind="rolling" role="status">
         <strong>Roll for initiative</strong>
-        <span>Everyone throws from their phone: highest acts first.</span>
+        <span>Everyone throws from their phone</span>
       </div>
     );
   }
   if (!turn) return null;
+  const next = fight.upNext ? seatName(fight.upNext.name) : "";
   if (turn.kind === "enemy") {
-    const first = fight.enemies.find((enemy) => enemy.acting);
     return (
       <div className="couch-fight-turn" data-kind="enemy" role="status">
-        {first ? <CouchFace src={enemyArt(art, first)} name={first.name} /> : null}
-        <span className="couch-fight-turn-text">
-          <strong>{turn.names.length === 1 ? `${turn.names[0]} moves` : "The creatures move"}</strong>
-          {fight.upNext ? <span>Then {fight.upNext.name}</span> : null}
-        </span>
+        <strong>{turn.names.length === 1 ? `${turn.names[0]} moves` : "The enemies move"}</strong>
+        {next ? <span>Then {next}</span> : null}
       </div>
     );
   }
-  const sheet = sheets.find((entry) => entry.id === turn.characterId);
   // A crew member who turned on the others moves in the foes' red.
   const against = turn.side === "foe";
   return (
     <div className="couch-fight-turn" data-kind={against ? "enemy" : "crew"} role="status">
-      <CouchFace src={sheet?.portrait?.url} name={turn.name} />
-      <span className="couch-fight-turn-text">
-        <strong>{turn.name}&apos;s move</strong>
-        <span>{against ? "Against the crew · " : ""}Say it on your phone{fight.upNext ? ` · then ${fight.upNext.name}` : ""}</span>
-      </span>
+      <strong>{seatName(turn.name)}, what do you do?</strong>
+      <span>{against ? "Against the crew · " : ""}Say it on your phone{next ? ` · then ${next}` : ""}</span>
     </div>
   );
 }
@@ -290,7 +311,19 @@ const NO_IDS: ReadonlySet<string> = new Set();
 // so a player deciding what to try needs no look up at the TV.
 // A crew member who turned on the others sees the crew there instead: the
 // side they are fighting.
-export function CouchPhoneFight({ fight, myCharacterIds = NO_IDS }: { fight: CouchFight | null; myCharacterIds?: ReadonlySet<string> }) {
+// With the phone's own board, each row also says how far it stands from
+// the player's character, and on their move how far they can still walk.
+export function CouchPhoneFight({
+  fight,
+  myCharacterIds = NO_IDS,
+  distances,
+  moveFeet = null,
+}: {
+  fight: CouchFight | null;
+  myCharacterIds?: ReadonlySet<string>;
+  distances?: ReadonlyMap<string, number>;
+  moveFeet?: number | null;
+}) {
   if (!fight) return null;
   const { against, rows } = fightOpponents(fight, myCharacterIds);
   return (
@@ -303,6 +336,11 @@ export function CouchPhoneFight({ fight, myCharacterIds = NO_IDS }: { fight: Cou
         {rows.map((enemy) => (
           <li key={enemy.id} data-tone={enemy.tone}>
             <span className="couch-phone-fight-name">{enemy.name}</span>
+            {distances?.has(enemy.id) && enemy.tone !== "down" && enemy.tone !== "fled" ? (
+              <span className="couch-phone-fight-far" data-near={distances.get(enemy.id)! <= 5 ? "" : undefined}>
+                {distanceWords(distances.get(enemy.id)!)}
+              </span>
+            ) : null}
             <span className="couch-fight-pips" aria-hidden="true">
               {[0, 1, 2, 3].map((index) => <i key={index} data-on={index < enemy.pips ? "" : undefined} />)}
             </span>
@@ -310,6 +348,11 @@ export function CouchPhoneFight({ fight, myCharacterIds = NO_IDS }: { fight: Cou
           </li>
         ))}
       </ul>
+      {moveFeet !== null ? (
+        <p className="couch-phone-fight-move">
+          {moveFeet > 0 ? `You can move ${moveFeet} ft this turn · 1 square = 5 ft` : "You have no movement left this turn"}
+        </p>
+      ) : null}
     </section>
   );
 }

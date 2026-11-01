@@ -99,7 +99,7 @@ function fromSnapshot(): ModelCatalog {
 
 function fromDisk(): ModelCatalog | null {
   try {
-    const text = readFileSync(catalogPath(), "utf8");
+    const text = readFileSync(/*turbopackIgnore: true*/ catalogPath(), "utf8");
     if (text.length > MAX_CATALOG_BYTES) return null;
     const stored = readStoredCatalog(JSON.parse(text));
     return stored && catalogModelCount(stored.providers) > 0 ? { ...stored, source: "cache" } : null;

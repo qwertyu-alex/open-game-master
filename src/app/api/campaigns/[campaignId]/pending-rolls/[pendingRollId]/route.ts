@@ -22,6 +22,8 @@ import { resumeHumanTurn } from "@/lib/dm/invoke";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { announceCouchRollCalls, publishCouchRollFeedback } from "@/lib/couch/roll-feedback";
 import { parkedAttackOutcome } from "@/lib/couch/roll-feedback-logic";
+import { applyCouchStressDice, recordCouchStressRoll } from "@/lib/couch/stress";
+import { couchPushHolds, offerCouchPush } from "@/lib/couch/push";
 import { publishWithSeq } from "@/lib/events";
 
 export const runtime = "nodejs";
@@ -138,6 +140,13 @@ export async function POST(
     );
   }
 
+  // A couch crew member's stress dice join a check or save
+  // (src/lib/couch/stress.ts).
+  const stressed = applyCouchStressDice(context.campaign, pending.characterId, pending.kind, outcome);
+  if (stressed) {
+    outcome = stressed.outcome;
+  }
+
   const roll = insertRoll({
     campaignId,
     characterId: pending.characterId,
@@ -171,6 +180,10 @@ export async function POST(
   );
   if (!resolved) {
     return Response.json({ error: "That roll was already resolved." }, { status: 409 });
+  }
+  if (stressed) {
+    recordCouchStressRoll(campaignId, roll.id, stressed.words);
+    setPendingCombatNote(pendingRollId, stressed.words);
   }
 
   publishWithSeq(campaignId, allocateSeq(campaignId), "roll_result", {
@@ -234,7 +247,10 @@ export async function POST(
   const remaining = listPendingForTurn(pending.turnId).filter(
     (entry) => entry.status === "pending",
   );
-  if (!remaining.length) {
+  // A couch crew member's failed check may be pushed: the turn waits for
+  // that (src/lib/couch/push.ts), which resumes it itself.
+  const held = offerCouchPush(context.campaign, pending, roll) || couchPushHolds(pending.turnId);
+  if (!remaining.length && !held) {
     // A turn a person opened has no model waiting on the answer: the roll
     // already published itself and applied what it applies, so closing the
     // turn is the whole of "resuming" it.

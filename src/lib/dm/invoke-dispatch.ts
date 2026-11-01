@@ -36,7 +36,7 @@ import { handlePartyStash } from "@/lib/dm/party-tools";
 import { handleClearEffect, handleSetEffect } from "@/lib/dm/effect-tools";
 import { handleEndScene, handleSceneCheck, handleStartScene } from "@/lib/dm/scene-tools";
 import { handlePlaySting, handleSetAmbience } from "@/lib/dm/ambience-tools";
-import { handleAdvanceAct, handleAwardStoryPoint, handleCutTo, handleRepaintPlace, handleSetMood, handleSetObjective } from "@/lib/dm/couch-tools";
+import { handleAdvanceAct, handleAwardStoryPoint, handleCutTo, handleEndNight, handleRepaintPlace, handleSetMood, handleSetObjective, handleSpringBeat, handleHiddenEffect, handleAdjustStress } from "@/lib/dm/couch-tools";
 import { handleOfferTruce } from "@/lib/couch/truce";
 import { handleSiteTool } from "@/lib/couch/site";
 import { handleDismount, handleMountUp } from "@/lib/dm/mount-tools";
@@ -237,11 +237,22 @@ export async function dispatchAdjudication(
       return handleCutTo(campaign, rawArguments);
     case "offer_truce":
       return handleOfferTruce(campaign, rawArguments);
+    case "spring_beat":
+      return handleSpringBeat(campaign, rawArguments);
+    case "end_night":
+      return handleEndNight(campaign, rawArguments);
+    case "hidden_effect":
+      return handleHiddenEffect(campaign, turn.id, rawArguments);
+    case "adjust_stress":
+      return handleAdjustStress(campaign, rawArguments);
     case "set_border":
     case "move_foe":
     case "reveal":
     case "take_item":
     case "track":
+    case "mark_on_map":
+    case "set_zone":
+    case "set_section":
       return handleSiteTool(campaign, name, rawArguments);
     case "mount_up":
       return handleMountUp(campaign, rawArguments, sheets, sheetsById, turn);

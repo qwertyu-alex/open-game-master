@@ -10,6 +10,7 @@ import type { WrittenScenario } from "@/lib/couch/scenarios/types";
 import { UNTO_US } from "@/lib/couch/scenarios/unto-us";
 import { DEAD_AIR } from "@/lib/couch/scenarios/dead-air";
 import { HADDON_OUTPOST_SCENARIO } from "@/lib/couch/scenarios/haddon-outpost";
+import { CREW_EXPENDABLE } from "@/lib/couch/scenarios/crew-expendable";
 
 // The ready-made nights (src/lib/couch/scenario-cards.ts has their public
 // faces). Server-only: each one holds its truth, its threat and every
@@ -25,6 +26,7 @@ export const WRITTEN_SCENARIOS: readonly WrittenScenario[] = [
   UNTO_US,
   DEAD_AIR,
   HADDON_OUTPOST_SCENARIO,
+  CREW_EXPENDABLE,
 ];
 
 export function writtenScenario(id: string): WrittenScenario | undefined {

@@ -106,7 +106,7 @@ await test("the phone keeps public roll details in the story, never a secret rol
     assert.ok(COUCH_RULES_BRIEFING.includes(rule.text));
     assert.ok(rules.includes(rule.title));
   }
-  assert.match(COUCH_RULES_BRIEFING, /points.*cannot be spent/s);
+  assert.match(COUCH_RULES_BRIEFING, /spend one: the failure becomes a success/);
 });
 
 await test("a couch table holds every player's rolls for their phone; other tables only those who asked", () => {

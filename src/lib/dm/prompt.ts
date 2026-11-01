@@ -265,6 +265,13 @@ export type DmGameState = {
   couchWhereabouts?: string;
   // The act clock and the crew's objective (src/lib/couch/pacing.ts).
   couchPacing?: string;
+  // The tension clock (src/lib/couch/tension.ts): "" in a fight.
+  couchTension?: string;
+  // The crew's hidden effects (src/lib/couch/hidden-effects.ts): secret, and
+  // their reply counts change every turn.
+  couchHidden?: string;
+  // The crew's stress and any panic (src/lib/couch/stress.ts).
+  couchStress?: string;
   // Recent lasting milestones per campaign character id.
   recentEventsByCharacter?: Map<string, string[]>;
   // Afflictions, lifestyle and downtime per character id
@@ -1354,6 +1361,15 @@ export function buildGameStateBlock(state: DmGameState): string {
   // The night's pace changes every turn, so it rides in the moment.
   if (campaign.gameSettings?.couchMode && state.couchPacing) {
     moment.push(state.couchPacing);
+  }
+  if (campaign.gameSettings?.couchMode && state.couchTension) {
+    moment.push(state.couchTension);
+  }
+  if (campaign.gameSettings?.couchMode && state.couchStress) {
+    moment.push(state.couchStress);
+  }
+  if (campaign.gameSettings?.couchMode && state.couchHidden && !state.withholdStorytellerSecrets) {
+    moment.push(state.couchHidden);
   }
   if (rollLines.length) {
     moment.push(`Recent rolls:\n${rollLines.join("\n")}`);

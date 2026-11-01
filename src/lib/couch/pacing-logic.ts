@@ -67,13 +67,13 @@ export function couchPacingLine(input: { act: number; minutes: number; replies: 
   const budget = actBudget(act, input.nightMinutes).minutes;
   const head = `NIGHT PACE: ${actName(act)} of III, ${minutes} of about ${budget} minutes, ${input.replies} of your replies so far.`;
   const push = {
-    fresh: "On pace. Keep scenes short; the world acts on its own every two or three replies.",
+    fresh: "On pace. Keep scenes short; TENSION says when the world acts.",
     middle: "Halfway: spring the act's twist if it has not landed, and bring in its escalation or a foe.",
     late: last
-      ? "Nearly out of time: drive to the climax now; the ending lands within three or four replies."
+      ? "Nearly out of time: drive to the climax now; the ending lands within three or four replies, with end_night."
       : "Nearly out of time: drive to the act's goal now. Within two or three replies the act ends, its goal won or lost at a cost, and you call advance_act.",
     over: last
-      ? `OVER TIME by ${Math.max(1, minutes - budget)} minutes: land the ending in this reply or the next. The clock runs out on its own.`
+      ? `OVER TIME by ${Math.max(1, minutes - budget)} minutes: land the ending in this reply or the next, and call end_night with it. The clock runs out on its own.`
       : `OVER TIME by ${Math.max(1, minutes - budget)} minutes: end the act in this reply or the next. The clock runs out on its own: the escalation hits, the goal is won or lost at a cost, then advance_act.`,
   }[phase];
   const objective =

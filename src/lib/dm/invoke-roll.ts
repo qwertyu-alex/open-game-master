@@ -37,6 +37,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { moteAfterRoll, moteOf } from "@/lib/dm/authored-mote";
 import { applyRollGates } from "@/lib/dm/roll-gates";
 import { checkSuccess } from "@/lib/couch/check-logic";
+import { FAILED_CHECK_COST, couchFailedCheckCost } from "@/lib/couch/tension-logic";
 import { invalidArguments, toolError, type ToolResult } from "@/lib/dm/tool-errors";
 
 export function handleRequestRoll(
@@ -250,6 +251,7 @@ export function handleRequestRoll(
       total: roll.total,
       dice: outcome.terms,
       ...(args.dc !== undefined ? { dc: args.dc, success: roll.success } : {}),
+      ...(campaign.gameSettings.couchMode && sheet && couchFailedCheckCost(args.kind, args.dc, roll.success) ? { cost: FAILED_CHECK_COST } : {}),
       ...(gated.contest ? { contest: `${gated.contest.name} rolled ${gated.contest.skill} ${gated.contest.total}; ${gated.contest.answering ? "a tie goes to the character" : "the character must beat it"}.` } : {}),
       ...(outcome.crit ? { crit: outcome.crit } : {}),
       ...(resolved.conditionNotes ? { conditionEffects: resolved.conditionNotes } : {}),

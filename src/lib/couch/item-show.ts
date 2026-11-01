@@ -17,8 +17,8 @@ import { itemUseFromTool, rollItemTerm, rollWielderId, type CouchItemPicture, ty
 // The picture for an item, or null while the night has none. Asking also
 // starts its painting, within the night's budget, so the next use has one;
 // the TV never waits for paint.
-export function couchItemPicture(campaignId: string, name: string, srdName?: string): string | null {
-  return paintedItemIcon(name, srdName) ?? itemArtFor(campaignId, [name]).art[itemArtKey(name)] ?? null;
+export function couchItemPicture(campaignId: string, name: string): string | null {
+  return paintedItemIcon(name) ?? itemArtFor(campaignId, [name]).art[itemArtKey(name)] ?? null;
 }
 
 // The weapon a crew member's attack or damage roll swings, when it is one
@@ -30,7 +30,7 @@ export function couchRollItem(campaignId: string, roll: StoredRoll, sheets: read
   const carried = sheets.find((sheet) => sheet.id === wielderId)?.equipment;
   const item = carried ? findCarriedItem(carried, term) : null;
   if (!item) return null;
-  const art = couchItemPicture(campaignId, item.name, item.srdName);
+  const art = couchItemPicture(campaignId, item.name);
   return art ? { name: item.name, art } : null;
 }
 
@@ -42,8 +42,7 @@ export function publishCouchItemUse(campaign: Campaign, turnId: string, toolName
   const sheets = listSheets(campaign.id);
   const use = itemUseFromTool(rawArguments, outcome, sheets);
   if (!use) return;
-  const srdName = sheets.find((sheet) => sheet.id === use.sheet.id)?.equipment.find((item) => item.name === use.item)?.srdName;
-  const art = couchItemPicture(campaign.id, use.item, srdName);
+  const art = couchItemPicture(campaign.id, use.item);
   if (!art) return;
   const show: CouchItemShow = {
     id: randomUUID(),

@@ -601,7 +601,7 @@ function SiteSheet({ view, youId, onMove }: { view: SiteView; youId: string; onM
   const here = me ? view.zones.find((zone) => zone.id === me.zone) : undefined;
   const exits = me ? (view.exits[me.zone] ?? []) : [];
   const things = me ? view.tokens.filter((token) => token.zone === me.zone && token.kind !== "crew") : [];
-  const exitWord = (kind: string) => (kind === "open" ? "Open to" : kind === "vent" ? "Vent to" : kind === "airlock" ? "Airlock to" : kind === "hatch" ? "Hatch to" : "Door to");
+  const exitWord = (kind: string) => (kind === "open" ? "Open to" : kind === "vent" ? "Vent to" : kind === "airlock" ? "Airlock to" : kind === "hatch" ? "Hatch to" : kind === "breach" ? "Hole through to" : "Door to");
   return (
     <div className="couch-site-sheet">
       <CouchPhoneSite view={view} youId={youId} onZone={onMove ? (zoneId, name) => zoneId !== me?.zone && onMove(`I go to the ${name}.`) : undefined} />
@@ -616,7 +616,8 @@ function SiteSheet({ view, youId, onMove }: { view: SiteView; youId: string; onM
               {exits.map((exit) => (
                 <li key={exit.zone} data-state={exit.name ? "visited" : "unknown"}>
                   {exitWord(exit.kind)} {exit.name ?? "somewhere dark"}
-                  {exit.state !== "open" && exit.kind !== "open" ? <small>{exit.state}</small> : null}
+                  {exit.state !== "open" && exit.kind !== "open" && exit.kind !== "breach" ? <small>{exit.state === "severed" ? "cut off" : exit.state}</small> : null}
+                  {exit.hazards?.length ? <small data-hazard="">{exit.hazards.join(", ")}</small> : null}
                 </li>
               ))}
             </ul>

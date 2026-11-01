@@ -6,7 +6,7 @@ import { consumeDmCoverTurn } from "@/lib/db/dm-cover";
 import { coverInEffect } from "@/lib/dm/delegation";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { listRecentMessages } from "@/lib/db/messages";
-import { getDmStatus, setDmStatus } from "@/lib/dm/status";
+import { getDmStatus, setDmStatus, setDmTurnPrivate } from "@/lib/dm/status";
 import { tableWaitTurnStarted } from "@/lib/dm/table-wait";
 import { startDmTurn } from "@/lib/dm/turn";
 import { hasHumanDm } from "@/lib/dm/viewer";
@@ -31,7 +31,10 @@ function requested() {
 // it folded into a turn already pending. Assisted mode's cover counts DM
 // answers, not player actions, so one handed-over answer is spent here per
 // enqueued turn and nothing on a coalesced one.
-export function requestDmTurn(campaignId: string): boolean {
+//
+// `privateOnly`: the request is a private whisper, so the "thinking" it
+// raises holds nobody at the table (startDmTurn decides again when it runs).
+export function requestDmTurn(campaignId: string, { privateOnly = false } = {}): boolean {
   if (requested().has(campaignId)) {
     return false;
   }
@@ -59,6 +62,7 @@ export function requestDmTurn(campaignId: string): boolean {
   // Show players the DM noticed immediately, even while an earlier turn is
   // still holding the queue (do not stomp that turn's live status).
   if (getDmStatus(campaignId) === "idle") {
+    setDmTurnPrivate(campaignId, privateOnly);
     setDmStatus(campaignId, "thinking");
   }
   if (covering) {

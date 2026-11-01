@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStream";
 import type { NarrationAudio } from "@/app/campaigns/[campaignId]/useNarrationAudio";
+import type { AmbienceAudio } from "@/app/campaigns/[campaignId]/useAmbienceAudio";
 import type { BuildInfo } from "@/lib/build-info";
 import { copyText } from "@/lib/clipboard";
 import { tvDebugReport } from "@/components/couch/debug-logic";
@@ -10,7 +11,15 @@ import { tvDebugReport } from "@/components/couch/debug-logic";
 // Puts the TV's debug report on the clipboard, to paste into an AI agent's
 // prompt. The build is asked for on each press, so a server
 // updated since the page loaded reports what it runs now.
-export function CouchTvDebugButton({ state, narration }: { state: CampaignState; narration: NarrationAudio }) {
+export function CouchTvDebugButton({
+  state,
+  narration,
+  ambience,
+}: {
+  state: CampaignState;
+  narration: NarrationAudio;
+  ambience: AmbienceAudio;
+}) {
   const [said, setSaid] = useState<"" | "copied" | "failed">("");
   async function copy() {
     const build = await fetch("/api/about", { cache: "no-store" })
@@ -25,6 +34,13 @@ export function CouchTvDebugButton({ state, narration }: { state: CampaignState;
         held: narration.held,
         playingMessageId: narration.playingMessageId,
         playbackFailure: narration.playbackFailure,
+        ambience: {
+          muted: ambience.muted,
+          installed: ambience.installed,
+          bed: ambience.playing.bed.playing ? ambience.playing.bed.cueId : null,
+          music: ambience.playing.music.playing ? ambience.playing.music.cueId : null,
+          blocked: ambience.playing.blocked,
+        },
       },
       environment: {
         url: window.location.href,

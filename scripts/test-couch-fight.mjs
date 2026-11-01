@@ -34,6 +34,7 @@ const { couchFight, fightArtKey, fightArtStage, fightOpponents, fightOver, fight
 const { crewNameKeys, crossingSide } = await import("../src/lib/couch/crew-fight-logic.ts");
 const { creatureLook, fightArtPrompt, FIGHT_LOOK_CHARS, knownFoe } = await import("../src/lib/couch/fight-art-logic.ts");
 const { couchTurn } = await import("../src/components/couch/phone-logic.ts");
+const { cropFightMap, distancesFromMe, distanceWords, feetBetween, fightAct, fightSteps, heldSquares, inReach, missingCrew, moveRange, queueBeats, stepWords } = await import("../src/lib/couch/fight-map-logic.ts");
 const { parkedAttackOutcome } = await import("../src/lib/couch/roll-feedback-logic.ts");
 const { CouchTvFightHud, CouchTvFightOrder, CouchPhoneFight } = await import("../src/components/couch/CouchTvFight.tsx");
 const { answerTruce, couchTruceCall, couchTruceResult, truceAsks } = await import("../src/lib/couch/truce-logic.ts");
@@ -137,6 +138,79 @@ await test("the card that closes a fight says how it ended and what each crew me
   assert.deepEqual(over.crew, [{ characterId: "kara", name: "Kara Voss", dealt: 14, taken: 6, crits: 1 }]);
 });
 
+await test("a phone says how far each creature stands from its own character, from its own board only", () => {
+  const tokens = [
+    { kind: "pc", refId: "kara", x: 4, y: 4 },
+    { kind: "pc", refId: "brakk", x: 9, y: 4 },
+    { kind: "enemy", refId: "e1", x: 5, y: 5 },
+    { kind: "enemy", refId: "e2", x: 10, y: 1 },
+  ];
+  const far = distancesFromMe(tokens, new Set(["kara"]));
+  assert.equal(far.get("e1"), 5);
+  assert.equal(far.get("e2"), 30);
+  assert.equal(far.get("brakk"), 25);
+  assert.equal(far.has("kara"), false);
+  assert.equal(distanceWords(5), "Next to you");
+  assert.equal(distanceWords(30), "30 ft");
+  // A player whose character has no square on their board gets no numbers.
+  assert.equal(distancesFromMe(tokens, new Set(["nobody"])).size, 0);
+});
+
+await test("the TV's grid crops the board to the fight, measures as the engine does, and reads what happened", () => {
+  // A 20 by 12 room walled round, a pillar at (6,4).
+  const rows = Array.from({ length: 12 }, (_, y) => Array.from({ length: 20 }, (_, x) => (x === 0 || y === 0 || x === 19 || y === 11 ? "#" : x === 6 && y === 4 ? "#" : y === 5 && x === 6 ? "," : ".")).join(""));
+  const board = { id: "m", width: 20, height: 12, terrain: rows.join("") };
+  const kit = { id: "t-kit", kind: "pc", refId: "kit", name: "Kit Navarro", x: 4, y: 5, down: false };
+  const hunter = { id: "t-h", kind: "enemy", refId: "h1", name: "Hunter 1", x: 8, y: 5, down: false };
+  const map = cropFightMap(board, [kit, hunter]);
+  // Every fighter with room round them, wider than tall, inside the board.
+  assert.ok(map.x <= 2 && map.x + map.width >= 11 && map.y <= 3 && map.y + map.height >= 8);
+  assert.ok(map.width >= map.height * 1.5 && map.x >= 0 && map.x + map.width <= 20 && map.y + map.height <= 12);
+  assert.equal(map.terrain.length, map.width * map.height);
+  assert.equal(map.terrain[(4 - map.y) * map.width + (6 - map.x)], "#", "the crop keeps the pillar where it stands");
+  assert.equal(cropFightMap(board, []), null);
+  // A grid read before initiative holds the creature alone: the crew the
+  // order names are missing from it, so the TV asks for it again.
+  assert.deepEqual(missingCrew(cropFightMap(board, [hunter]), ["kit"]), ["kit"]);
+  assert.deepEqual(missingCrew(map, ["kit"]), []);
+  // Every diagonal counts one square, as the engine's own reach does.
+  assert.equal(feetBetween(kit, hunter), 20);
+  assert.equal(feetBetween({ x: 0, y: 0 }, { x: 3, y: 2 }), 15);
+  assert.ok(inReach({ x: 4, y: 4 }, { x: 5, y: 5 }) && !inReach(kit, hunter));
+  // Thirty feet is six squares; the pillar stops a walker, the enemy's own
+  // square is never one, and rough ground costs double.
+  const range = moveRange(map, kit, 30, [hunter]);
+  assert.ok(range.has("10,5") === true && !range.has("11,5"), "six squares east");
+  assert.ok(!range.has("6,4"), "not into the pillar");
+  assert.ok(!range.has("8,5"), "not onto the enemy");
+  assert.ok(!range.has("4,5"), "not where they stand");
+  assert.ok(!moveRange(map, kit, 5).has("6,5") && moveRange(map, kit, 5).has("5,5"), "the rough square costs two");
+  // A move since the last board: a walk within the walker's speed, a run past it.
+  const before = new Map([["t-kit", { x: 4, y: 5 }], ["t-h", { x: 8, y: 5 }]]);
+  const steps = fightSteps(before, [{ ...kit, x: 13, y: 5 }, hunter], (token) => (token.kind === "pc" ? 30 : null));
+  assert.deepEqual(steps.map((step) => [step.id, step.feet, step.ran]), [["t-kit", 45, true]]);
+  assert.equal(stepWords(steps[0]), "Runs 45 ft");
+  assert.equal(stepWords({ feet: 15, ran: false }), "Moves 15 ft");
+  assert.deepEqual(fightSteps(before, [hunter]), [], "nobody moved");
+  // One thing at a time, in the order it happened: a walk that reached the
+  // TV after the swing it came before goes back in front of it, and its
+  // figure stays where it set out until its beat.
+  const swing = { key: "fx:1", at: 2000, ms: 1500, items: [{ kind: "lunge", tokenId: "t-kit" }] };
+  const walk = { key: "walk", at: 1500, ms: 1100, items: [{ kind: "trail", tokenId: "t-kit", walk: { x: 4, y: 5 } }] };
+  const later = { key: "fx:2", at: 2000, ms: 1200, items: [] };
+  assert.deepEqual(queueBeats([swing, later], [walk]).map((beat) => beat.key), ["walk", "fx:1", "fx:2"]);
+  assert.deepEqual(queueBeats([], [swing, later]).map((beat) => beat.key), ["fx:1", "fx:2"], "a tie keeps the order it came in");
+  assert.deepEqual([...heldSquares([walk, swing])], [["t-kit", { x: 4, y: 5 }]]);
+  assert.equal(heldSquares([swing]).size, 0, "a swing holds nobody back");
+  assert.equal(fightSteps(before, [{ ...kit, x: 6, y: 5, movedAt: 1500 }, hunter])[0].at, 1500, "a walk is timed by the server");
+  // A check in a fight reads as what is being done.
+  assert.deepEqual(fightAct({ kind: "skill_check", detail: "Persuasion" }), { look: "talk", words: "Persuades" });
+  assert.deepEqual(fightAct({ kind: "skill_check", detail: "Stealth (Dexterity)" }), { look: "sneak", words: "Sneaks" });
+  assert.deepEqual(fightAct({ kind: "saving_throw", detail: "Dexterity" }), { look: "brace", words: "Resists" });
+  assert.deepEqual(fightAct({ kind: "ability_check", detail: "strength (force the hatch)" }), { look: "other", words: "Strength" });
+  assert.equal(fightAct({ kind: "attack", detail: "Pistol" }), null, "an attack plays as the board's own effect");
+});
+
 await test("the TV shows each creature with the picture for how it is doing, its words and pips, and the order", () => {
   const fight = couchFight(encounter());
   const art = { [fightArtKey("Hunter")]: { whole: "/uploads/whole.png", hurt: "/uploads/hurt.png", down: "/uploads/down.png" } };
@@ -146,7 +220,9 @@ await test("the TV shows each creature with the picture for how it is doing, its
   assert.doesNotMatch(html, /\/uploads\/whole\.png/);
   assert.match(html, /Bloodied/);
   assert.match(html, /class="couch-fight-stamp">Down</);
-  assert.match(html, /Kara Voss&#x27;s move/);
+  // Whose move it is, by first name, and who follows.
+  assert.match(html, /Kara, what do you do\?/);
+  assert.match(html, /then Brakk/);
   // While a roll is called or the GM answers, the move banner gives way.
   assert.doesNotMatch(renderToStaticMarkup(createElement(CouchTvFightHud, { fight, art, sheets: [], gmBusy: false, rollsWaiting: true })), /couch-fight-turn/);
   // A picture still being painted falls back to the one before it.
@@ -168,7 +244,7 @@ await test("a foe is painted as what the story says it is, and hurt and down as 
   const whole = fightArtPrompt("whole", { name: "Bellwurm", look, styleLock: "Late-1970s film still" });
   assert.ok(whole.startsWith("Late-1970s film still"), "the style lock leads");
   assert.match(whole, /a person stays a person/);
-  assert.match(whole, /If it is a creature, an original design, never one from a film, game or book/);
+  assert.doesNotMatch(whole, /original design|never one from a film/, "a night may paint an existing universe's creatures");
   assert.doesNotMatch(whole, /Creature study|no people/, "nothing in the prompt makes every foe a beast");
   assert.match(whole, /Only this one figure/);
   for (const stage of ["hurt", "down"]) {
@@ -348,7 +424,7 @@ await test("the phone asks only those the truce asks, and the TV fills in each a
   // It takes the move banner's place in the fight.
   const hud = renderToStaticMarkup(createElement(CouchTvFightHud, { fight: couchFight(encounter()), art: {}, sheets: [], gmBusy: false, rollsWaiting: false, truce: open }));
   assert.match(hud, /offers a truce/);
-  assert.doesNotMatch(hud, /&#x27;s move/);
+  assert.doesNotMatch(hud, /what do you do/);
 });
 
 // ---- the engine ----

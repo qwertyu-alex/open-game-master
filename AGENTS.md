@@ -76,6 +76,23 @@ database file on this machine can grant a sign-in.
 4. Always run `node scripts/agent-session.mjs revoke` when done. It removes
    only the sessions the tool minted, never anyone's own.
 
+**Stand-in players.** On the TV, the host controls hold **Play a turn**
+(a move for everyone the GM waits on, written by the GM's own model and
+posted through the real routes as each player, plus their rolls and truce
+answers) and **Autoplay** (presses it again after each passage is read,
+until turned off). They show only in development or with
+`COUCH_AUTOPLAY=1` (`src/lib/couch/autoplay*.ts`). From a terminal,
+`node scripts/couch-autoplay.mjs --campaign <id>`
+sits in the player seats (all, or `--as "Teddy,Anouk"`) and plays them:
+whenever the GM waits on one it writes a move with `claude -p` (`--model`,
+default haiku), throws its rolls and answers its truces, so a night runs on
+one machine with only the TV open. `--prompt` asks you for each move
+instead (an empty line lets the AI write it); `--note` steers every AI move;
+`--dry-run` prints the moves and posts nothing. While it runs, type
+`Name: move` to step in, or `!note`, `!pause`, `!resume`, `!prompt`,
+`!auto`, `!quit`. It signs in through agent-session and revokes its own
+sessions on exit.
+
 The sections below come from upstream. Their conventions (CONTRIBUTING,
 settings, token and creature art) still hold for couch work. "Releases" and
 "Addon framework" do not apply to this fork unless asked.
@@ -113,6 +130,12 @@ Use a named SRD creature, an original design, or a separately licensed subject
 with recorded permission. Do not let a generic prompt such as "aberration"
 introduce a beholder or mind flayer. Inspect the rendered anatomy as well as the
 prompt, and preserve the source and edit history with each art change.
+
+This fork: the content-source rule above (and CONTRIBUTING's) does not bind
+couch nights. A night may build on any existing universe, franchise, film,
+game or book, with its creatures, companies, ships and names, in the forge,
+the GM's prose and the pictures. Do not add rules, prompts or tests that keep
+franchise names out of couch code.
 
 ## Addon framework
 

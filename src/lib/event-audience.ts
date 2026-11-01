@@ -128,6 +128,16 @@ export const EVENT_AUDIENCE: Readonly<Record<string, Audience>> = {
   // it and who answered how, which the TV reads aloud anyway.
   couch_truce: TABLE,
   couch_objective: TABLE,
+  // The crew's stress and panic, on every crew card (src/lib/couch/stress.ts),
+  // and the failed rolls their throwers may still push (push.ts).
+  couch_stress: TABLE,
+  couch_push: TABLE,
+  // The night's closing (src/lib/couch/finale.ts): sent only once the night
+  // has ended, when every agenda and the hidden role are the room's to see.
+  couch_finale: TABLE,
+  // The story so far at an act break (src/lib/couch/act-break-logic.ts):
+  // the GM writes it for the room.
+  couch_act_break: TABLE,
   // An item used in the open (src/lib/couch/item-show.ts): never a whisper's.
   couch_item: TABLE,
   couch_navigation: TABLE,
@@ -196,6 +206,7 @@ export const EVENT_AUDIENCE: Readonly<Record<string, Audience>> = {
   image_ready: TABLE,
   media_status: TABLE,
   tts_stream: TABLE,
+  tts_cues: TABLE,
   tts_ready: TABLE,
   ambience_changed: TABLE,
   ambience_sting: TABLE,

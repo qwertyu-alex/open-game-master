@@ -12,16 +12,22 @@ import type { NarrationAudio } from "@/app/campaigns/[campaignId]/useNarrationAu
 import { useNarrationReplay } from "@/app/campaigns/[campaignId]/NarrationFailureBanner";
 import { effectiveMaxHp } from "@/lib/dm/condition-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { CouchFace, CouchHp } from "@/components/couch/CouchParts";
+import { CouchFace, CouchHp, CouchStress } from "@/components/couch/CouchParts";
+import type { StressView } from "@/lib/couch/stress-logic";
 import { CouchTvLobby } from "@/components/couch/CouchTvLobby";
 import { TvPictures } from "@/components/couch/CouchTvPictures";
 import { CouchTvJoinButton } from "@/components/couch/CouchTvJoin";
 import { CouchTvDebugButton } from "@/components/couch/CouchTvDebug";
+import { CouchTvAutoplay } from "@/components/couch/CouchTvAutoplay";
 import { CouchTvAnswers } from "@/components/couch/CouchTvAnswers";
 import { CouchTvHalted } from "@/components/couch/CouchTvHalted";
-import { CouchRolls } from "@/components/couch/CouchRolls";
+import { CouchTvSpeaker, useSpeakerNow } from "@/components/couch/CouchTvSpeaker";
+import { CouchTvActBreak, useActBreakShowing } from "@/components/couch/CouchTvActBreak";
+import { CouchTvEndNight, CouchTvFinale } from "@/components/couch/CouchTvFinale";
+import { CouchRolls, type RollStageState } from "@/components/couch/CouchRolls";
 import { CouchMapRail, CouchPlaceTitle } from "@/components/couch/CouchNavigation";
 import { CouchTvFightHud, CouchTvFightOrder, CouchTvFightOver, useFightArt } from "@/components/couch/CouchTvFight";
+import { CouchTvFightMap } from "@/components/couch/CouchTvFightMap";
 import { useTruceShown } from "@/components/couch/CouchTruce";
 import { couchFight, crewHealthOf, type CouchFight } from "@/lib/couch/fight-logic";
 import { couchAnswersVisible } from "@/lib/couch/answers-logic";
@@ -29,17 +35,20 @@ import type { CouchObjective } from "@/lib/couch/pacing-logic";
 import { itemShowCaption, tvItemShow } from "@/lib/couch/item-show-logic";
 import {
   couchHaltedTurn,
+  couchGmStatus,
   gmAtWork,
   gmStatusWords,
   latestNarration,
   isDead,
   previousSubtitlePages,
+  speakingFace,
   subtitlePageMs,
   subtitlePages,
   voicedSubtitlePage,
   tvCrew,
   tvTurnSeats,
   tvPictures,
+  type SpeakingFace,
 } from "@/components/couch/couch-logic";
 
 // The room's screen in couch mode (docs/couch-mode-spec.md 2.6), the TV the
@@ -78,6 +87,8 @@ export function CouchTv({
     return spoken?.id ?? latestNarration(state.messages)?.id ?? null;
   }, [state.messages, narration.playingMessageId]);
   const lobby = campaign?.status === "lobby";
+  // The story so far at an act break holds the new act's title card back.
+  const actBreak = useActBreakShowing(lobby ? null : state.couchActBreak);
   const ttsOn = Boolean(campaign?.gameSettings?.ttsEnabled);
   const canPause = ttsOn && Boolean(narration.playingMessageId);
   const canReplay = ttsOn && !lobby && !narration.muted && Boolean(replayId);
@@ -113,12 +124,23 @@ export function CouchTv({
     return null;
   }
   const ambienceOn = Boolean(campaign.gameSettings?.ambienceEnabled);
+  // The TV is the room's only speaker, so one Mute covers both channels.
+  // The music has its own account-wide mute (the Sound panel, device
+  // settings), which would otherwise silence it here with Mute still lit.
+  const muted = (ttsOn && narration.muted) || (ambienceOn && ambience.muted);
   const askForSound =
-    !narration.unlocked || (ttsOn && (narration.held > 0 || (narration.muted && !hushed))) || (ambienceOn && ambience.waiting);
+    !narration.unlocked || (ttsOn && narration.held > 0) || (muted && !hushed) || (ambienceOn && ambience.waiting);
+  const startSound = () => {
+    if (narration.muted) narration.setMuted(false);
+    if (ambience.muted) ambience.setMuted(false);
+    narration.unlock();
+    ambience.unlock();
+  };
   return (
     <main className="couch couch-tv" aria-label={`${campaign.title}, on the TV`} data-idle={awake ? undefined : ""}>
       {lobby ? <CouchTvLobby state={state} refresh={refresh} narration={narration} ttsOn={ttsOn} /> : <CouchTvPlay state={state} narration={narration} ttsOn={ttsOn} replays={replays} />}
-      <SceneTitle card={state.titleCard} onShown={markTitleCardShown} />
+      {actBreak ? <CouchTvActBreak actBreak={actBreak} /> : null}
+      <SceneTitle card={actBreak ? null : state.titleCard} onShown={markTitleCardShown} />
       {!lobby ? (
         <HandoutStage
           campaignId={campaign.id}
@@ -135,11 +157,7 @@ export function CouchTv({
         <button
           type="button"
           className="couch-tv-sound"
-          onClick={() => {
-            if (narration.muted) narration.setMuted(false);
-            narration.unlock();
-            ambience.unlock();
-          }}
+          onClick={startSound}
         >
           Tap to start sound
         </button>
@@ -148,11 +166,7 @@ export function CouchTv({
           type="button"
           className="couch-tv-gate"
           // The click itself is the gesture the browser waits for.
-          onClick={() => {
-            if (narration.muted) narration.setMuted(false);
-            narration.unlock();
-            ambience.unlock();
-          }}
+          onClick={startSound}
           autoFocus
         >
           <span className="couch-tv-gate-box">
@@ -163,6 +177,8 @@ export function CouchTv({
           </span>
         </button>
       ) : null}
+      {/* The night is over: the closing covers the scene (src/lib/couch/finale.ts). */}
+      {!lobby ? <CouchTvFinale state={state} narration={narration} ttsOn={ttsOn} /> : null}
       <div className="couch-tv-controls" ref={controls}>
         <Link href={`/campaigns/${campaign.id}?host=1`} className="couch-tv-control">
           Host controls
@@ -170,9 +186,9 @@ export function CouchTv({
         <button
           type="button"
           className="couch-tv-control"
-          aria-pressed={narration.muted}
+          aria-pressed={muted}
           onClick={() => {
-            const next = !narration.muted;
+            const next = !muted;
             setHushed(next);
             narration.setMuted(next);
             ambience.setMuted(next);
@@ -182,7 +198,7 @@ export function CouchTv({
             }
           }}
         >
-          {narration.muted ? "Unmute" : "Mute"}
+          {muted ? "Unmute" : "Mute"}
         </button>
         {canPause ? (
           <button type="button" className="couch-tv-control" aria-pressed={narration.paused} onClick={togglePause}>
@@ -195,7 +211,9 @@ export function CouchTv({
           </button>
         ) : null}
         {!lobby && campaign.inviteCode ? <CouchTvJoinButton inviteCode={campaign.inviteCode} /> : null}
-        <CouchTvDebugButton state={state} narration={narration} />
+        <CouchTvDebugButton state={state} narration={narration} ambience={ambience} />
+        <CouchTvAutoplay state={state} narration={narration} />
+        {campaign.status === "active" ? <CouchTvEndNight campaignId={campaign.id} /> : null}
       </div>
     </main>
   );
@@ -290,12 +308,16 @@ function CouchTvPlay({ state, narration, ttsOn, replays }: {
   // waits for. Their faces light up in the crew strip.
   const waitingOn = tvTurnSeats({
     floor: campaign?.floor ?? { mode: "open" },
-    gmIdle: state.dmStatus === "idle",
+    gmIdle: couchGmStatus(state) === "idle",
     waitingOn: state.tableWait?.waitingOn ?? [],
     names: Object.fromEntries(sheets.filter((sheet) => !sheet.isCompanion).map((sheet) => [sheet.userId, sheet.name])),
   });
   const waitingIds = new Set(waitingOn.map((seat) => seat.userId));
   const crew = useMemo(() => tvCrew(sheets, campaign?.leadUserId), [sheets, campaign?.leadUserId]);
+  // Whose line is being heard: their face over the subtitles, and a crew
+  // member's tile lit in the strip.
+  const speakerName = useSpeakerNow(narration, state.narrationCues);
+  const speaking = useMemo(() => speakingFace(speakerName, sheets, state.cast), [speakerName, sheets, state.cast]);
   // A fight holds the story until it ends (docs/couch-mode-spec.md 2.11):
   // the screen turns to it, and the last one is kept for the card that
   // closes it.
@@ -321,9 +343,14 @@ function CouchTvPlay({ state, narration, ttsOn, replays }: {
     mapSplit(navigation) ? (navigation?.groups.find((group) => !group.inScene && group.crew.some((member) => member.id === sheetId))?.room.name ?? "") : "";
   const fightNextId = fight?.upNext?.characterId ?? "";
   const truce = useTruceShown(state.couchTruce);
-  const gmWords = gmStatusWords(state.dmStatus);
-  const gmBusy = gmAtWork(state.dmStatus);
-  const halted = useMemo(() => (state.dmStatus === "idle" ? couchHaltedTurn(messages) : null), [messages, state.dmStatus]);
+  // In a fight a roll's card goes in the right-hand column's slot, never over
+  // the grid, and what it decides waits on the grid until the dice land.
+  const [fightSlot, setFightSlot] = useState<HTMLElement | null>(null);
+  const [rollStage, setRollStage] = useState<RollStageState>({ showing: false, hold: false });
+  const gmStatus = couchGmStatus(state);
+  const gmWords = gmStatusWords(gmStatus);
+  const gmBusy = gmAtWork(gmStatus);
+  const halted = useMemo(() => (gmStatus === "idle" ? couchHaltedTurn(messages) : null), [messages, gmStatus]);
   return (
     <>
       {/* While the GM works, the scene behind it dims so the room can tell
@@ -360,10 +387,11 @@ function CouchTvPlay({ state, narration, ttsOn, replays }: {
             {site ? null : <CouchMapRail state={state} />}
           </div>
           <div className="couch-tv-side">
-            {state.couchObjective ? <CouchTvObjective key={state.couchObjective.text} objective={state.couchObjective} /> : null}
-            {fight ? <CouchTvFightOrder fight={fight} art={fightArt} sheets={sheets} /> : null}
+            {/* A fight sets the objective aside: the screen is the fight's. */}
+            {state.couchObjective && !fight ? <CouchTvObjective key={state.couchObjective.text} objective={state.couchObjective} /> : null}
             {halted && campaign ? <CouchTvHalted campaignId={campaign.id} turnId={halted.turnId} reason={halted.reason} /> : null}
-            {waitingOn.length ? (
+            {/* In a fight the corner under the creatures says whose move it is. */}
+            {waitingOn.length && !fight ? (
               <div className="couch-tv-waiting" role="status">
                 <span className="couch-label">Waiting on</span>
                 <strong>{waitingOn.map((seat) => seat.name).join(", ")}</strong>
@@ -371,6 +399,8 @@ function CouchTvPlay({ state, narration, ttsOn, replays }: {
             ) : null}
           </div>
         </div>
+        {fight ? <CouchTvFightOrder fight={fight} art={fightArt} sheets={sheets} /> : null}
+        {fight ? <CouchTvFightMap state={state} fight={fight} art={fightArt} sheets={sheets} hold={rollStage.hold} /> : null}
         {showAnswers && round && !rollCalled ? null : passage ? (
           <TvSubtitles
             key={`${passage.id}:${replays}`}
@@ -381,7 +411,10 @@ function CouchTvPlay({ state, narration, ttsOn, replays }: {
             paused={narration.paused && narration.playingMessageId === passage.id}
             voiceExpected={voiceExpected}
             clock={narration.clock}
-            sentenceOnly={siteLayout === "split"}
+            speaker={speaking}
+            // In a fight the screen belongs to the fight: one line of the
+            // story at a time, the rest is in the voice and on the phones.
+            sentenceOnly={siteLayout === "split" || Boolean(fight)}
           />
         ) : null}
         <ul className="couch-tv-crew" aria-label="The crew">
@@ -391,13 +424,29 @@ function CouchTvPlay({ state, narration, ttsOn, replays }: {
               sheet={sheet}
               away={awayFrom(sheet.id)}
               waiting={waitingIds.has(sheet.userId)}
+              speaking={speaking?.sheetId === sheet.id}
+              inFight={Boolean(fight)}
               fightTurn={fight ? (sheet.id === fightTurnId ? "now" : sheet.id === fightNextId ? "next" : "") : ""}
               against={Boolean(fight?.turned.includes(sheet.id))}
+              stress={state.couchStress?.[sheet.id]}
             />
           ))}
         </ul>
-        {fight ? <CouchTvFightHud fight={fight} art={fightArt} sheets={sheets} gmBusy={gmBusy} rollsWaiting={rollCalled} truce={truce} /> : null}
       </div>
+      {/* The fight's right-hand column sits outside the stage: a roll in its
+          card slot stays at full brightness while the GM works. */}
+      {fight ? (
+        <CouchTvFightHud
+          fight={fight}
+          art={fightArt}
+          sheets={sheets}
+          gmBusy={gmBusy}
+          rollsWaiting={rollCalled || rollStage.showing}
+          diceHold={rollStage.hold}
+          truce={truce}
+          slotRef={setFightSlot}
+        />
+      ) : null}
       {/* A roll called on the TV is what the room looks at next: the
           answers it came from give way rather than sit under the call. */}
       {showAnswers && round && !rollCalled ? <CouchTvAnswers round={round} sheets={sheets} /> : null}
@@ -412,7 +461,7 @@ function CouchTvPlay({ state, narration, ttsOn, replays }: {
           </span>
         ) : null}
       </div>
-      <CouchRolls state={state} narration={narration} />
+      <CouchRolls state={state} narration={narration} slot={fight ? fightSlot : null} onStage={setRollStage} />
     </>
   );
 }
@@ -430,55 +479,87 @@ function CouchTvObjective({ objective }: { objective: CouchObjective }) {
   );
 }
 
-function CrewMember({ sheet, away = "", waiting, fightTurn, against }: {
+function CrewMember({ sheet, away = "", waiting, speaking, inFight, fightTurn, against, stress }: {
   sheet: CharacterSheet;
   // The room they stand in while the scene is elsewhere.
   away?: string;
   waiting: boolean;
+  // Their line is being heard.
+  speaking: boolean;
+  // In a fight the strip is the crew's side of it: a card each, marked with
+  // whose move it is, who is next and who was just hit, and no roles.
+  inFight: boolean;
   fightTurn: "now" | "next" | "";
   against: boolean;
+  // Their stress and any panic taking their moves (src/lib/couch/stress.ts).
+  stress?: StressView;
 }) {
   const max = effectiveMaxHp(sheet);
   // Health lost flashes the face red, so the room sees who was hit. Only a
   // drop seen on this screen: a reload does not replay it.
-  const [seen, setSeen] = useState({ hp: sheet.currentHp, hits: 0 });
+  // `struck` counts only the blows landed in a fight, so a fight starting
+  // does not mark a card for a hit taken before it.
+  const [seen, setSeen] = useState({ hp: sheet.currentHp, hits: 0, struck: 0 });
   if (seen.hp !== sheet.currentHp) {
-    setSeen({ hp: sheet.currentHp, hits: sheet.currentHp < seen.hp ? seen.hits + 1 : seen.hits });
+    const hit = sheet.currentHp < seen.hp;
+    setSeen({ hp: sheet.currentHp, hits: hit ? seen.hits + 1 : seen.hits, struck: hit && inFight ? seen.struck + 1 : seen.struck });
   }
   // The dead stay in the strip, shrunk to a dark face marked Dead, until
   // their player plays on as someone else (tvCrew); the room should never
   // read a death as low health.
   const dead = isDead(sheet);
+  const fightTag = !inFight || dead ? null
+    : fightTurn === "now" ? { tone: against ? "danger" : "accent", words: "Your move" }
+    : against ? { tone: "danger", words: "Against the crew" }
+    : fightTurn === "next" ? { tone: "plain", words: "Next" }
+    : null;
   return (
     <li
       className="couch-tv-member"
       data-waiting={!dead && (waiting || fightTurn === "now") ? "" : undefined}
+      data-speaking={speaking ? "" : undefined}
       data-down={sheet.currentHp <= 0 ? "" : undefined}
       data-dead={dead ? "" : undefined}
       data-fight-turn={fightTurn || undefined}
       data-against={against ? "" : undefined}
       data-away={away && !dead ? "" : undefined}
+      data-in-fight={inFight ? "" : undefined}
     >
       {seen.hits ? <span key={seen.hits} className="couch-tv-member-hit" aria-hidden="true" /> : null}
+      {/* A blow seen on this screen marks the card for a few seconds, so
+          the room reads who the creature went for. */}
+      {inFight && seen.struck && !dead ? <span key={`struck:${seen.struck}`} className="couch-tv-member-struck" aria-hidden="true" /> : null}
       <CouchFace src={sheet.portrait?.url} name={sheet.name} />
       <span className="couch-tv-member-text">
+        {/* Always there in a fight, empty or not, so the cards keep one
+            height as the marks come and go. */}
+        {inFight && !dead ? (
+          <span className="couch-tv-member-tags">
+            {fightTag ? <span className="couch-tv-member-tag" data-tone={fightTag.tone}>{fightTag.words}</span> : null}
+            {seen.struck ? <span key={`hit-tag:${seen.struck}`} className="couch-tv-member-tag couch-tv-member-hit-tag" data-tone="danger">Hit</span> : null}
+          </span>
+        ) : null}
         <span className="couch-tv-member-name">{sheet.name}</span>
         {dead ? (
           <span className="couch-tv-member-dead">Dead</span>
         ) : (
           <>
-            {/* A crew member fighting the others says so where their role is. */}
-            {against ? (
+            {/* A panic says so where their role is, loud enough for the room;
+                a crew member fighting the others says so there too. */}
+            {stress?.panic ? (
+              <span className="couch-tv-member-role couch-tv-member-panic">Panicking · {stress.panic.label}</span>
+            ) : against && !inFight ? (
               <span className="couch-tv-member-role couch-tv-member-against">Fighting the crew</span>
             ) : away ? (
               <span className="couch-tv-member-role couch-tv-member-away">
                 <span className="sr-only">Off scene, in </span>
                 {away}
               </span>
-            ) : sheet.crewRole?.trim() ? (
+            ) : sheet.crewRole?.trim() && !inFight ? (
               <span className="couch-tv-member-role">{sheet.crewRole}</span>
             ) : null}
             <CouchHp current={sheet.currentHp} max={max} label={`${sheet.name}'s health`} />
+            <CouchStress value={stress?.stress ?? 0} label={`${sheet.name}'s stress`} />
           </>
         )}
       </span>
@@ -500,7 +581,7 @@ const VOICE_POLL_MS = 200;
 // voice stops; without a voice, at a reading pace. Keyed by the passage, so
 // a new one always starts at its first page. Beside a map (`sentenceOnly`)
 // the column is narrow: only the sentence being spoken, no earlier lines.
-function TvSubtitles({ id, content, messages, speaking, paused, voiceExpected, clock, sentenceOnly }: {
+function TvSubtitles({ id, content, messages, speaking, paused, voiceExpected, clock, speaker, sentenceOnly }: {
   id: string;
   content: string;
   messages: CampaignState["messages"];
@@ -509,6 +590,8 @@ function TvSubtitles({ id, content, messages, speaking, paused, voiceExpected, c
   paused: boolean;
   voiceExpected: boolean;
   clock: NarrationAudio["clock"];
+  // Whose line is being heard, shown over it; null while the narrator reads.
+  speaker: SpeakingFace | null;
   sentenceOnly: boolean;
 }) {
   const pages = useMemo(() => subtitlePages(content, undefined, sentenceOnly), [content, sentenceOnly]);
@@ -564,6 +647,7 @@ function TvSubtitles({ id, content, messages, speaking, paused, voiceExpected, c
           {earlier.map((entry) => <p key={entry.id}>{entry.content}</p>)}
         </div>
       ) : null}
+      {speaker ? <CouchTvSpeaker key={speaker.name} face={speaker} /> : null}
       <p key={`${id}:${shown}`}>{pages[shown]}</p>
     </div>
   );

@@ -66,6 +66,13 @@ export async function register() {
       } catch (error) {
         console.error("[dm] could not re-arm the tables waiting for everyone", error);
       }
+      // So did couch rooms gone quiet (src/lib/couch/tension.ts).
+      try {
+        const { rearmCouchQuiet } = await import("@/lib/couch/tension");
+        rearmCouchQuiet();
+      } catch (error) {
+        console.error("[couch] could not re-arm the quiet-room clocks", error);
+      }
 
       // Event loop delay for the admin's metrics (src/lib/metrics.ts).
       const { startProcessMetrics } = await import("@/lib/metrics");

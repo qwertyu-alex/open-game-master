@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { CampaignState, PendingRoll } from "@/app/campaigns/[campaignId]/useCampaignStream";
 import type { NarrationAudio } from "@/app/campaigns/[campaignId]/useNarrationAudio";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -16,7 +17,19 @@ import { couchRollCall, couchRollVoiceId, type CouchRollFeedback } from "@/lib/c
 // land in one tool call: keep them in order instead of replacing an attack
 // with its damage before anyone can read the attack. A group check shows as
 // one card for the whole crew (CouchTvGroupCheck.tsx).
-export function CouchRolls({ state, narration }: { state: CampaignState; narration: NarrationAudio }) {
+// What the rolls hold up, for the screen around them: whether a card is
+// showing, and whether dice are still in the air (a roll's outcome waits on
+// the fight's grid until they land).
+export type RollStageState = { showing: boolean; hold: boolean };
+
+export function CouchRolls({ state, narration, slot = null, onStage }: {
+  state: CampaignState;
+  narration: NarrationAudio;
+  // In a fight, the right-hand column's card slot: the cards go there
+  // rather than over the grid. The dice still tumble across the screen.
+  slot?: HTMLElement | null;
+  onStage?: (stage: RollStageState) => void;
+}) {
   const dice = useCouchDice({ volume: narration.volume * 0.8, on: narration.unlocked && !narration.muted });
   const [through, setThrough] = useState(() => state.lastSeq);
   const [mountedAt] = useState(() => state.lastSeq);
@@ -47,6 +60,13 @@ export function CouchRolls({ state, narration }: { state: CampaignState; narrati
   const calls = state.pendingRolls.filter((pending) => (pending as { visibility?: string }).visibility !== "secret" && !groupPending.has(pending.id));
   // A thrown roll's call has done its job: the narrator stops reading it,
   // or never starts, and the result comes next instead of after the call.
+  // Which stage has reached its result: until then its dice are in the air.
+  const [landed, setLanded] = useState<string | null>(null);
+  const hold = Boolean(next) && landed !== next?.roll.id;
+  const showing = Boolean(next || groupShown || calls.length);
+  useEffect(() => {
+    onStage?.({ showing, hold });
+  }, [onStage, showing, hold]);
   const { skip } = narration;
   useEffect(() => {
     for (const entry of state.couchRolls) {
@@ -57,14 +77,19 @@ export function CouchRolls({ state, narration }: { state: CampaignState; narrati
     <>
       <div id={COUCH_DICE_TRAY_ID} className="couch-dice-tray" aria-hidden="true" />
       {next ? (
-        <RollStage key={next.roll.id} feedback={next} state={state} narration={narration} dice={dice} complete={complete} />
+        inSlot(<RollStage key={next.roll.id} feedback={next} state={state} narration={narration} dice={dice} complete={complete} onLanded={setLanded} />, slot)
       ) : groupShown ? (
         <CouchGroupStage key={groupShown.id} group={groupShown} state={state} narration={narration} dice={dice} complete={completeGroup} />
       ) : calls.length ? (
-        <RollCalls calls={calls} state={state} />
+        inSlot(<RollCalls calls={calls} state={state} />, slot)
       ) : null}
     </>
   );
+}
+
+// A card in the fight's slot when there is one, where it is otherwise.
+function inSlot(card: ReactNode, slot: HTMLElement | null) {
+  return slot ? createPortal(card, slot) : card;
 }
 
 // How long a called roll waits before the host may throw it for an absent
@@ -167,12 +192,13 @@ type Phase = "announce" | "rolling" | "result";
 // cannot play, or nothing yet while the tray decides.
 type DiceShow = "pending" | "three" | "flat";
 
-function RollStage({ feedback, state, narration, dice, complete }: {
+function RollStage({ feedback, state, narration, dice, complete, onLanded }: {
   feedback: CouchRollFeedback;
   state: CampaignState;
   narration: NarrationAudio;
   dice: CouchDice;
   complete: () => void;
+  onLanded?: (rollId: string) => void;
 }) {
   const [phase, setPhase] = useState<Phase>("announce");
   const [show, setShow] = useState<DiceShow>("pending");
@@ -247,6 +273,10 @@ function RollStage({ feedback, state, narration, dice, complete }: {
     // Thrown once per stage; the sound settings are read as they are then.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, throwDice, roll]);
+
+  useEffect(() => {
+    if (phase === "result") onLanded?.(feedback.roll.id);
+  }, [phase, onLanded, feedback.roll.id]);
 
   useEffect(() => {
     if (phase !== "result") return;

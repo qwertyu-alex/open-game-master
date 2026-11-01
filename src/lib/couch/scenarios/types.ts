@@ -37,7 +37,9 @@ export type WrittenScenario = {
       setting: string;
       truth: string;
       threat: string;
-      acts: Array<{ title: string; goal: string; setPieces: string[]; escalation: string; clock: string; twist: string }>;
+      // beats: the act's deck of scares (src/lib/couch/tension-logic.ts);
+      // a scenario without one improvises from its escalation and foes.
+      acts: Array<{ title: string; goal: string; setPieces: string[]; escalation: string; clock: string; twist: string; beats?: Array<{ kind: "sign" | "human" | "strike"; what: string }> }>;
       cast: Array<{ name: string; role: string; look: string; voice: string; agenda: string; secret: string }>;
       // What the crew can fight, act by act: people, machines, the threat's
       // spawn or victims, never the threat itself at full strength.

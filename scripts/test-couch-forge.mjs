@@ -25,8 +25,7 @@
 //   - a forge that failed, or one a restart cut off, is asked again by the
 //     lead only, and never once a card is taken.
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
+import { existsSync } from "node:fs";
 import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
 import { fakeModel, reply, settleQueue } from "./lib/enforce-narrator.mjs";
@@ -54,7 +53,7 @@ const { getDatabase } = await import("../src/lib/db/core.ts");
 const { latestEventOfType } = await import("../src/lib/events.ts");
 const kit = await import("../src/lib/couch/kit-logic.ts");
 const { matchWeapon } = await import("../src/lib/srd/weapons.ts");
-const { ammoKindForItem } = await import("../src/lib/srd/ammunition.ts");
+const { ammoKindForItem, ammoKindForWeapon } = await import("../src/lib/srd/ammunition.ts");
 
 const crewMember = (overrides = {}) => ({
   name: "Kara Voss",
@@ -183,7 +182,8 @@ await test("the careers read the model's words, and each stands on a class with 
 await test("the prompt asks for the whole night, original, with tonight's limits", () => {
   const system = logic.forgeSystemPrompt(3, "spiders, harm to children");
   assert.match(system, /exactly 3, ordinary working people/);
-  assert.match(system, /never one from a film, game or book/);
+  assert.match(system, /Any universe is welcome/);
+  assert.doesNotMatch(system, /never one from a film|Name no real franchise/, "the table may build on an existing universe");
   assert.match(system, /exactly ONE crew member has one/, "the owner wants the hidden role in play");
   assert.match(logic.forgeSystemPrompt(1, ""), /hiddenRole: null/, "a crew of one has none");
   assert.match(system, /80 to 150 words/);
@@ -197,17 +197,6 @@ await test("the prompt asks for the whole night, original, with tonight's limits
   assert.match(system, /Off limits tonight, never in the story in any form, not even implied: spiders, harm to children/);
   assert.match(logic.forgeUserPrompt(""), /surprise us/);
   assert.match(logic.forgeUserPrompt("A mining moon goes quiet"), /Story seed from the table: A mining moon goes quiet/);
-  // No franchise's creatures, companies or ships in shipped code
-  // (docs/art/creature-art-guidance.md).
-  const root = new URL("../src/", import.meta.url).pathname;
-  for (const dir of ["lib/couch", "app/couch", "app/api/couch", "app/api/campaigns/[campaignId]/couch"]) {
-    for (const file of fs.readdirSync(path.join(root, dir), { recursive: true })) {
-      const full = path.join(root, dir, String(file));
-      if (fs.statSync(full).isFile()) {
-        assert.doesNotMatch(fs.readFileSync(full, "utf8"), /xenomorph|weyland|yutani|nostromo|facehugger|chestburster/i, full);
-      }
-    }
-  }
 });
 
 await test("the night's settings are couch mode's own", () => {
@@ -276,10 +265,23 @@ await test("every career builds a level 1 sheet with no spells that the table ad
     assert.ok(sheet.equipment.some((item) => matchWeapon(item)), `${career} has a weapon`);
     assert.ok(!sheet.equipment.some((item) => /piton|ration|torch|bedroll|tinderbox|rope|backpack/i.test(item.name)), `${career} carries no adventurer's pack`);
     assert.ok(sheet.equipment.every((item) => !ammoKindForItem(item) || item.qty <= kit.STARTING_AMMO), `${career}'s ammunition is scarce`);
-    // The light pack passes the door as it is (the signature item, free
-    // text, goes on after the door and is never judged), and the door does
-    // not refill it.
-    const pack = sheet.equipment.slice(1);
+    // Named for the night's future, not the class's 5e kit (Scale Mail and
+    // a Longbow on a salvage tug, 2026-10-31): the 5e row rides in srdName,
+    // so the weapon still attacks and its ammunition still counts.
+    for (const item of sheet.equipment.slice(1)) {
+      assert.ok(item.srdName && item.srdName !== item.name, `${career}'s ${item.name} is named for the night`);
+      assert.ok(!/mail|plate|leather|hide|padded|sword|greataxe|handaxe|bow|arrow|crossbow|rapier|mace|javelin/i.test(item.name), `${career} carries no medieval ${item.name}`);
+    }
+    const shooter = sheet.equipment.find((item) => matchWeapon(item)?.properties?.includes("ammunition"));
+    if (shooter) {
+      assert.ok(sheet.equipment.some((item) => ammoKindForItem(item) === ammoKindForWeapon(matchWeapon(shooter).name)), `${career}'s ${shooter.name} is loaded`);
+    }
+    // The light pack, under the 5e rows it stands for, passes the door as it
+    // is (the signature item, free text, goes on after the door and is
+    // never judged), and the door does not refill it. Its names are the
+    // night's alone: a card is claimed without the door (src/lib/couch/
+    // play.ts), and an edit's door takes the rows a sheet already carries.
+    const pack = sheet.equipment.slice(1).map(({ srdName, ...item }) => ({ ...item, name: srdName ?? item.name }));
     const again = tableJudge(campaign)({ ...sheet, equipment: pack });
     assert.deepEqual(again?.equipment.map((item) => item.name), pack.map((item) => item.name), `${career}'s light pack passes the door as it is`);
     if (career === "Medic") {
@@ -516,12 +518,15 @@ await test("the act turns for every crew member, each told their new agenda priv
   assert.equal(sheets.getSheetForUser(night, ana.id).agenda.act, 2);
 });
 
-await test("a story point lands on the crew member's agenda, ten at most, and only on crew", () => {
+await test("a story point lands on the crew member's agenda, three at most (ALIEN's cap), and only on crew", () => {
   const lio = sheets.getSheetForUser(night, ana.id);
   assert.deepEqual(play.awardStoryPoint(night, lio.id), { ok: true, storyPoints: 1 });
   assert.equal(sheets.getSheetById(lio.id).agenda.storyPoints, 1);
   for (let index = 0; index < 12; index += 1) play.awardStoryPoint(night, lio.id);
-  assert.equal(sheets.getSheetById(lio.id).agenda.storyPoints, 10);
+  assert.equal(sheets.getSheetById(lio.id).agenda.storyPoints, 3);
+  // A night from before the cap keeps what it holds.
+  sheets.setSheetAgenda(lio.id, { ...sheets.getSheetById(lio.id).agenda, storyPoints: 4 });
+  assert.deepEqual(play.awardStoryPoint(night, lio.id), { ok: true, storyPoints: 4 });
   assert.equal(play.awardStoryPoint(night, "nobody").ok, false);
   const other = world.addHero({ name: "Elsewhere" });
   assert.equal(play.awardStoryPoint(night, other.id).ok, false, "another table's sheet");
@@ -586,6 +591,9 @@ await test("every ready-made card has its story and every story its card", () =>
   for (const card of readyCards.SCENARIO_CARDS) {
     assert.ok(card.players.min >= 1 && card.players.max <= 5 && card.players.min <= card.players.max, card.id);
     assert.ok(written.writtenScenario(card.id).reply.crew.length >= card.players.max, `${card.id} writes a crew for its largest table`);
+    // A card without its painted cover shows an empty gradient in the picker:
+    // paint it with scripts/paint-scenario-covers.mjs.
+    assert.ok(existsSync(new URL(`../public${readyCards.scenarioCover(card)}`, import.meta.url)), `${card.id} has its cover painted`);
   }
 });
 

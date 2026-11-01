@@ -43,18 +43,22 @@ import { auditEntryForViewer, sheetForViewer } from "@/lib/dm/sheet-view";
 import { enqueueDmJob, runningDmJob } from "@/lib/dm/queue";
 import { runStorySetup } from "@/lib/dm/setup";
 import { generateStoryArc } from "@/lib/dm/arc";
-import { getDmStatus } from "@/lib/dm/status";
+import { dmTurnPrivate, getDmStatus } from "@/lib/dm/status";
 import { listUtilityCalls } from "@/lib/dm/call-tracker";
 import { listBlockedUserIds } from "@/lib/db/moderation";
 import { xCardRaised } from "@/lib/dm/safety";
 import { tableBreakOn } from "@/lib/dm/table-break";
 import { latestEventOfType, publishPersisted, publishWithSeq } from "@/lib/events";
 import type { HandoutShown, TitleCard } from "@/lib/scene/state";
-import { narrationAudioFor } from "@/lib/tts";
+import { narrationAudioFor, narrationCuesFor } from "@/lib/tts";
 import { latestCouchAnswers } from "@/lib/couch/answers";
 import { latestCouchGroup } from "@/lib/couch/group-check";
 import { latestCouchTruce } from "@/lib/couch/truce";
 import { couchObjective } from "@/lib/couch/pacing";
+import { couchStressViews } from "@/lib/couch/stress";
+import { couchPushOffers } from "@/lib/couch/push";
+import { beginCouchFinale, couchFinaleView } from "@/lib/couch/finale";
+import type { CouchActBreak } from "@/lib/couch/act-break-logic";
 import { listSceneTags } from "@/lib/couch/whereabouts";
 import { couchNavigation } from "@/lib/couch/navigation";
 import { couchSite } from "@/lib/couch/site";
@@ -147,6 +151,14 @@ export async function GET(
     couchTruce: campaign.gameSettings.couchMode ? latestCouchTruce(campaignId) : null,
     // What the crew must do now (src/lib/couch/pacing.ts).
     couchObjective: couchObjective(campaign),
+    // The crew's stress and any panic, and a failed roll its thrower may
+    // still push (src/lib/couch/stress.ts, push.ts).
+    couchStress: couchStressViews(campaign),
+    couchPush: campaign.gameSettings.couchMode ? couchPushOffers(campaignId) : [],
+    // The night's closing, once it has ended (src/lib/couch/finale.ts).
+    couchFinale: couchFinaleView(campaign),
+    // The newest act break's story so far, for a TV reloaded while it shows.
+    couchActBreak: campaign.gameSettings.couchMode ? ((latestEventOfType(campaignId, ["couch_act_break"])?.payload as CouchActBreak | undefined) ?? null) : null,
     members: listMembers(campaignId),
     // Names and faces of the cast, for the transcript's speech lines.
     cast: publicCast(campaignId),
@@ -201,6 +213,8 @@ export async function GET(
     // Which messages already have narration on disk, so read-aloud plays them
     // straight from a fresh load instead of rendering a second take.
     narrationAudio: narrationAudioFor(campaignId, messages.map((message) => message.id)),
+    // Whose face goes with each line of the newest takes (the couch TV).
+    narrationCues: narrationCuesFor(campaignId, messages.map((message) => message.id)),
     // What is playing. The ambience_changed event keeps it live from here;
     // without the snapshot a reload mid-scene would sit in silence until the
     // next place or fight changed it.
@@ -222,6 +236,8 @@ export async function GET(
     caps,
     // In-memory status so a reload mid-turn still shows the DM at work.
     dmStatus: getDmStatus(campaignId),
+    // Whether that turn only answers whispers (couch tables keep playing).
+    dmPrivate: dmTurnPrivate(campaignId),
     // And the step it is on, for the status line's stage and the lead's Stop.
     dmJob: runningDmJob(campaignId),
     // Same reason, for background work: utility_calls is ephemeral, so a
@@ -326,6 +342,10 @@ export async function PATCH(
   // Campaign over: write durable progression back to each player's library
   // character (level, XP, gold, gear, spells; never HP or conditions).
   if (nextStatus === "ended") {
+    // A couch night the host ends gets its closing, as one the GM ends does.
+    if (campaign.gameSettings.couchMode) {
+      beginCouchFinale(campaignId, "host");
+    }
     for (const sheet of listSheets(campaignId)) {
       if (sheet.libraryCharacterId) {
         syncProgressToLibrary(sheet.id);

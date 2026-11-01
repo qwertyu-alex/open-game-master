@@ -1,14 +1,10 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import path from "node:path";
-import { isPrivateBackendHost } from "@/lib/backend-host";
 import { forgedMember, introTexts, type IntroCrew } from "@/lib/couch/intro-logic";
 import { getCouchForge, listCouchCrew } from "@/lib/couch/store";
 import { getCampaignById } from "@/lib/db/campaigns";
 import { enqueueMediaJob } from "@/lib/media-queue";
-import { PaidAiRefusedError, paidAiAllowedNow } from "@/lib/shared-host";
-import { synthesizeSpeech, ttsBackend } from "@/lib/tts-backend";
-import { recordUsage } from "@/lib/usage/ledger";
+import { renderNarratorClip } from "@/lib/couch/narrator-clip";
+import { ttsBackend } from "@/lib/tts-backend";
 
 // The TV's introductions read aloud (docs/couch-mode-spec.md 2.6): one clip
 // per step, the briefing and then each crew member, in the narrator's voice.
@@ -54,50 +50,15 @@ function clipName(key: string, step: number): string {
   return `intro-${key}-${step}.mp3`;
 }
 
-function clipPath(campaignId: string, name: string): string {
-  return path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "generated-audio", campaignId, name);
-}
-
-declare global {
-  var __odmCouchIntroRenders: Map<string, Promise<string>> | undefined;
-}
-
 // Resolves to the clip's path under generated-audio, rendering it first if
-// it is not on disk; one render per clip however many ask at once.
+// it is not on disk.
 export function renderIntroClip(campaignId: string, step: number): Promise<string[]> {
   const plan = introPlan(campaignId);
   const text = plan?.texts[step];
   if (!plan || !text) {
     return Promise.reject(new IntroMissingError());
   }
-  const name = clipName(plan.key, step);
-  const segments = [campaignId, name];
-  const file = clipPath(campaignId, name);
-  if (existsSync(file)) {
-    return Promise.resolve(segments);
-  }
-  const renders = (globalThis.__odmCouchIntroRenders ??= new Map());
-  const running = renders.get(file);
-  if (running) {
-    return running.then(() => segments);
-  }
-  const render = (async () => {
-    const backend = ttsBackend();
-    // As the narration's own clips are (src/lib/tts.ts): ElevenLabs bills
-    // the host's account for every character, and the shared-host policy
-    // answers before one is read.
-    const paid = backend.provider === "elevenlabs" || (backend.provider === "openai" && backend.apiKey !== "" && !isPrivateBackendHost(backend.v1));
-    if (paid && !paidAiAllowedNow()) {
-      throw new PaidAiRefusedError("speech");
-    }
-    const audio = await synthesizeSpeech(text, plan.voice, plan.speed, backend);
-    mkdirSync(path.dirname(file), { recursive: true });
-    writeFileSync(file, audio);
-    recordUsage({ kind: "tts", role: "narration", backend: backend.provider, model: backend.model, paid, units: text.length });
-    return file;
-  })().finally(() => renders.delete(file));
-  renders.set(file, render);
-  return render.then(() => segments);
+  return renderNarratorClip(campaignId, clipName(plan.key, step), text, plan.voice, plan.speed);
 }
 
 export class IntroMissingError extends Error {

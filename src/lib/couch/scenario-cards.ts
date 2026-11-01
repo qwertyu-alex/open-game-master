@@ -11,6 +11,9 @@
 // at most one hidden role), but every story, creature, company and name is
 // original: the published scenarios are someone else's to sell, and a night
 // built on one would spoil it for anyone who later plays the real thing.
+// Crew Expendable is set in a published universe at the owner's request
+// (src/lib/couch/scenarios/crew-expendable.ts says how), but its story is
+// still written new, and its card names nothing from it.
 
 export type ScenarioCard = {
   id: string;
@@ -167,6 +170,20 @@ export const SCENARIO_CARDS: readonly ScenarioCard[] = [
     hours: "2–3 hours",
     intensity: 2,
     contentNotes: ["Body horror", "Being hunted", "Confined spaces"],
+    onMap: true,
+  },
+  {
+    id: "crew-expendable",
+    title: "Crew Expendable",
+    tagline: "An hour, three of you, and a Company ship lost four years ago, calling for help.",
+    setting: "Hauler and derelict",
+    blurb:
+      "Your ice hauler's computer woke you forty days early: a Company ship listed lost with all hands four years ago has started calling for help, dead ahead. Your contract says you answer. The umbilical has already locked on. Not everyone aboard your ship is who they say they are.",
+    mood: ["Played on a map", "Who is human?", "Betrayal"],
+    players: { min: 3, max: 4, best: "3" },
+    hours: "About an hour",
+    intensity: 3,
+    contentNotes: ["Body horror", "Being hunted", "Betrayal by a friend"],
     onMap: true,
   },
 ];

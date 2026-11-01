@@ -1,6 +1,8 @@
 import type { Campaign } from "@/lib/db/campaigns";
 import { getCouchForge, getCouchMood, setCouchMood } from "@/lib/couch/store";
 import { followMoodAmbience } from "@/lib/dm/ambience-tools";
+import { soundPackById } from "@/lib/couch/sound-catalog";
+import { couchSoundPack } from "@/lib/couch/sound-logic";
 import { baseMood, moodCue, moodIntensity, steerMood, toolMood, type CouchMood } from "@/lib/couch/mood-logic";
 
 // The rim of the couch music director (src/lib/couch/mood-logic.ts). Three
@@ -20,7 +22,9 @@ function steer(
   setCouchMood(campaign.id, next);
   // Only on a change: a cue the GM chose with set_ambience plays until the
   // mood moves on, and a held music layer is left alone (applyAuto).
-  if (next.mood !== previous?.mood) followMoodAmbience(campaign, moodCue(next.mood, act));
+  if (next.mood !== previous?.mood) {
+    followMoodAmbience(campaign, moodCue(next.mood, act, soundPackById(couchSoundPack(campaign))?.scorePrefix));
+  }
   return next.mood;
 }
 

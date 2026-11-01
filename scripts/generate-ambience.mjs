@@ -20,7 +20,15 @@
 //   node scripts/generate-ambience.mjs --force          add a take even where one exists
 //   node scripts/generate-ambience.mjs --dry-run        list what would be made
 //   ACESTEP_URL=http://host:8002 node scripts/generate-ambience.mjs
-import { execFileSync } from "node:child_process";
+//
+// Or through ElevenLabs, which also makes stings: its sound-effects model
+// for beds (looping) and stings, its music model for the score. A couch
+// night's pack (src/lib/couch/sound-catalog.ts) is made this way:
+//   node --env-file=.env.server scripts/generate-ambience.mjs --backend elevenlabs --pack scifi_horror
+//   ... --takes 2 --layer bed       two takes of every bed
+// A pack's files are pinned in src/lib/ambience/sources.json with their
+// credit, so a fresh clone credits them without this machine's lock.
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import https from "node:https";
@@ -42,6 +50,14 @@ function option(name, fallback = null) {
 }
 
 const BASE = (process.env.ACESTEP_URL || "http://127.0.0.1:8002").replace(/\/$/, "");
+const backend = option("backend", "acestep");
+if (!["acestep", "elevenlabs"].includes(backend)) {
+  console.error(`[ambience] unknown backend "${backend}": acestep or elevenlabs.`);
+  process.exit(1);
+}
+const ELEVEN_BASE = (process.env.ELEVENLABS_URL || "https://api.elevenlabs.io").replace(/\/$/, "");
+const ELEVEN_KEY = process.env.ELEVENLABS_API_KEY || "";
+const onlyPack = option("pack");
 const onlyCue = option("cue");
 const onlyLayer = option("layer");
 const takes = Math.max(1, Number(option("takes", "1")) || 1);
@@ -77,6 +93,95 @@ function post(pathname, body) {
 }
 
 async function generate(cue, seed) {
+  return backend === "elevenlabs" ? generateEleven(cue) : generateAceStep(cue, seed);
+}
+
+// ElevenLabs answers with the audio itself. A bed is a looping sound
+// effect (at most 30 s, the model's limit), a sting a short one, and a
+// score cue an instrumental piece from the music model.
+async function generateEleven(cue) {
+  const music = cue.layer === "music";
+  const url = music
+    ? `${ELEVEN_BASE}/v1/music?output_format=mp3_44100_128`
+    : `${ELEVEN_BASE}/v1/sound-generation?output_format=mp3_44100_128`;
+  const body = music
+    ? { prompt: cue.prompt, music_length_ms: (cue.seconds ?? SECONDS.music) * 1000, force_instrumental: true, model_id: process.env.ELEVENLABS_MUSIC_MODEL || "music_v2_5" }
+    : {
+        text: cue.prompt,
+        loop: cue.layer === "bed",
+        duration_seconds: Math.min(30, Math.max(0.5, cue.seconds ?? (cue.layer === "bed" ? 30 : 4))),
+        prompt_influence: 0.6,
+        model_id: process.env.ELEVENLABS_SFX_MODEL || "eleven_text_to_sound_v2",
+      };
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "xi-api-key": ELEVEN_KEY, "Content-Type": "application/json", Accept: "audio/mpeg" },
+    body: JSON.stringify(body),
+    // The music model takes a minute or two for a two-minute piece.
+    signal: AbortSignal.timeout(10 * 60_000),
+  });
+  if (!response.ok) {
+    throw new Error(`ElevenLabs answered ${response.status}: ${(await response.text()).slice(0, 300)}`);
+  }
+  return toOpus(Buffer.from(await response.arrayBuffer()), cue.layer);
+}
+
+// How loud each layer is made before the catalog's gain trims it. The model
+// hands back a breathing suit at -58 dB and a bridge at -10; the room should
+// not have to ride the volume between them. A bed sits under the voice, the
+// score under a sting.
+const LOUDNESS = { bed: -26, music: -20, sting: -16 };
+
+// The library's own format (every shipped file is Opus), at one loudness a
+// layer: measured, then applied as one linear gain (two-pass loudnorm), so a
+// loop's quiet moments stay quiet. A looping bed is cut to loop and keeps
+// its ends; anything else gets a short fade so it never clicks in.
+function toOpus(input, layer) {
+  const stem = path.join(os.tmpdir(), `odm-ambience-${process.pid}-${Date.now()}`);
+  writeFileSync(`${stem}.in`, input);
+  try {
+    const target = `I=${LOUDNESS[layer] ?? -20}:TP=-1.5:LRA=20`;
+    // loudnorm reports on stderr.
+    const report = spawnSync(
+      "ffmpeg",
+      ["-hide_banner", "-i", `${stem}.in`, "-af", `loudnorm=${target}:print_format=json`, "-f", "null", "-"],
+      { encoding: "utf8" },
+    ).stderr;
+    const measured = JSON.parse(report.slice(report.lastIndexOf("{"), report.lastIndexOf("}") + 1));
+    const filters = [
+      `loudnorm=${target}:linear=true:measured_I=${measured.input_i}:measured_TP=${measured.input_tp}:measured_LRA=${measured.input_lra}:measured_thresh=${measured.input_thresh}:offset=${measured.target_offset}`,
+      ...(layer === "bed" ? [] : ["afade=t=in:d=0.05,areverse,afade=t=in:d=0.3,areverse"]),
+    ];
+    execFileSync(
+      "ffmpeg",
+      [
+        "-loglevel", "error", "-y", "-i", `${stem}.in`, "-af", filters.join(","), "-ar", "48000",
+        "-codec:a", "libopus", "-b:a", layer === "music" ? "96k" : "64k", `${stem}.opus`,
+      ],
+      { stdio: "inherit" },
+    );
+    return readFileSync(`${stem}.opus`);
+  } finally {
+    rmSync(`${stem}.in`, { force: true });
+    rmSync(`${stem}.opus`, { force: true });
+  }
+}
+
+// --normalize: bring a pack's files already on disk to their layer's
+// loudness, without generating anything.
+if (flag("normalize")) {
+  for (const name of readdirSync(OUT_DIR).sort()) {
+    const parsed = parseTrackFile(name);
+    const cue = parsed && AMBIENCE_CUES.find((candidate) => candidate.id === parsed.cueId);
+    if (!cue || (onlyPack && cue.pack !== onlyPack) || (onlyCue && cue.id !== onlyCue) || (onlyLayer && cue.layer !== onlyLayer)) continue;
+    if (!cue.pack && !onlyCue) continue;
+    console.log(`[ambience] normalizing ${name}`);
+    if (!dryRun) writeFileSync(path.join(OUT_DIR, name), toOpus(readFileSync(path.join(OUT_DIR, name)), cue.layer));
+  }
+  process.exit(0);
+}
+
+async function generateAceStep(cue, seed) {
   const { status, text } = await post("/v1/chat/completions", {
     messages: [{ role: "user", content: cue.prompt }],
     lyrics: "[Instrumental]",
@@ -120,18 +225,38 @@ function toMp3(wav) {
   }
 }
 
+// A pack's files ship with the project, so their credit goes in the pins
+// beside the fetched library's.
+const SOURCES = path.join(path.dirname(new URL(import.meta.url).pathname), "..", "src", "lib", "ambience", "sources.json");
+function pinShipped(file, credit) {
+  const pins = JSON.parse(readFileSync(SOURCES, "utf8"));
+  pins[file] = { title: credit.title, author: credit.author, license: credit.license, source: credit.source };
+  writeFileSync(SOURCES, `${JSON.stringify(pins, null, 2)}\n`);
+}
+
 function filesFor(cueId) {
   return existsSync(OUT_DIR) ? readdirSync(OUT_DIR).filter((name) => parseTrackFile(name)?.cueId === cueId) : [];
 }
 
-const health = await fetch(`${BASE}/health`).then((response) => response.ok).catch(() => false);
-if (!health && !dryRun) {
-  console.error(`[ambience] no ACE-Step server at ${BASE}. Start acestep-openrouter or set ACESTEP_URL.`);
+if (backend === "acestep") {
+  const health = await fetch(`${BASE}/health`).then((response) => response.ok).catch(() => false);
+  if (!health && !dryRun) {
+    console.error(`[ambience] no ACE-Step server at ${BASE}. Start acestep-openrouter or set ACESTEP_URL.`);
+    process.exit(1);
+  }
+} else if (!ELEVEN_KEY && !dryRun) {
+  console.error("[ambience] no ELEVENLABS_API_KEY. Run with node --env-file=.env.server.");
   process.exit(1);
 }
 
 const cues = AMBIENCE_CUES.filter(
-  (cue) => cue.prompt && (!onlyCue || cue.id === onlyCue) && (!onlyLayer || cue.layer === onlyLayer),
+  (cue) =>
+    cue.prompt &&
+    // ACE-Step's shortest piece is ten seconds; a sting is one beat.
+    (backend === "elevenlabs" || cue.layer !== "sting") &&
+    (!onlyPack || cue.pack === onlyPack) &&
+    (!onlyCue || cue.id === onlyCue) &&
+    (!onlyLayer || cue.layer === onlyLayer),
 );
 if (!cues.length) {
   console.error("[ambience] nothing to make: no cue matches, or none of them has a prompt.");
@@ -152,7 +277,7 @@ for (const cue of cues) {
     continue;
   }
   for (let take = 0; take < wanted; take += 1) {
-    const file = nextTrackFile(cue.id, ".mp3", filesFor(cue.id));
+    const file = nextTrackFile(cue.id, backend === "elevenlabs" ? ".opus" : ".mp3", filesFor(cue.id));
     console.log(`[ambience] ${cue.id} (${cue.label}) -> ${file}`);
     if (dryRun) {
       continue;
@@ -161,14 +286,25 @@ for (const cue of cues) {
     try {
       const audio = await generate(cue, Math.floor(Math.random() * 2 ** 31));
       writeFileSync(path.join(OUT_DIR, file), audio);
-      lock[file] = {
-        title: `${cue.label} (take ${parseTrackFile(file)?.variant ?? 1})`,
-        author: "Made with ACE-Step 1.5 on this server",
-        source: "https://github.com/ace-step/ACE-Step-1.5",
-        license: "Generated locally; no third-party rights",
-        origin: "generated",
-      };
+      const title = `${cue.label} (take ${parseTrackFile(file)?.variant ?? 1})`;
+      lock[file] =
+        backend === "elevenlabs"
+          ? {
+              title,
+              author: "Generated with ElevenLabs for Open Game Master",
+              source: "https://elevenlabs.io",
+              license: "Generated for this project under the ElevenLabs terms",
+              origin: "generated",
+            }
+          : {
+              title,
+              author: "Made with ACE-Step 1.5 on this server",
+              source: "https://github.com/ace-step/ACE-Step-1.5",
+              license: "Generated locally; no third-party rights",
+              origin: "generated",
+            };
       writeLock(lock);
+      if (cue.pack) pinShipped(file, lock[file]);
       // The manifest after every take, not at the end: a run of forty
       // minutes should let the table hear the first take while the rest
       // are made.

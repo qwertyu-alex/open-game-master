@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { toneBedBias } from "@/lib/dm/safety-logic";
+import { couchBed, couchSoundPack } from "@/lib/couch/sound-logic";
 import { cueById, cueIds } from "@/lib/ambience/catalog";
 import {
   applyAuto,
@@ -147,6 +148,11 @@ export function handleSetAmbience(
     if (typeof value === "string" && cueById(value)?.layer !== layer) {
       return { error: `"${value}" is not a ${layer} cue. Use one from the list.`, retry: true };
     }
+    // A pack's table plays its own sounds: no sea under a spaceship.
+    const pack = couchSoundPack(campaign);
+    if (typeof value === "string" && pack && !cueIds(layer, pack).includes(value)) {
+      return { error: `"${value}" is not one of this night's ${layer} sounds. Use one from the list.`, retry: true };
+    }
   }
 
   let state = getAmbience(campaign.id);
@@ -186,7 +192,8 @@ export function handlePlaySting(
     return { error: "Invalid arguments: play_sting needs a cue.", retry: true };
   }
   const cue = cueById(args.cue);
-  if (!cue || cue.layer !== "sting") {
+  const pack = couchSoundPack(campaign);
+  if (!cue || cue.layer !== "sting" || (pack && !cueIds("sting", pack).includes(cue.id))) {
     return { error: `"${args.cue}" is not a sting. Use one from the list.`, retry: true };
   }
   // Ephemeral by nature: a sting is only true while it is happening, so a
@@ -209,6 +216,14 @@ export function followSceneAmbience(campaign: Campaign, placeBed: string | null)
   // The table's tone stands in when the place has no kind and no bed is
   // playing yet (docs/vtt-parity-implementation-plan.md 9.2); a place with
   // no kind otherwise keeps what is playing.
+  // A couch night hears its own pack: a place filed under an upstream kind
+  // is translated, and no kind at all is the ship's corridor.
+  const pack = couchSoundPack(campaign);
+  if (pack) {
+    const { state, changed } = applyAuto(getAmbience(campaign.id), { bed: couchBed(placeBed, pack) });
+    commit(campaign.id, state, changed);
+    return;
+  }
   const bed = placeBed ?? (getAmbience(campaign.id).bed ? null : toneBedBias(campaign.gameSettings.gm?.tone ?? []));
   if (!bed) {
     return;

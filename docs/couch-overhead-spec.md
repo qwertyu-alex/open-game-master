@@ -20,7 +20,7 @@ salvage tug docked to it, 2 to 4 players, about 45 minutes).
 | Piece | File |
 | --- | --- |
 | The map format, checks, walls, line of sight, the fog, the TV's camera, stealth paths, the tracker, the GM's SITE MAP | `src/lib/couch/site-map-logic.ts` |
-| The live map: its state, the players' view, the move checks, the five map tools | `src/lib/couch/site.ts` |
+| The live map: its state, the players' view, the move checks, the six map tools | `src/lib/couch/site.ts` |
 | The sites, and the nights written for them | `src/lib/couch/sites/` (`haddon-outpost.ts`, `dead-air.ts`), `src/lib/couch/scenarios/haddon-outpost.ts`, `dead-air.ts` |
 | The drawing, the TV's camera and overview, the phone's map | `src/components/couch/CouchSiteMap.tsx`, `src/app/styles/couch-site.css` |
 | Hooks into the night | `move_party` in `src/lib/dm/turn.ts`; the prompt in `src/lib/couch/navigation.ts`; the tools in `turn.ts`, `invoke-dispatch.ts`, `tool-profiles.ts`; the snapshot's `couchSite` and the `couch_site` event; `CouchTv.tsx`, `CouchNavigation.tsx`, `CouchPhoneView.tsx` |
@@ -144,8 +144,45 @@ From the rulebook's chapter 4, cut to what a room of phones needs.
   the power supply and calls `track`. Every active foe, person or the threat
   within four zones pings, in rooms nobody has seen too; passive (still)
   things do not. The pings stay until the crew next moves.
-- **Finds.** `reveal` puts a hidden thing on every screen; `take_item`
-  takes an item or clue off the map.
+- **Reveals.** Nothing in a room shows until the GM's narration shows it:
+  `reveal` puts a person, foe, item, clue or body on every screen, a hidden
+  one only once the crew finds it; `take_item` takes an item or clue off
+  the map.
+- **What the crew knows of is marked.** A person, item, clue or body the
+  crew has seen is known where they saw it, and stays on the map. When the
+  crew learns where someone or something is without seeing it (Marsh over
+  comms: "I'm barricaded in the server room"), the GM calls `mark_on_map`
+  with its name: it is marked where it really is, its zone drawn as a bare
+  named outline until someone sees into it. A landmark the site does not
+  place ("Clamp release", "Barricade") is marked by a short name and its
+  zone, at most sixteen, and taken off with `where: "gone"`. Foes and the
+  threat are never marked: not knowing where it is is the horror.
+
+### The map changes under the crew
+
+A site is written once, but a night breaks it. Five things the GM can do to
+the map, each on every screen at once with a red alarm ring where it
+happened and a klaxon on the TV (both last until the crew next moves):
+
+| What happens in the story | The GM calls | What the map does |
+| --- | --- | --- |
+| A fire breaks out | `set_zone` fire | It spreads into every zone open to it (open borders, open or broken doors, holes) each stealth turn, filling them with smoke; a shut door holds it, vacuum puts it out. The `move_party` answer says what spread. |
+| Smoke, gas, a blizzard inside | `set_zone` smoke | Nobody sees into the zone, and from inside nobody sees out. |
+| A hull breach, an airlock blown | `set_zone` vacuum | Every zone open to it vents at once, and again whenever a door to it is opened; a shut door holds the air. The answer names the crew caught in it. |
+| An explosion, a collapse | `set_zone` wrecked, and fire next door | Nobody walks into or through it (a walk goes round); walking out is allowed. |
+| The power fails; a flare is lit | `set_zone` dark / lit | Adds or lifts the rulebook's `dark` feature. |
+| Something bursts through a wall | `set_border` broken between two zones with no way through | A hole on the wall they share: a way through, and the rooms see each other. |
+| Mother locks the deck down | `set_border` with `to: "all"` | Every door, hatch and airlock of the zone at once. |
+| A ship undocks, a clamp lets go, a dropship lifts off | `set_section` adrift / absent | Its zones, walls, furniture and tokens glide away and turn as one piece; the border to it is drawn cut (severed) and nobody crosses. Crew aboard go with it and still walk it. Absent, it is not sent at all. |
+| A ship arrives and docks | `set_section` docked | It slides in, joined as written. |
+
+`state: off` lifts a condition (the fire is out, the rubble cleared); a zone
+open to vacuum vents again until its door is shut. Sections are written
+with the site (`SiteMap.sections`: the zones, a drift vector and turn, a
+note for the GM): the Cormorant on Dead Air, the Erebus on Crew
+Expendable. `set_section` is offered only on a site that has one. Hazards
+show on every zone drawn, even out of sight (the ship's alarms tell
+everyone), and in the phone's ways out ("Door to Mess Hall · VACUUM").
 
 The GM reads all of it as `SITE MAP` from the night's first turn: the
 rules above, the scene's zone and its look, its ways out with their states
@@ -162,10 +199,14 @@ phone never holds what it should not show:
 | | Players |
 | --- | --- |
 | A zone, its walls, doors and furniture | once someone has seen into it; it stays drawn |
-| Zones never seen | not sent at all: black |
-| People, foes | only while someone can see their zone |
-| Items, clues, bodies | while seen, and left where they were seen |
-| Hidden things | once revealed |
+| A zone next to one someone has stood in | a bare named outline (no walls, doors or furniture) until seen: the crew read the signs on the doors they passed |
+| Other zones never seen | not sent at all: black |
+| Anything on the map (people, foes, items, clues, bodies) | not until the GM reveals it as the narration shows it, so the map never shows what the story has not said; a foe that walks into sight (`move_foe`) is revealed by it, unless hidden |
+| Foes, the threat | once revealed, only while someone can see their zone |
+| People | once revealed, while seen; out of sight, a dashed "last seen" token where the crew last knew them, until they see that zone without them |
+| Anything marked (`mark_on_map`) | in its zone, which is drawn as a bare named outline (no walls, doors or furniture) until seen |
+| Items, clues, bodies | once revealed, while seen, and left where they were seen |
+| Hidden things | once revealed, which the GM does only when the crew finds them |
 | A later act's entities | not until that act |
 | Pings | until the crew next moves |
 | Active or passive | never |
@@ -183,7 +224,17 @@ tile), the panel shows all of it. Past that the camera frames the scene's
 zone and what can be seen from it, and a small map of everything found sits
 in the panel's corner with the camera's frame on it. The camera glides
 between frames. The scene's zone is brightest, zones in sight are lit,
-zones left behind are dim. Crew tokens are their portraits. The tracker's
+zones left behind are dim. Crew tokens are their portraits. Every other
+token shows what it is at a glance: a picture the night already has of it
+(a person's portrait, a foe's picture from a fight, an item's icon or the
+picture painted for it on someone's sheet; nothing is painted for the
+map), or else its kind's drawn icon in its kind's shape: a person's head on
+a blue disc, a skull on a red diamond, the threat's eye, a crate, a page, a
+body laid out, a landmark's flag on an amber pin. Its name sits beside it
+(a person last seen elsewhere with a "?"), never over another name, a
+token or a zone's title: each name tries the spots around its token,
+nearest first, and one that has to stand further off gets a thin line in
+its kind's colour back to the token (`tagPlaces`). The tracker's
 pings beep twice.
 
 ### On the phone
@@ -202,8 +253,8 @@ no vote and no destination picker.
 
 ## Part 6: decided
 
-- **Tokens are portraits** (the crew's own); foes, people and items are
-  shapes.
+- **Tokens are portraits** (the crew's own); foes, people and items wear
+  a picture the night has of them, or their kind's icon.
 - **The picture every turn stays**, unchanged, as the corner inset.
 - **The night starts black** and draws zones as they are seen; a big map
   is handled by the camera and the overview.
@@ -215,5 +266,7 @@ no vote and no destination picker.
   until then the card shows its plain backdrop.
 - Forged sites: the forge drafts a `SiteMap` for a story written tonight,
   and `checkSiteMap` refuses it and asks again on any problem.
-- A light source on the map: a flashlight or flare lifting `dark` from a
-  zone, shown on the floor.
+- A light source drawn on the floor (`set_zone lit` already lifts `dark`).
+- Ships that arrive mid-night need zones written for them: the Aurex
+  Halyard docking to Dead Air's relay in act 3 is the obvious first.
+- Moving zones: a lift car between decks, an APC crossing the exterior.

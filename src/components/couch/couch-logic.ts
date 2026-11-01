@@ -490,6 +490,13 @@ export function gmStatusWords(status: DmStatus): string {
   }
 }
 
+// The GM's status as the room meets it. A turn that only answers someone's
+// private Ask GM holds nobody: the TV shows no work and every phone keeps
+// its Do and Say (the asker's thread shows the wait on its own).
+export function couchGmStatus(state: { dmStatus: DmStatus; dmPrivate?: boolean }): DmStatus {
+  return state.dmPrivate ? "idle" : state.dmStatus;
+}
+
 // The GM is answering the table: the TV dims the scene under a breathing
 // edge and the phones hold Do and Say until it is done. Not awaiting_rolls,
 // where the table owes the GM a roll, and not the chapter notes, which are
@@ -516,4 +523,31 @@ export function couchHaltedTurn(
     return { id: message.id, turnId: message.dmTurnId, reason: stated.charAt(0).toUpperCase() + stated.slice(1) };
   }
   return null;
+}
+
+// ---- who is talking ----
+
+// The face that goes with a voice the TV hears (src/lib/narration-cues-logic.ts):
+// a character at the table by their sheet, a cast member by their name or an
+// alias, else the name alone. A numbered creature ("Stalker 2") is one of
+// its kind. `sheetId` is set for a character, whose tile in the crew strip
+// lights instead of a card.
+export type SpeakingFace = { name: string; portraitUrl: string; sheetId: string };
+
+export function speakingFace(
+  speaker: string | null,
+  sheets: readonly { id: string; name: string; portrait?: { url?: string } | null }[],
+  cast: readonly { name: string; portraitUrl: string; aliases?: string[] }[],
+): SpeakingFace | null {
+  if (!speaker?.trim()) {
+    return null;
+  }
+  const key = (name: string) => name.trim().replace(/\s+(?:#?\d+|[A-Z])$/, "").trim().toLowerCase();
+  const wanted = key(speaker);
+  const sheet = sheets.find((entry) => key(entry.name) === wanted);
+  if (sheet) {
+    return { name: sheet.name, portraitUrl: sheet.portrait?.url ?? "", sheetId: sheet.id };
+  }
+  const member = cast.find((entry) => [entry.name, ...(entry.aliases ?? [])].some((name) => key(name) === wanted));
+  return member ? { name: member.name, portraitUrl: member.portraitUrl, sheetId: "" } : { name: speaker.trim(), portraitUrl: "", sheetId: "" };
 }

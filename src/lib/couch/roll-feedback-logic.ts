@@ -2,6 +2,7 @@ import type { StoredRoll } from "@/lib/db/rolls";
 import { rollExpression } from "@/lib/dice";
 import type { CouchItemPicture } from "@/lib/couch/item-show-logic";
 import { rollToastLead, ROLL_KIND_LABELS } from "@/lib/roll-labels";
+import { savedByStoryPoint } from "@/lib/couch/stress-logic";
 
 export type CouchRollFeedback = {
   roll: StoredRoll;
@@ -21,6 +22,9 @@ export type CouchRollFeedback = {
   groupId?: string;
   // The carried weapon an attack or its damage swings, with its picture.
   item?: CouchItemPicture;
+  // The thrower's stress dice beside a check or save, and any panic they set
+  // off (src/lib/couch/stress.ts), read aloud after the result.
+  stress?: string;
 };
 
 export type CouchAttackRuling = { hit: boolean; crit?: boolean; target?: number };
@@ -150,13 +154,15 @@ export function rollMath(roll: StoredRoll): string {
 
 // Public results only, even when the TV is signed in as the lead. Critical
 // attack rules never turn an ordinary skill check into an automatic result.
-export function couchRollFeedback(roll: StoredRoll, name?: string, reason = "", ruling?: CouchAttackRuling): CouchRollFeedback | null {
+export function couchRollFeedback(roll: StoredRoll, name?: string, reason = "", ruling?: CouchAttackRuling, stress = ""): CouchRollFeedback | null {
   if (roll.visibility !== "public" || !roll.breakdown) return null;
   const attackCrit = roll.kind === "attack" ? roll.breakdown.crit : undefined;
   const target = ruling?.target ?? roll.dc;
   const success = ruling ? ruling.hit : roll.kind === "attack" && target !== null
     ? attackCrit === "nat20" ? true : attackCrit === "nat1" ? false : roll.success : roll.success;
-  const verdict = ruling?.hit && ruling.crit ? "Critical hit" :
+  // A failure a story point turned into a success (src/lib/couch/push.ts).
+  const spent = success === true && savedByStoryPoint(roll.detail);
+  const verdict = ruling?.hit && ruling.crit ? "Critical hit" : spent ? "Success · story point" :
     success === true ? (roll.kind === "attack" ? "Hit" : "Success") :
       success === false ? (roll.kind === "attack" ? "Miss" : "Failure") :
         attackCrit === "nat20" ? "Natural 20" : attackCrit === "nat1" ? "Natural 1" :
@@ -169,10 +175,10 @@ export function couchRollFeedback(roll: StoredRoll, name?: string, reason = "", 
   const meaning = roll.kind === "damage" ? "This is the damage rolled; defenses may change the health lost." :
     roll.kind === "initiative" ? "Higher initiative acts earlier." :
       roll.kind === "attack" ? success === true ? "The attack hits." : success === false ? "The attack misses." : "The GM resolves the attack and any defenses." :
-        success === true ? "The roll succeeds." : success === false ? "The roll fails." : "The GM will explain what this changes.";
+        spent ? `${name ?? "They"} spent a story point: the roll succeeds.` : success === true ? "The roll succeeds." : success === false ? "The roll fails." : "The GM will explain what this changes.";
   const faces = roll.breakdown.terms.filter((term) => term.kind === "dice").flatMap((term) =>
     term.dice.map((die) => `${die.value}${die.kept ? "" : " discarded"}`),
   );
-  const result = `${label}. ${faces.length ? `Dice: ${faces.join(", ")}. ` : ""}Total ${roll.total}${target !== null ? ` against target ${target}` : ""}. ${ruling?.hit && ruling.crit ? "Critical hit. " : ""}${meaning}`;
-  return { roll, target, label, announcement, result, verdict, math: rollMath(roll), good: success === true, bad: success === false };
+  const result = `${label}. ${faces.length ? `Dice: ${faces.join(", ")}. ` : ""}${stress ? `${stress.split(" PANIC")[0]} ` : ""}Total ${roll.total}${target !== null ? ` against target ${target}` : ""}. ${ruling?.hit && ruling.crit ? "Critical hit. " : ""}${meaning}`;
+  return { roll, target, label, announcement, result, verdict, math: rollMath(roll), good: success === true, bad: success === false, ...(stress ? { stress } : {}) };
 }

@@ -43,6 +43,10 @@ const COVERS = {
     "A small battered ore freighter in deep space with Christmas lights taped inside its cockpit window, one very bright star-like beacon ahead of it, three distant white-and-gold ships approaching",
   "dead-air":
     "A small dark relay station of three linked modules and a tall antenna mast in deep space, a battered orange salvage tug clamped to its frosted airlock, red warning strobes, a single green light in one window",
+  "haddon-outpost":
+    "A squat mining outpost of prefab steel modules and a tall ore conveyor on a grey airless moon under a black starfield, every window lit warm white, a small survey lander parked on the dust beside its airlock, long hard shadows, perfectly still",
+  "crew-expendable":
+    "Seen through the frosted canopy of a small cockpit full of green screens: a huge black derelict spaceship turning slowly against the stars, its running lights dead, one airlock blinking amber, a thin flexible umbilical tube stretched across to it",
 };
 
 const args = process.argv.slice(2);

@@ -87,7 +87,7 @@ export async function POST(
   // Contentless ping; each client re-fetches its own filtered rows.
   publishEphemeral(campaignId, "whisper_activity", {});
   // Coalesced: never interrupts a running turn, at most one follow-up.
-  requestDmTurn(campaignId);
+  requestDmTurn(campaignId, { privateOnly: true });
 
   return Response.json({ ok: true }, { status: 202 });
 }

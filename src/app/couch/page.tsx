@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { use, useId, useState, type FormEvent, type ReactNode } from "react";
+import { use, useEffect, useId, useState, type FormEvent, type ReactNode } from "react";
 import { PageSection, PageShell } from "@/components/PageShell";
 import { cn } from "@/lib/cn";
 import { OFF_LIMITS_MAX, PLAYERS_MAX, SEED_MAX } from "@/lib/couch/limits";
@@ -38,6 +38,15 @@ export default function CouchNightPage({ searchParams }: { searchParams: Promise
   const [offLimits, setOffLimits] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // An admin can read a ready-made story in full (/couch/stories/[id]), to
+  // debug it; nobody else is shown the way in.
+  const [admin, setAdmin] = useState(false);
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { user?: { isAdmin?: boolean } | null } | null) => setAdmin(data?.user?.isAdmin === true))
+      .catch(() => undefined);
+  }, []);
 
   async function start(event: FormEvent) {
     event.preventDefault();
@@ -92,7 +101,23 @@ export default function CouchNightPage({ searchParams }: { searchParams: Promise
               </StoryChoice>
               {SCENARIO_CARDS.map((entry) => (
                 <StoryChoice key={entry.id} id={entry.id} label={entry.title} checked={story === entry.id} onPick={pickStory}>
-                  <ScenarioTile card={entry} selected={story === entry.id} />
+                  <ScenarioTile
+                    card={entry}
+                    selected={story === entry.id}
+                    footer={
+                      admin ? (
+                        <a
+                          href={`/couch/stories/${entry.id}`}
+                          target="_blank"
+                          rel="noopener"
+                          onClick={(event) => event.stopPropagation()}
+                          className="inline-flex min-h-10 items-center self-start text-sm text-amber-200 underline-offset-4 hover:text-amber-400 hover:underline focus-visible:rounded focus-visible:ring-2 focus-visible:ring-amber-300"
+                        >
+                          Read the story (spoilers)
+                        </a>
+                      ) : null
+                    }
+                  />
                 </StoryChoice>
               ))}
             </div>

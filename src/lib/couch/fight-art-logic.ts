@@ -47,12 +47,9 @@ export function knownFoe(name: string, people: readonly KnownPerson[]): KnownFoe
   return look || portrait ? { look, portrait } : null;
 }
 
-// The image model otherwise turns any foe into a monster, and a creature
-// into the films' famous one; the shipped art rules hold for a night's
-// pictures too (docs/art/creature-art-guidance.md).
+// The image model otherwise turns any foe into a monster.
 const TRUE_TO_KIND =
   "Draw it as what the story says it is: a person stays a person with a human face and body, a machine stays a machine, a creature stays a creature. Never turn a person into a monster.";
-const ORIGINAL = "If it is a creature, an original design, never one from a film, game or book: none of the famous film aliens, no beholder or mind flayer.";
 const ALONE = "Only this one figure, no one else in frame, no text or lettering.";
 
 // The style lock first: image models weigh the first words most. `known` is
@@ -73,7 +70,6 @@ export function fightArtPrompt(
           input.face ? `Keep the face, build and clothes of ${name} in the reference picture.` : "",
           "The whole figure in frame, three-quarter view, lunging toward the viewer, lit by harsh practical light against deep shadow. Menacing and clearly readable as one figure.",
           TRUE_TO_KIND,
-          ORIGINAL,
         ]
       : stage === "hurt"
         ? [

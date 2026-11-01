@@ -137,8 +137,8 @@ export const TOOL_GROUPS: Record<ToolGroupId, { summary: string; tools: readonly
   effects: { summary: "a lasting blessing, curse or boon that is not a condition", tools: ["set_effect", "clear_effect"] },
   scenes: { summary: "structured scenes: chases, heists, skill challenges", tools: ["start_scene", "scene_check", "end_scene"] },
   sound: { summary: "the table's music and sound stings", tools: ["set_ambience", "play_sting"] },
-  couch: { summary: "a couch one-shot's acts, the crew's objective, story points, place pictures, mood, cuts between a split crew and truces", tools: ["advance_act", "set_objective", "award_story_point", "repaint_place", "set_mood", "cut_to", "offer_truce"] },
-  site: { summary: "a night played on a map: doors, moving foes in secret, finds, picking up items, the motion tracker", tools: ["set_border", "move_foe", "reveal", "take_item", "track"] },
+  couch: { summary: "a couch one-shot's acts, the crew's objective, story points, place pictures, mood, cuts between a split crew, truces, pressure beats, hidden effects, stress and ending the night", tools: ["advance_act", "set_objective", "award_story_point", "repaint_place", "set_mood", "cut_to", "offer_truce", "spring_beat", "end_night", "hidden_effect", "adjust_stress"] },
+  site: { summary: "a night played on a map: doors, moving foes in secret, finds, picking up items, the motion tracker, marking what the crew knows of, fire, breaches and ships that dock or leave", tools: ["set_border", "move_foe", "reveal", "take_item", "track", "mark_on_map", "set_zone", "set_section"] },
   mounts: { summary: "mounting and dismounting", tools: ["mount_up", "dismount"] },
   gear: { summary: "donning a shield, drawing a weapon, dropping, picking up or handing over an item", tools: ["handle_item"] },
   // A pet's damage is apply_damage's (issue #471), which a table with pets
@@ -249,6 +249,12 @@ export function autoGroups(signals: ProfileSignals): Set<ToolGroupId> {
   if (signals.couch) groups.add("couch");
   // Offered only on a night played on a map; elsewhere the group is empty.
   if (signals.couch) groups.add("site");
+  // A couch ship hurts on its own (vents, fire, vacuum, falls): apply_hazard
+  // is offered every turn, not only when a player says "fire".
+  if (signals.couch) groups.add("hazards");
+  // A horror night lives on its stings (a tracker ping, a bulkhead slam):
+  // play_sting is offered every turn rather than behind more_tools.
+  if (signals.couch) groups.add("sound");
   const text = signals.englishPlayerText ?? "";
   for (const [group, pattern] of ENGLISH_INTENT) {
     if (pattern.test(text)) groups.add(group);

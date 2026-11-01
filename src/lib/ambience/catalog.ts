@@ -9,8 +9,11 @@
 // a cue from a place description, and none of the three has to know what is
 // actually on disk, or care that a table swapped a track out.
 //
-// Pure by design: no imports, no I/O. scripts/test-ambience.mjs loads it
-// directly, and so does the fetch script.
+// Pure by design: no I/O, and its one import (a couch night's own pack,
+// src/lib/couch/sound-catalog.ts) is pure too. scripts/test-ambience.mjs
+// loads it directly, and so does the fetch script.
+
+import { COUCH_PACK_SHARED, COUCH_SOUND_CUES } from "../couch/sound-catalog";
 
 export type AmbienceLayer = "bed" | "music" | "sting";
 
@@ -37,6 +40,11 @@ export type AmbienceCue = {
   // archives have nothing. Beds and music only: a sting is one beat, and
   // the models that make them make ten seconds at the least.
   prompt?: string;
+  // A genre pack's own cue (src/lib/couch/sound-catalog.ts): offered only to
+  // a table playing that pack. Unset is the upstream library.
+  pack?: string;
+  // How long a generated take should be, in seconds.
+  seconds?: number;
 };
 
 // ---- beds: where the party is ----
@@ -807,7 +815,9 @@ const STINGS: AmbienceCue[] = [
   },
 ];
 
-export const AMBIENCE_CUES: AmbienceCue[] = [...BEDS, ...MUSIC, ...STINGS];
+// Every cue, the packs' too, so a file, a stored row or a tool argument
+// naming one resolves. What a table is OFFERED goes by its pack (below).
+export const AMBIENCE_CUES: AmbienceCue[] = [...BEDS, ...MUSIC, ...STINGS, ...COUCH_SOUND_CUES];
 
 export const BED_CUES = BEDS;
 export const MUSIC_CUES = MUSIC;
@@ -819,19 +829,25 @@ export function cueById(id: string): AmbienceCue | null {
   return BY_ID.get((id ?? "").trim()) ?? null;
 }
 
-export function cuesForLayer(layer: AmbienceLayer): AmbienceCue[] {
-  return AMBIENCE_CUES.filter((cue) => cue.layer === layer);
+// What a table is offered on a layer: the upstream library with no pack,
+// else the pack's own cues and the ones it shares (upstream or another
+// pack's).
+export function cuesForLayer(layer: AmbienceLayer, pack?: string | null): AmbienceCue[] {
+  const shared = new Set(pack ? COUCH_PACK_SHARED[pack] ?? [] : []);
+  return AMBIENCE_CUES.filter(
+    (cue) => cue.layer === layer && (pack ? cue.pack === pack || shared.has(cue.id) : !cue.pack),
+  );
 }
 
 // Ids only, for a zod enum or a tool's `enum` list.
-export function cueIds(layer: AmbienceLayer): string[] {
-  return cuesForLayer(layer).map((cue) => cue.id);
+export function cueIds(layer: AmbienceLayer, pack?: string | null): string[] {
+  return cuesForLayer(layer, pack).map((cue) => cue.id);
 }
 
 // `{ value, label }` options for a console select. The empty option is the
 // caller's business: silence means different things per layer.
-export function cueOptions(layer: AmbienceLayer): Array<{ value: string; label: string }> {
-  return cuesForLayer(layer).map((cue) => ({ value: cue.id, label: cue.label }));
+export function cueOptions(layer: AmbienceLayer, pack?: string | null): Array<{ value: string; label: string }> {
+  return cuesForLayer(layer, pack).map((cue) => ({ value: cue.id, label: cue.label }));
 }
 
 // The beds that name a kind of place: what move_party, update_location and
@@ -841,10 +857,10 @@ export function cueOptions(layer: AmbienceLayer): Array<{ value: string; label: 
 // the sky cleared.
 const NOT_PLACES = new Set(["wind", "rain", "storm", "night"]);
 
-export function sceneIds(): string[] {
-  return cueIds("bed").filter((id) => !NOT_PLACES.has(id));
+export function sceneIds(pack?: string | null): string[] {
+  return cueIds("bed", pack).filter((id) => !NOT_PLACES.has(id));
 }
 
-export function sceneOptions(): Array<{ value: string; label: string }> {
-  return cueOptions("bed").filter((option) => !NOT_PLACES.has(option.value));
+export function sceneOptions(pack?: string | null): Array<{ value: string; label: string }> {
+  return cueOptions("bed", pack).filter((option) => !NOT_PLACES.has(option.value));
 }

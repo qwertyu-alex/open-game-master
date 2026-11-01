@@ -1,5 +1,6 @@
 import type { Campaign } from "@/lib/db/campaigns";
 import { publishTitleCard } from "@/lib/dm/scene-state";
+import { noteCouchCrewDied } from "@/lib/couch/stress";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // A crew member's death on a couch night (docs/couch-mode-spec.md 2.12),
@@ -10,9 +11,11 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 //
 // Kept apart from src/lib/couch/takeover.ts: the death engine is imported
 // by most of the rules, and this needs nothing past the title card.
-export function couchCrewDied(campaign: Pick<Campaign, "id" | "gameSettings">, sheet: Pick<CharacterSheet, "name" | "crewRole" | "isCompanion">): void {
+export function couchCrewDied(campaign: Pick<Campaign, "id" | "gameSettings">, sheet: Pick<CharacterSheet, "id" | "name" | "crewRole" | "isCompanion">): void {
   if (!campaign.gameSettings.couchMode || sheet.isCompanion) {
     return;
   }
+  // Everyone still standing feels it (src/lib/couch/stress.ts).
+  noteCouchCrewDied(campaign, sheet.id);
   publishTitleCard(campaign.id, { title: `${sheet.name} is dead`, ...(sheet.crewRole?.trim() ? { subtitle: sheet.crewRole.trim() } : {}), tone: "ember" });
 }

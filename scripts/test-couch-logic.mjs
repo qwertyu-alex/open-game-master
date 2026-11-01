@@ -30,8 +30,10 @@ const {
   introRunning,
   introducedCard,
   couchHaltedTurn,
+  couchGmStatus,
   gmAtWork,
   gmStatusWords,
+  speakingFace,
 } = await import("../src/components/couch/couch-logic.ts");
 const { checkSuccess } = await import("../src/lib/couch/check-logic.ts");
 const { crewIntroduction, briefingIntroduction, introTexts, introReadMs, introTotal, introDone, splitFlaw, forgedMember } = await import(
@@ -392,6 +394,13 @@ test("the screens wait on the GM while it answers, not while the table owes it a
   assert.equal(gmStatusWords("narrating"), "The GM is thinking");
 });
 
+test("a turn that only answers a private Ask GM holds nobody in the room", () => {
+  assert.equal(couchGmStatus({ dmStatus: "thinking", dmPrivate: true }), "idle");
+  assert.equal(gmAtWork(couchGmStatus({ dmStatus: "narrating", dmPrivate: true })), false);
+  assert.equal(couchGmStatus({ dmStatus: "thinking", dmPrivate: false }), "thinking");
+  assert.equal(couchGmStatus({ dmStatus: "rolling" }), "rolling");
+});
+
 test("a natural 20 passes a couch long shot, and no other check", () => {
   const couch = { couchMode: true };
   const nat20 = { total: 25, crit: "nat20" };
@@ -410,6 +419,16 @@ test("a natural 20 passes a couch long shot, and no other check", () => {
   assert.equal(checkSuccess(couch, "attack", 30, nat20), false);
   assert.equal(checkSuccess({ couchMode: false }, "skill_check", 30, nat20), false);
   assert.equal(checkSuccess(couch, "skill_check", null, nat20), undefined);
+});
+
+test("the TV shows the face of whoever is heard: a crew member, a cast member, else just a name", () => {
+  const sheets = [{ id: "s1", name: "Tove Lindqvist", portrait: { url: "/tove.png" } }];
+  const cast = [{ name: "Odile Ha", portraitUrl: "/odile.png", aliases: ["the technician"] }, { name: "Stalker", portraitUrl: "" }];
+  assert.equal(speakingFace(null, sheets, cast), null, "the narrator has no face");
+  assert.deepEqual(speakingFace("tove lindqvist", sheets, cast), { name: "Tove Lindqvist", portraitUrl: "/tove.png", sheetId: "s1" });
+  assert.deepEqual(speakingFace("The Technician", sheets, cast), { name: "Odile Ha", portraitUrl: "/odile.png", sheetId: "" });
+  assert.deepEqual(speakingFace("Stalker 2", sheets, cast), { name: "Stalker", portraitUrl: "", sheetId: "" }, "one of its kind");
+  assert.deepEqual(speakingFace("Marsh", sheets, cast), { name: "Marsh", portraitUrl: "", sheetId: "" });
 });
 
 console.log(`${passed} couch logic tests passed`);

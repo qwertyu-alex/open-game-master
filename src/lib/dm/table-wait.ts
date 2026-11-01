@@ -24,6 +24,7 @@ import { breakRefusal } from "@/lib/dm/table-break-logic";
 import { runsAiTurns } from "@/lib/workshop/kind";
 import { publishCouchAnswers } from "@/lib/couch/answers";
 import { inSceneIds } from "@/lib/couch/whereabouts";
+import { panickedCrewIds } from "@/lib/couch/stress";
 import { decideTableWait, type TableSeat, type TableWaitDecision, type TableWaitView } from "./table-wait-logic";
 
 export type { TableWaitView } from "./table-wait-logic";
@@ -69,11 +70,14 @@ function playerSeats(campaign: Campaign): TableSeat[] {
   const seats = new Map<string, string>();
   const sheets = listSheets(campaign.id);
   const scene = campaign.gameSettings.couchMode ? inSceneIds(campaign, sheets) : null;
+  // A couch crew member whose panic takes their move is not waited on
+  // (src/lib/couch/stress.ts).
+  const panicked = campaign.gameSettings.couchMode ? panickedCrewIds(campaign) : null;
   for (const sheet of sheets) {
     if (sheet.isCompanion || sheet.deathSaves?.dead || !sheet.userId || sheet.userId === campaign.dmUserId || seats.has(sheet.userId)) {
       continue;
     }
-    if (scene && !scene.has(sheet.id)) {
+    if ((scene && !scene.has(sheet.id)) || panicked?.has(sheet.id)) {
       continue;
     }
     seats.set(sheet.userId, sheet.name);

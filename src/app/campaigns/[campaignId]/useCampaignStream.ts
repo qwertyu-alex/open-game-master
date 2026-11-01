@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import type { CampaignMember, SessionUser } from "@/lib/campaign-types";
 import type { CoordinationPhase } from "@/lib/dm/coordination-logic";
 import type { TableWaitView } from "@/lib/dm/table-wait-logic";
+import { normalizeNarrationCues, type NarrationCue } from "@/lib/narration-cues-logic";
 import { coalesceRefresh } from "@/app/campaigns/[campaignId]/coalesce";
 import { createStreamWatchdog } from "@/app/campaigns/[campaignId]/streamWatchdog";
 import {
@@ -32,6 +33,9 @@ import type { CouchGroupCheck } from "@/lib/couch/group-check-logic";
 import type { CouchTruce } from "@/lib/couch/truce-logic";
 import type { CouchItemShow } from "@/lib/couch/item-show-logic";
 import type { CouchObjective } from "@/lib/couch/pacing-logic";
+import type { PushOffer, StressView } from "@/lib/couch/stress-logic";
+import type { CouchFinaleView } from "@/lib/couch/finale-logic";
+import type { CouchActBreak } from "@/lib/couch/act-break-logic";
 import type { DmBeat } from "@/lib/db/dm-beats";
 import type { Note } from "@/lib/db/notes";
 import type { StoredRoll } from "@/lib/db/rolls";
@@ -207,6 +211,17 @@ export type CampaignState = {
   // What a couch crew must do now, on the TV and every phone
   // (src/lib/couch/pacing.ts); null when the act has none yet.
   couchObjective: CouchObjective | null;
+  // Each couch crew member's stress and any panic taking their moves, by
+  // characterId (src/lib/couch/stress.ts); null off a couch night.
+  couchStress: Record<string, StressView> | null;
+  // Failed rolls their throwers may still push, until `until` (push.ts).
+  couchPush: PushOffer[];
+  // A couch night's closing once it has ended (src/lib/couch/finale.ts):
+  // being written, then the reveal and the review.
+  couchFinale: CouchFinaleView | null;
+  // The story so far at the newest act break, for the TV
+  // (src/lib/couch/act-break-logic.ts); null before the first.
+  couchActBreak: CouchActBreak | null;
   // Items used in the open on a couch night, for the TV (src/lib/couch/item-show.ts).
   couchItems: Array<CouchItemShow & { seq: number }>;
   // The group each message of a split crew belongs to (src/lib/couch/whereabouts.ts).
@@ -322,12 +337,17 @@ export type CampaignState = {
   // A table break: who paused and since when (src/lib/dm/table-break.ts).
   tableBreak: TableBreak | null;
   narrationAudio: Record<string, string>;
+  // Who is heard when in each take, by message id (src/lib/tts-segments.ts
+  // narrationCues): the couch TV shows the speaker's face from these.
+  narrationCues: Record<string, NarrationCue[]>;
   // `live` marks a passage offered while it is still being rendered
   // (tts_stream): heard now, by whoever is at the table now.
   latestTts: { messageId: string; url: string; seq: number; live?: boolean } | null;
   latestRoll: { roll: StoredRoll; source: string; seq: number } | null;
   lastSeq: number;
   dmStatus: DmStatus;
+  // The turn in flight only answers private whispers (src/lib/dm/status.ts).
+  dmPrivate: boolean;
   // The DM's job in flight: the step it is on and since when, for the
   // status line and the lead's Stop (issue #383).
   dmJob: DmJobView | null;
@@ -396,6 +416,10 @@ const initialState: CampaignState = {
   couchGroup: null,
   couchTruce: null,
   couchObjective: null,
+  couchStress: null,
+  couchPush: [],
+  couchFinale: null,
+  couchActBreak: null,
   couchItems: [],
   // A plain player until the snapshot says otherwise: the safe default is
   // the one that shows the fewest controls and no secrets.
@@ -449,10 +473,12 @@ const initialState: CampaignState = {
   safetyPause: null,
   tableBreak: null,
   narrationAudio: {},
+  narrationCues: {},
   latestTts: null,
   latestRoll: null,
   lastSeq: 0,
   dmStatus: "idle",
+  dmPrivate: false,
   dmJob: null,
   utilityCalls: [],
   directorArm: null,
@@ -531,6 +557,10 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
         couchGroup: action.payload.couchGroup ? { ...action.payload.couchGroup, seq: action.payload.lastSeq ?? 0 } : null,
         couchTruce: action.payload.couchTruce ?? null,
         couchObjective: action.payload.couchObjective ?? null,
+        couchStress: action.payload.couchStress ?? null,
+        couchPush: action.payload.couchPush ?? [],
+        couchFinale: action.payload.couchFinale ?? null,
+        couchActBreak: action.payload.couchActBreak ?? null,
         couchItems: [],
       };
     case "notes":
@@ -605,6 +635,7 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
           // partial draft never stays on screen for a retry to stream over.
           if (endsDmTurn(message)) {
             next.dmStatus = "idle";
+            next.dmPrivate = false;
             // A narration answers everything the party had said up to it, so
             // the queue clears with the same event that clears the draft.
             // Actions that land mid-narration keep their own later seq and
@@ -687,6 +718,7 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
           const url = String(payload.url ?? "");
           if (messageId && url) {
             next.narrationAudio = { ...state.narrationAudio, [messageId]: url };
+            next.narrationCues = { ...state.narrationCues, [messageId]: normalizeNarrationCues(payload.cues) };
             next.latestTts = { messageId, url, seq: action.seq ?? 0 };
             next.narrationStatus = withoutKey(state.narrationStatus, messageId);
           }
@@ -700,6 +732,14 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
           const url = String(payload.url ?? "");
           if (messageId && url) {
             next.latestTts = { messageId, url, seq: 0, live: true };
+          }
+          return next;
+        }
+        case "tts_cues": {
+          // The faces so far of a passage still being rendered.
+          const messageId = String(payload.messageId ?? "");
+          if (messageId) {
+            next.narrationCues = { ...state.narrationCues, [messageId]: normalizeNarrationCues(payload.cues) };
           }
           return next;
         }
@@ -1049,6 +1089,18 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
         case "couch_objective":
           next.couchObjective = (payload.objective as CouchObjective | null | undefined) ?? null;
           return next;
+        case "couch_stress":
+          next.couchStress = (payload.stress as Record<string, StressView> | undefined) ?? null;
+          return next;
+        case "couch_push":
+          next.couchPush = (payload.offers as PushOffer[] | undefined) ?? [];
+          return next;
+        case "couch_finale":
+          next.couchFinale = (payload.finale as CouchFinaleView | null | undefined) ?? null;
+          return next;
+        case "couch_act_break":
+          next.couchActBreak = payload as unknown as CouchActBreak;
+          return next;
         case "couch_scene_tag": {
           const tag = payload.tag as CouchSceneTag | undefined;
           if (tag) next.couchSceneTags = [...state.couchSceneTags.filter((entry) => entry.messageId !== tag.messageId), tag];
@@ -1090,6 +1142,7 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
           return next;
         case "dm_status":
           next.dmStatus = payload.state as DmStatus;
+          next.dmPrivate = payload.private === true;
           return next;
         case "dm_job":
           next.dmJob = (payload.job as DmJobView | null) ?? null;
@@ -1156,6 +1209,10 @@ const PERSISTED_EVENTS = [
   "couch_group",
   "couch_truce",
   "couch_objective",
+  "couch_stress",
+  "couch_push",
+  "couch_finale",
+  "couch_act_break",
   "couch_item",
   "couch_scene_tag",
   "couch_navigation",
@@ -1229,6 +1286,7 @@ const EPHEMERAL_EVENTS = [
   "quests_updated",
   "cast_updated",
   "tts_stream",
+  "tts_cues",
   "dm_status",
   // Who the DM waits on before its next turn (src/lib/dm/table-wait.ts).
   // The whole view each time, and the snapshot carries it for a reload.
@@ -1420,6 +1478,10 @@ export function useCampaignStream(campaignId: string) {
           couchGroup: data.couchGroup ?? null,
           couchTruce: data.couchTruce ?? null,
           couchObjective: data.couchObjective ?? null,
+          couchStress: data.couchStress ?? null,
+          couchPush: data.couchPush ?? [],
+          couchFinale: data.couchFinale ?? null,
+          couchActBreak: data.couchActBreak ?? null,
           caps: data.caps ?? capsForRole("player", "ai"),
           me: data.me,
           members: data.members,
@@ -1444,9 +1506,11 @@ export function useCampaignStream(campaignId: string) {
             ? queuedIntents(data.messages ?? [], (data.beats ?? []).map((beat: { messageId: string }) => beat.messageId))
             : [],
           dmStatus: data.dmStatus ?? "idle",
+          dmPrivate: data.dmPrivate === true,
           dmJob: data.dmJob ?? null,
           utilityCalls: sortCalls(data.utilityCalls ?? []),
           narrationAudio: data.narrationAudio ?? {},
+          narrationCues: data.narrationCues ?? {},
           ambience: data.ambience ?? EMPTY_AMBIENCE,
           // The sky, the character in play, and what a late joiner walks in
           // on: the handout on the table, the X-card pause, the title card.

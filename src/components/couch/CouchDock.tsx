@@ -8,7 +8,7 @@ import { composerLimit, textLength } from "@/lib/text-limits";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { couchFight, crewHealthOf } from "@/lib/couch/fight-logic";
 import { couchTurn, privateCapped, PRIVATE_MAX_CHARS, PRIVATE_PENDING_CAP, type CouchTurn } from "@/components/couch/phone-logic";
-import { couchHaltedTurn, gmAtWork } from "@/components/couch/couch-logic";
+import { couchGmStatus, couchHaltedTurn, gmAtWork } from "@/components/couch/couch-logic";
 import { mapSplit, myGroup } from "@/lib/couch/navigation-logic";
 
 export type CouchMode = "do" | "say" | "private";
@@ -40,18 +40,19 @@ export function useCouchTurn(state: CampaignState): CouchTurn {
   for (const candidate of state.sheets) {
     if (!candidate.isCompanion && !names[candidate.userId]) names[candidate.userId] = candidate.name;
   }
-  const wait = floor.mode === "open" && state.dmStatus === "idle" ? state.tableWait : null;
+  const dmStatus = couchGmStatus(state);
+  const wait = floor.mode === "open" && dmStatus === "idle" ? state.tableWait : null;
   const mine = new Set(state.sheets.filter((candidate) => candidate.userId === meId).map((candidate) => candidate.id));
   return couchTurn({
     ended: campaign?.status === "ended",
     muted: Boolean(state.members.find((member) => member.userId === meId)?.muted),
     myRolls: state.pendingRolls.filter((pending) => pending.userId === meId).length,
-    dmStatus: state.dmStatus,
+    dmStatus,
     floor,
     meUserId: meId,
     names,
     waitingOn: wait?.waitingOn ?? [],
-    halted: state.dmStatus === "idle" && couchHaltedTurn(state.messages) !== null,
+    halted: dmStatus === "idle" && couchHaltedTurn(state.messages) !== null,
     fight: couchFight(state.encounter, crewHealthOf(state.sheets)),
     myCharacterIds: mine,
     offScene: offSceneOf(state.couchNavigation, mine),
@@ -113,7 +114,7 @@ export function CouchDock({
   // waits on the GM or the floor (the actions route holds it).
   const away = mapSplit(state.couchNavigation) ? myGroup(state.couchNavigation, new Set([sheet.id])) : null;
   const offScene = Boolean(away && !away.inScene);
-  const gmAnswering = gmAtWork(state.dmStatus) && !isPrivate && !offScene;
+  const gmAnswering = gmAtWork(couchGmStatus(state)) && !isPrivate && !offScene;
   const expanded = isPrivate || (!gmAnswering && (focused || input.length > 0));
   // A box disabled under the finger may never hear its blur.
   if (gmAnswering && focused) setFocused(false);

@@ -1,6 +1,8 @@
 import { catchUpPortraits, forgeRunning, publishCouchChange } from "@/lib/couch/forge";
 import { couchIntroKey } from "@/lib/couch/intro";
 import { actName } from "@/lib/couch/prompt-logic";
+import { actBreakSpeech, actRollCall, readActRecap, type CouchActBreak } from "@/lib/couch/act-break-logic";
+import { enqueueNarrationAudio } from "@/lib/tts";
 import { forgedMember, introDone, introTotal } from "@/lib/couch/intro-logic";
 import { publishCouchNavigation } from "@/lib/couch/navigation";
 import {
@@ -10,11 +12,12 @@ import {
   listCouchCrew,
   recordCrewSheet,
   releaseCrewCard,
+  addCouchActPoint,
   setCouchAct,
   takeCrewCard,
   type CouchStatus,
 } from "@/lib/couch/store";
-import { listMembers, setMemberReady, type Campaign } from "@/lib/db/campaigns";
+import { getCampaignById, listMembers, setMemberReady, type Campaign } from "@/lib/db/campaigns";
 import { insertWhisper } from "@/lib/db/dm-whispers";
 import { createSheet, getSheetById, getSheetForUser, listSheets, setSheetAgenda } from "@/lib/db/sheets";
 import { seatAddedSheet } from "@/lib/character-seat";
@@ -177,19 +180,31 @@ function crewSheets(campaignId: string): CharacterSheet[] {
 // last), each owner is whispered their new one (it reaches their phone
 // alone, src/lib/dm/whispers.ts, and the GM's next prompt as a whisper it
 // sent), their sheet goes out again (the phone's agenda card re-reads it),
-// and the TV shows the act's title card. Returns the act now in force,
-// 0 to 2; at the last act it changes nothing and returns 2.
+// and the TV shows the act break (src/lib/couch/act-break-logic.ts): the
+// story so far (the recap's points, kept for the GM's later turns), each
+// crew member's story points this act and the reminder of new agendas, all
+// read aloud by the narrator, and then the act's title card. Returns the act now in force, 0 to 2; at the last act it changes
+// nothing and returns 2.
 //
 // For the DM tool that turns the act (wired by the coordinator); never
 // called by a route.
-export function advanceCouchAct(campaignId: string, subtitle = ""): number {
+//
+// earned: the sheet ids the GM judged to have chased the ended act's agenda
+// at risk or cost; each earns its story point here, before the roll call.
+export function advanceCouchAct(campaignId: string, subtitle = "", recap: readonly string[] = [], earned: readonly string[] = []): number {
   const forge = getCouchForge(campaignId);
   const current = forge?.act ?? 0;
   const next = Math.min(2, current + 1);
   if (!forge || next === current) {
     return current;
   }
-  setCouchAct(campaignId, next);
+  const points = readActRecap(recap);
+  for (const sheetId of new Set(earned)) {
+    if (isCouchCrew(campaignId, sheetId)) awardStoryPoint(campaignId, sheetId);
+  }
+  // The roll call reads the act's awards before the turn clears them.
+  const crew = actRollCall(crewSheets(campaignId), getCouchForge(campaignId)?.actPoints ?? forge.actPoints);
+  setCouchAct(campaignId, next, points);
   const recipients: Array<{ sheet: CharacterSheet; agenda: string }> = [];
   for (const sheet of crewSheets(campaignId)) {
     const agenda = sheet.agenda!;
@@ -207,16 +222,36 @@ export function advanceCouchAct(campaignId: string, subtitle = ""): number {
     publishEphemeral(campaignId, "whisper_activity", {});
   }
   const title = subtitle.trim() || (forge.forge?.scenario.acts[next]?.title ?? "");
+  // Before the title card, so the TV holds the card until the room has read
+  // the story so far.
+  if (points.length || crew.length) {
+    const actBreak: CouchActBreak = { id: `act-break-${next}-${Date.now().toString(36)}`, ended: actName(current), points, crew, next: actName(next), at: Date.now() };
+    publishPersisted(campaignId, "couch_act_break", actBreak);
+    // In the narrator's voice, on its own lane, ahead of the GM's words
+    // about the new act.
+    const campaign = getCampaignById(campaignId);
+    if (campaign?.gameSettings.ttsEnabled) {
+      void enqueueNarrationAudio(campaignId, actBreak.id, actBreakSpeech(actBreak), [], campaign.gameSettings, null, { onDemand: true, narratorOnly: true });
+    }
+  }
   publishTitleCard(campaignId, { title: actName(next), ...(title ? { subtitle: title } : {}), tone: "act" });
   return next;
 }
 
-export const STORY_POINTS_MAX = 10;
+// ALIEN's cap (Starter Set rulebook, p. 35): nobody holds more than three.
+export const STORY_POINTS_MAX = 3;
+
+// Whether a sheet is a living crew member of this night with an agenda: who
+// can earn a story point.
+export function isCouchCrew(campaignId: string, sheetId: string): boolean {
+  return crewSheets(campaignId).some((sheet) => sheet.id === sheetId);
+}
 
 // A story point for pursuing the agenda (docs/couch-mode-spec.md 2.2): the
-// count on the crew member's agenda goes up by one, to ten at most, and
-// their sheet goes out again. For the DM tool that awards it; the error says
-// why the call was wrong, for the tool to hand back with retry.
+// count on the crew member's agenda goes up by one, to three at most, and
+// their sheet goes out again. The act break gives them (advanceCouchAct);
+// the host's award_story_point gives one by hand. The error says why the
+// call was wrong, for the tool to hand back with retry.
 export function awardStoryPoint(campaignId: string, sheetId: string): { ok: true; storyPoints: number } | { ok: false; error: string } {
   const sheet = getSheetById(sheetId);
   if (!sheet || sheet.campaignId !== campaignId || !sheet.agenda) {
@@ -225,8 +260,12 @@ export function awardStoryPoint(campaignId: string, sheetId: string): { ok: true
   if (sheet.deathSaves?.dead) {
     return { ok: false, error: `${sheet.name} is dead; award the crew member their player plays now, from CREW AGENDAS.` };
   }
-  const storyPoints = Math.min(STORY_POINTS_MAX, sheet.agenda.storyPoints + 1);
+  // Never lower: a night from before the cap may hold more than three.
+  const storyPoints = Math.max(sheet.agenda.storyPoints, Math.min(STORY_POINTS_MAX, sheet.agenda.storyPoints + 1));
   const updated = setSheetAgenda(sheet.id, { ...sheet.agenda, storyPoints });
+  if (storyPoints > sheet.agenda.storyPoints) {
+    addCouchActPoint(campaignId, sheet.id);
+  }
   if (updated) {
     publishPersisted(campaignId, "sheet_updated", { sheet: updated });
   }

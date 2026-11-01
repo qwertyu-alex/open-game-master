@@ -1,5 +1,6 @@
 // The skills list alone, not the whole rules index: the TV imports this.
 import skillsJson from "@/lib/srd/skills.json";
+import { FAILED_CHECK_COST } from "@/lib/couch/tension-logic";
 
 // A couch night's group check (docs/couch-mode-spec.md 2.10), the pure half.
 // The GM calls it once; every crew member it names throws on their own
@@ -144,5 +145,7 @@ export function couchGroupAnswer(group: CouchGroupCheck) {
     note: `${passed
       ? `The group succeeds: ${tally.passes} of ${tally.count} made it, at least half. Narrate the shared success.`
       : `The group fails: only ${tally.passes} of ${tally.count} made it, short of half. Narrate the shared setback.`} The server already read the dice and the verdict aloud; do not repeat them.`,
+    // A failed group pays like a failed check (src/lib/couch/tension-logic.ts).
+    ...(passed ? {} : { cost: FAILED_CHECK_COST }),
   };
 }

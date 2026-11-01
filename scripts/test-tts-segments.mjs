@@ -167,4 +167,50 @@ test("a tag after a sentence opens the next one when a long run is cut", () => {
   assert.equal(requests.map((request) => request.text).join(" "), long, "and nothing is lost");
 });
 
+// Narration cues (src/lib/narration-cues-logic.ts): whose face the TV shows
+// while each clip is heard, measured from the clips' MP3 frames.
+const { narrationCues, normalizeNarrationCues, speakerAt } = await import("../src/lib/narration-cues-logic.ts");
+const { mp3Seconds } = await import("../src/lib/mp3-logic.ts");
+
+test("each request keeps who is heard in it", () => {
+  const plan = planSpeech('The door opens. "Sit," says Marla.', {
+    narratorVoice: "af_heart",
+    cast,
+    lines: [{ line: "Sit,", speaker: { kind: "npc", id: "n1", name: "Marla" } }],
+  });
+  assert.deepEqual(speechRequests(plan).map((request) => request.speaker), [null, "Marla", null]);
+});
+
+test("cues mark each speaker's run, merge their clips, and leave the narrator out", () => {
+  const requests = [{ speaker: null }, { speaker: "Marla" }, { speaker: "Marla" }, { speaker: null }, { speaker: "Old Pike" }];
+  assert.deepEqual(narrationCues(requests, [2.5, 1.25, 1, 3, 0.755]), [
+    { start: 2.5, end: 4.75, speaker: "Marla" },
+    { start: 7.75, end: 8.51, speaker: "Old Pike" },
+  ]);
+  assert.deepEqual(narrationCues([{ speaker: "Marla" }], [0]), [], "a clip that could not be measured shows nobody");
+  const cues = narrationCues(requests, [2.5, 1.25, 1, 3, 0.755]);
+  assert.equal(speakerAt(cues, 1), null, "the narrator");
+  assert.equal(speakerAt(cues, 4.7), "Marla");
+  assert.equal(speakerAt(cues, 4.75), null, "a cue ends where the narrator takes over");
+  assert.equal(speakerAt(cues, 8), "Old Pike");
+  assert.deepEqual(normalizeNarrationCues([{ start: 1, end: 2, speaker: " Marla " }, { start: 3, end: 2, speaker: "x" }, { speaker: "" }, null]), [
+    { start: 1, end: 2, speaker: "Marla" },
+  ]);
+  assert.deepEqual(normalizeNarrationCues("nope"), []);
+});
+
+test("an MP3 clip is measured from its frames, whatever is in front of them", () => {
+  // MPEG-1 layer III, 128 kbps, 44.1 kHz: 417-byte frames of 1152 samples.
+  const frame = new Uint8Array(417);
+  frame.set([0xff, 0xfb, 0x90, 0x00]);
+  const frames = (count) => Buffer.concat(Array.from({ length: count }, () => frame));
+  assert.ok(Math.abs(mp3Seconds(frames(100)) - (100 * 1152) / 44100) < 1e-9);
+  const id3 = Buffer.from([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0, 20, ...new Array(20).fill(0xff)]);
+  assert.ok(Math.abs(mp3Seconds(Buffer.concat([id3, frames(10)])) - (10 * 1152) / 44100) < 1e-9, "an ID3 tag is skipped");
+  const xing = Buffer.from(frame);
+  xing.write("Xing", 36);
+  assert.ok(Math.abs(mp3Seconds(Buffer.concat([xing, frames(10)])) - (10 * 1152) / 44100) < 1e-9, "the Xing frame is not heard");
+  assert.equal(mp3Seconds(Buffer.from("not audio at all")), 0);
+});
+
 console.log(`test-tts-segments: ${passed} passed`);

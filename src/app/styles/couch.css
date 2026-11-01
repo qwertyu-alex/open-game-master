@@ -136,6 +136,14 @@ html[data-theme="light"] .couch-phone {
 .couch-hp[data-tone="hurt"] > i { background: var(--couch-warn); }
 .couch-hp[data-tone="down"] > i { background: var(--couch-danger); }
 
+/* Stress: ten pips under the health bar, lit as it climbs; amber from 4,
+   red from 7 (src/lib/couch/stress-logic.ts). */
+.couch-stress { display: flex; gap: 3px; }
+.couch-stress > i { flex: 1 1 0; height: 5px; border-radius: 2px; background: var(--couch-raise); }
+.couch-stress > i[data-on] { background: var(--couch-dim); }
+.couch-stress[data-tone="mid"] > i[data-on] { background: var(--couch-warn); }
+.couch-stress[data-tone="high"] > i[data-on] { background: var(--couch-danger); }
+
 /* ---- the phone: couch-phone.css ---- */
 
 /* A dot that breathes while something works: the phone's turn line, the
@@ -381,6 +389,34 @@ html[data-theme="light"] .couch-phone {
   animation: couch-sub-in 450ms ease both;
 }
 @keyframes couch-sub-in { from { opacity: 0; transform: translateY(0.4vh); } to { opacity: 1; transform: none; } }
+/* Whose line is being heard: their face and name over it, ringed and
+   glowing like a crew member whose turn it is, fading in on each new voice. */
+.couch-tv-speaker {
+  display: flex;
+  align-items: center;
+  gap: 1vw;
+  padding: 0.5vh 1.4vw 0.5vh 0.5vh;
+  border-radius: 999px;
+  background: rgba(3, 6, 8, 0.78);
+  animation: couch-speaker-in 300ms ease both;
+}
+.couch-tv-speaker .couch-face {
+  --face: clamp(3.2rem, 5.2vw, 7rem);
+  box-shadow: 0 0 0 3px var(--couch-accent), 0 0 2.4vw color-mix(in srgb, var(--couch-accent) 50%, transparent);
+  animation: couch-speaker-talk 1.4s ease-in-out infinite;
+}
+.couch-tv-speaker strong {
+  font-size: clamp(1.25rem, 2vw, 2.8rem);
+  font-weight: 650;
+  color: var(--couch-accent);
+  text-shadow: 0 2px 10px #000;
+}
+@keyframes couch-speaker-in { from { opacity: 0; transform: translateY(0.6vh) scale(0.96); } to { opacity: 1; transform: none; } }
+@keyframes couch-speaker-talk {
+  50% { box-shadow: 0 0 0 4px var(--couch-accent), 0 0 3.4vw color-mix(in srgb, var(--couch-accent) 70%, transparent); }
+}
+.couch-tv-stage[data-site="split"] .couch-tv-speaker .couch-face { --face: clamp(2.6rem, 3.8vw, 5rem); }
+.couch-tv-stage[data-site="split"] .couch-tv-speaker strong { font-size: clamp(1.1rem, 1.5vw, 2.2rem); }
 .couch-tv-history { display: grid; justify-items: center; gap: 0.9vh; }
 .couch-tv-history p {
   display: -webkit-box;
@@ -431,13 +467,24 @@ html[data-theme="light"] .couch-phone {
    left dimmed. */
 .couch-tv-member[data-waiting] .couch-face { box-shadow: 0 0 0 3px var(--couch-accent), 0 0 2.2vw color-mix(in srgb, var(--couch-accent) 55%, transparent); }
 .couch-tv-member[data-waiting] { opacity: 1; }
+/* A crew member whose line is being heard lights the same way, without the
+   "your turn". */
+.couch-tv-member[data-speaking] { opacity: 1; }
+.couch-tv-member[data-speaking] .couch-face { box-shadow: 0 0 0 3px var(--couch-accent), 0 0 2.2vw color-mix(in srgb, var(--couch-accent) 55%, transparent); animation: couch-speaker-talk 1.4s ease-in-out infinite; }
+.couch-tv-member[data-speaking] .couch-tv-member-name { color: var(--couch-accent); }
 .couch-tv-member[data-waiting] .couch-tv-member-name { color: var(--couch-accent); }
-.couch-tv-member[data-waiting]:not([data-fight-turn]) .couch-tv-member-name::after { content: " · your turn"; font-weight: 600; }
+.couch-tv-member[data-waiting]:not([data-fight-turn]):not([data-in-fight]) .couch-tv-member-name::after { content: " · your turn"; font-weight: 600; }
 .couch-tv-member[data-down] .couch-face { filter: grayscale(1) brightness(0.6); }
 .couch-tv-member-text { display: grid; flex: 1 1 auto; gap: 0.5vh; min-width: 0; }
 .couch-tv-member-name { overflow: hidden; font-size: max(1.05rem, 1.35vw); font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .couch-tv-member-role { overflow: hidden; font-size: max(0.85rem, 0.95vw); color: rgba(225, 238, 230, 0.72); text-overflow: ellipsis; white-space: nowrap; }
 .couch-tv-member .couch-hp { height: max(6px, 0.5vw); background: rgba(255, 255, 255, 0.14); }
+.couch-tv-member .couch-stress { gap: max(2px, 0.2vw); }
+.couch-tv-member .couch-stress > i { height: max(4px, 0.35vw); background: rgba(255, 255, 255, 0.1); }
+.couch-tv-member .couch-stress > i[data-on] { background: rgba(225, 238, 230, 0.7); }
+.couch-tv-member .couch-stress[data-tone="mid"] > i[data-on] { background: var(--couch-warn); }
+.couch-tv-member .couch-stress[data-tone="high"] > i[data-on] { background: var(--couch-danger); }
+.couch-tv-member-role.couch-tv-member-panic { color: var(--couch-danger); font-weight: 700; }
 /* Dead, not down: the card shrinks to a dark face over the word, at the end
    of the strip, so the living keep the room until the player plays on as
    someone else. The death card has already named them; the name stays for
@@ -516,6 +563,7 @@ html[data-theme="light"] .couch-phone {
 @keyframes couch-die-settle { from { transform: scale(1.12); } to { transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) {
   .couch-tv-roll, .couch-tv-roll .couch-die, .couch-tv-roll-item, .couch-tv-insert[data-item] img { animation: none !important; }
+  .couch-tv-speaker, .couch-tv-speaker .couch-face, .couch-tv-member[data-speaking] .couch-face { animation: none; }
   .couch-tv-controls { transition: none; }
 }
 
@@ -548,6 +596,10 @@ html[data-theme="light"] .couch-phone {
   font-size: 0.7rem;
 }
 .couch-tv-control:hover { background: #141b1f; }
+.couch-tv-control[aria-pressed="true"] { border-color: #7fe0b0; color: #7fe0b0; }
+.couch-tv-control:disabled { opacity: 0.6; }
+.couch-tv-control-note { align-self: center; color: #e8eeea; font-size: 0.7rem; text-shadow: 0 1px 2px #000; }
+.couch-tv-control-note:empty { display: none; }
 .couch-tv-join-overlay { position: fixed; inset: 0; z-index: 70; background: rgba(0, 0, 0, 0.8); }
 .couch-tv-join-dialog {
   position: fixed;
@@ -967,6 +1019,23 @@ button.couch-roll-die:active:not(:disabled) { animation: couch-die-rattle 110ms 
 .couch-roll-sheet-verdict[data-bad] { color: var(--couch-danger); }
 .couch-roll-sheet-math { font-family: var(--font-geist-mono), ui-monospace, monospace; color: var(--couch-dim); }
 .couch-roll-sheet-close { min-width: 14rem; margin-top: 10px; }
+/* The thrower's stress dice, and the push a failed check offers. */
+.couch-roll-sheet-stress { max-width: 22rem; color: var(--couch-warn); font-size: 0.9rem; text-align: center; }
+.couch-roll-sheet-push {
+  display: inline-flex;
+  min-width: 14rem;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 10px;
+  border: 2px solid var(--couch-warn);
+  color: var(--couch-warn);
+  font-weight: 700;
+}
+/* Spending a story point: the gold of the agenda's points, not the push's warning. */
+.couch-roll-sheet-spend { border-color: var(--couch-accent); color: var(--couch-accent); }
+.couch-roll-sheet-push-time { font-family: var(--font-geist-mono), ui-monospace, monospace; font-weight: 500; opacity: 0.8; }
 
 @media (prefers-reduced-motion: reduce) {
   .couch-tv-call,
@@ -981,3 +1050,67 @@ button.couch-roll-die:active:not(:disabled) { animation: couch-die-rattle 110ms 
 }
 /* A flaw is written to follow "flaw:", so it starts lower case; shown on its own, it gets a capital. */
 .couch-tv-intro-facts dd::first-letter { text-transform: uppercase; }
+
+/* ---- the act break: the story so far (CouchTvActBreak.tsx) ---- */
+.couch-act-break {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8vh 10vw;
+  /* Read, never touched: the sound gate and host buttons stay reachable. */
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(14, 18, 16, 0.86), rgba(2, 4, 3, 0.96));
+  animation: couch-fade-in 1200ms ease both;
+}
+.couch-act-break-card { display: grid; gap: 1.8vh; max-width: min(64rem, 72vw); max-height: 100%; }
+.couch-act-break .couch-label { color: var(--couch-accent); letter-spacing: 0.24em; }
+.couch-act-break h2 { font-size: clamp(2.4rem, 4.6vw, 5.6rem); font-weight: 750; line-height: 1; letter-spacing: -0.01em; }
+.couch-act-break ol { display: grid; gap: 1.4vh; margin-top: 1vh; }
+.couch-act-break li {
+  position: relative;
+  padding-left: 2.6vw;
+  font-size: max(1.3rem, min(1.9vw, 3.4vh));
+  line-height: 1.28;
+  color: rgba(232, 242, 236, 0.92);
+  animation: couch-act-point-in 1100ms ease both;
+}
+.couch-act-break li::before {
+  position: absolute;
+  left: 0;
+  top: 0.62em;
+  width: 1.1vw;
+  height: 2px;
+  background: var(--couch-accent);
+  content: "";
+}
+@keyframes couch-act-point-in {
+  from { opacity: 0; transform: translate3d(0, 1.2vh, 0); }
+  to { opacity: 1; transform: none; }
+}
+.couch-act-break-crew { display: grid; gap: 0.6vh; margin-top: 1.4vh; padding-top: 1.8vh; border-top: 1px solid rgba(255, 255, 255, 0.12); }
+.couch-act-break .couch-act-break-crew li {
+  display: flex;
+  align-items: center;
+  gap: 1.4vw;
+  padding-left: 0;
+  font-size: max(1.1rem, min(1.5vw, 2.8vh));
+}
+.couch-act-break .couch-act-break-crew li::before { content: none; }
+.couch-act-break-crew .couch-face { --face: max(2.4rem, min(2.8vw, 5vh)); }
+.couch-act-break-name { min-width: 16vw; font-weight: 650; }
+.couch-act-break-earned { color: rgba(225, 238, 230, 0.6); }
+.couch-act-break-crew li[data-earned] .couch-act-break-earned { color: var(--couch-accent); font-weight: 650; }
+.couch-act-break-total { margin-left: auto; font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 0.8em; color: rgba(225, 238, 230, 0.55); }
+.couch-act-break-agendas {
+  margin-top: 1vh;
+  font-size: max(1.2rem, min(1.7vw, 3vh));
+  font-weight: 650;
+  color: var(--couch-warn);
+  animation: couch-act-point-in 1100ms ease both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .couch-act-break, .couch-act-break li, .couch-act-break-agendas { animation-duration: 1ms; }
+}

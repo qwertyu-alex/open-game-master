@@ -120,7 +120,9 @@ export function chunkSentences(text: string, firstLimit = CHUNK_CHARS, limit = C
   return chunks;
 }
 
-export type SpeechRequest = { text: string; voice: string; speed: number };
+// `speaker` is who is heard in the clip, null for the narrator; the speech
+// server never sees it (src/lib/narration-cues-logic.ts reads it).
+export type SpeechRequest = { text: string; voice: string; speed: number; speaker?: string | null };
 
 // The plan as the requests actually sent, in the order they are heard.
 // `audioTags`: the server reads tags like [whispers] (ElevenLabs), so each
@@ -132,9 +134,10 @@ export function speechRequests(plan: SpeechPlan, options: { audioTags?: boolean 
   for (const part of parts) {
     for (const text of chunkSentences(part.text, requests.length ? CHUNK_CHARS : FIRST_CHUNK_CHARS)) {
       if (hasSpokenWords(text)) {
-        requests.push({ text, voice: part.voice, speed: part.speed });
+        requests.push({ text, voice: part.voice, speed: part.speed, speaker: part.speaker });
       }
     }
   }
   return requests;
 }
+

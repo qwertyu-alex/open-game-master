@@ -6,6 +6,7 @@ import { publishPersisted } from "@/lib/events";
 import { enqueueNarrationAudio } from "@/lib/tts";
 import { groupedPendingIds, landCouchGroupThrow } from "./group-check";
 import { couchRollItem } from "./item-show";
+import { couchStressRollWords } from "./stress";
 import { COUCH_ROLL_PARTS, couchAttackRulings, couchRollCall, couchRollFeedback, couchRollVoiceId } from "./roll-feedback-logic";
 
 // Called around every model tool, so attacks, saves and damage get the
@@ -24,7 +25,7 @@ export function publishCouchRollFeedback(campaign: Campaign, rollIds: readonly s
   const group = pending && rolls[0] ? landCouchGroupThrow(campaign, pending, rolls[0]) : null;
   for (const roll of rolls) {
     const id = roll.id;
-    const read = couchRollFeedback(roll, sheets.find((sheet) => sheet.id === roll.characterId)?.name, reason, rulings.get(id));
+    const read = couchRollFeedback(roll, sheets.find((sheet) => sheet.id === roll.characterId)?.name, reason, rulings.get(id), couchStressRollWords(id));
     if (!read) continue;
     // The weapon swung, pictured on the card (src/lib/couch/item-show.ts).
     const item = couchRollItem(campaign.id, roll, sheets);

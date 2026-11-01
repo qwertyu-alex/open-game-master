@@ -26,14 +26,13 @@ const GEAR_PAINTINGS: Array<[RegExp, string]> = [
   [/^acid\b/i, "gear-acid"],
 ];
 
-// The painted icon for an item, by its own name or the SRD name it stands
-// for; null when the set has none and the night paints one instead.
-export function paintedItemIcon(name: string, srdName?: string): string | null {
-  for (const key of [srdName, name]) {
-    if (!key?.trim()) continue;
-    const painted = iconCandidates({ kind: "item", key })[0];
-    if (painted) return painted;
-  }
+// The painted icon for an item, by its own name; null when the set has none
+// and the night paints one instead. Never by the SRD row it stands for: a
+// crew's Carbine is a Longbow underneath (src/lib/couch/kit-logic.ts), and
+// the set's longbow is not what they carry.
+export function paintedItemIcon(name: string): string | null {
+  const painted = name.trim() ? iconCandidates({ kind: "item", key: name })[0] : undefined;
+  if (painted) return painted;
   const gear = GEAR_PAINTINGS.find(([pattern]) => pattern.test(name.trim()));
   return gear ? `/assets/icons/action/${gear[1]}.webp` : null;
 }

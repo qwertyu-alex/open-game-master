@@ -12,6 +12,9 @@ export type TvDebugAudio = {
   held: number;
   playingMessageId: string | null;
   playbackFailure: string | null;
+  // What the room hears under the voice: the server's cue is in the
+  // database, so only whether this browser plays it.
+  ambience?: { muted: boolean; installed: boolean; bed: string | null; music: string | null; blocked: boolean };
 };
 
 export type TvDebugEnvironment = {
@@ -43,8 +46,14 @@ export function tvDebugReport({
     `url: ${environment.url}`,
     ...(state.answeredBy ? [`answeredBy: ${state.answeredBy}`] : []),
     `at: ${environment.at}`,
-    `client: gmStatus=${state.dmStatus} sound=${audio.unlocked ? "unlocked" : "locked"}${audio.muted ? ",muted" : ""} held=${audio.held}` +
+    `client: gmStatus=${state.dmStatus}${state.dmPrivate ? "(private)" : ""} sound=${audio.unlocked ? "unlocked" : "locked"}${audio.muted ? ",muted" : ""} held=${audio.held}` +
       `${audio.playbackFailure ? ` playbackFailure=${audio.playbackFailure}` : ""}${state.error ? ` streamError=${JSON.stringify(state.error)}` : ""}`,
+    ...(audio.ambience
+      ? [
+          `ambience: ${audio.ambience.installed ? "installed" : "no library"}${audio.ambience.muted ? ",muted" : ""}` +
+            `${audio.ambience.blocked ? ",blocked" : ""} bed=${audio.ambience.bed ?? "none"} music=${audio.ambience.music ?? "none"}`,
+        ]
+      : []),
     `browser: ${environment.viewport} ${environment.userAgent}`,
   ].join("\n");
 }

@@ -7,6 +7,7 @@ import { buzz, onShake, supportsShake } from "@/lib/dice/shake-to-roll";
 import { couchRollCall } from "@/lib/couch/roll-feedback-logic";
 import { groupTally } from "@/lib/couch/group-check-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import type { PushOffer } from "@/lib/couch/stress-logic";
 
 // The phone's roll screen (docs/couch-mode-spec.md 2.10). When the GM calls
 // for this player's roll, the phone turns into the die: what the roll is
@@ -26,7 +27,10 @@ const REVEAL_AFTER_MS = 3200;
 // The result closes on its own, back to the story.
 const CLOSE_AFTER_MS = 7000;
 
-type Thrown = { pendingId: string; at: number };
+// skipRollId: the roll a push replaced, so the sheet waits for the new one.
+// afterSeq: a spent story point reads the same roll out again, so the sheet
+// waits for a readout newer than the failure's.
+type Thrown = { pendingId: string; at: number; skipRollId?: string; afterSeq?: number };
 
 export function CouchRollPrompt({ state, sheet }: { state: CampaignState; sheet: CharacterSheet }) {
   const meId = state.me?.id ?? "";
@@ -37,15 +41,23 @@ export function CouchRollPrompt({ state, sheet }: { state: CampaignState; sheet:
   const close = useCallback(() => setThrown(null), [setThrown]);
   const current = waiting.find((pending) => pending.id !== thrown?.pendingId);
   if (thrown) {
-    const landed = state.couchRolls.find((entry) => entry.pendingId === thrown.pendingId);
+    // The newest readout for this roll: a pushed roll lands a second one.
+    const landed = state.couchRolls.findLast((entry) =>
+      entry.pendingId === thrown.pendingId && entry.roll.id !== thrown.skipRollId && entry.seq > (thrown.afterSeq ?? -1));
+    const offer = state.couchPush.find((entry) => entry.pendingRollId === thrown.pendingId) ?? null;
     return (
       <ThrownSheet
-        key={thrown.pendingId}
+        key={`${thrown.pendingId}:${thrown.at}`}
+        campaignId={campaignId}
         thrown={thrown}
         landed={landed ?? null}
+        offer={offer}
         name={sheet.name}
         nextUp={Boolean(current)}
         close={close}
+        onPushed={(rollId) => setThrown({ pendingId: thrown.pendingId, at: Date.now(), skipRollId: rollId })}
+        // No dice fly for a story point: the success shows at once.
+        onSpent={(seq) => setThrown({ pendingId: thrown.pendingId, at: Date.now() - REVEAL_AFTER_MS, afterSeq: seq })}
       />
     );
   }
@@ -167,25 +179,78 @@ function RollSheet({ campaignId, pending, sheet, group = null, onThrown }: {
   );
 }
 
-function ThrownSheet({ thrown, landed, name, nextUp, close }: {
+function ThrownSheet({ campaignId, thrown, landed, offer, name, nextUp, close, onPushed, onSpent }: {
+  campaignId: string;
   thrown: Thrown;
   landed: CampaignState["couchRolls"][number] | null;
+  // A failed check its thrower may still push (src/lib/couch/push.ts).
+  offer: PushOffer | null;
   name: string;
   nextUp: boolean;
   close: () => void;
+  onPushed: (replacedRollId: string) => void;
+  onSpent: (failureSeq: number) => void;
 }) {
   const titleId = useId();
   const [revealed, setRevealed] = useState(false);
+  const [pushing, setPushing] = useState<"" | "push" | "spend">("");
+  const [pushError, setPushError] = useState("");
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = window.setTimeout(() => setRevealed(true), Math.max(0, thrown.at + REVEAL_AFTER_MS - Date.now()));
     return () => window.clearTimeout(timer);
   }, [thrown.at]);
   const shown = revealed && landed;
+  const pushable = Boolean(shown && offer && offer.until > now);
+  // The offer's seconds tick down on the button.
   useEffect(() => {
-    if (!shown) return;
+    if (!offer) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 500);
+    return () => window.clearInterval(timer);
+  }, [offer]);
+  // Never closes itself while the push is still on offer.
+  useEffect(() => {
+    if (!shown || pushable) return;
     const timer = window.setTimeout(close, CLOSE_AFTER_MS);
     return () => window.clearTimeout(timer);
-  }, [shown, close]);
+  }, [shown, pushable, close]);
+
+  // Taking the failure lets the GM go on now; the sheet closes either way.
+  async function decline() {
+    if (offer) {
+      void fetch(`/api/campaigns/${campaignId}/couch/push`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pendingRollId: offer.pendingRollId, decline: true }),
+      }).catch(() => undefined);
+    }
+    close();
+  }
+
+  // A push throws again; a story point makes the failure a success.
+  async function push(spend = false) {
+    if (!offer || !landed || pushing) return;
+    setPushing(spend ? "spend" : "push");
+    setPushError("");
+    buzz();
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/couch/push`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pendingRollId: offer.pendingRollId, ...(spend ? { spend: true } : {}) }),
+      });
+      if (response.ok) {
+        if (spend) onSpent(landed.seq);
+        else onPushed(landed.roll.id);
+        return;
+      }
+      const data = (await response.json().catch(() => ({}))) as { error?: string };
+      setPushError(data.error || (spend ? "The story point did not go through." : "The push did not go through."));
+    } catch {
+      setPushError("Could not reach the server.");
+    }
+    setPushing("");
+  }
   // A roll the server could not present (behind the GM's screen) has no
   // number to show; the TV and the story carry on without it.
   useEffect(() => {
@@ -207,8 +272,26 @@ function ThrownSheet({ thrown, landed, name, nextUp, close }: {
               {landed.math}
               {landed.target !== null ? ` · target ${landed.target}` : ""}
             </span>
-            <button type="button" className="couch-btn couch-btn-primary couch-roll-sheet-close" onClick={close} autoFocus>
-              {nextUp ? "Next roll" : "Back to the story"}
+            {landed.stress ? <span className="couch-roll-sheet-stress">{landed.stress}</span> : null}
+            {pushable && offer && offer.storyPoints > 0 ? (
+              <button type="button" className="couch-btn couch-roll-sheet-push couch-roll-sheet-spend" onClick={() => void push(true)} disabled={Boolean(pushing)} autoFocus>
+                {pushing === "spend" ? <Loader2 className="size-5 animate-spin" aria-hidden="true" /> : null}
+                Make it succeed · 1 story point
+                <span className="couch-roll-sheet-push-time">
+                  {offer.storyPoints} left{offer.push ? "" : ` · ${Math.max(0, Math.ceil((offer.until - now) / 1000))}s`}
+                </span>
+              </button>
+            ) : null}
+            {pushable && offer?.push ? (
+              <button type="button" className="couch-btn couch-roll-sheet-push" onClick={() => void push()} disabled={Boolean(pushing)} autoFocus={offer.storyPoints < 1}>
+                {pushing === "push" ? <Loader2 className="size-5 animate-spin" aria-hidden="true" /> : null}
+                Push it · +1 stress
+                <span className="couch-roll-sheet-push-time">{Math.max(0, Math.ceil((offer.until - now) / 1000))}s</span>
+              </button>
+            ) : null}
+            {pushError ? <p className="couch-error" role="alert">{pushError}</p> : null}
+            <button type="button" className="couch-btn couch-btn-primary couch-roll-sheet-close" onClick={pushable ? () => void decline() : close} autoFocus={!pushable}>
+              {nextUp ? "Next roll" : pushable ? "Take the failure" : "Back to the story"}
             </button>
           </>
         ) : (

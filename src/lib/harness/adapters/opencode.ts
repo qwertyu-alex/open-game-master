@@ -439,7 +439,7 @@ export function staleOdmSessions(
         session.metadata?.openDungeonMaster !== SESSION_TAG.openDungeonMaster ||
         !directory ||
         !path.basename(directory).startsWith(RUN_DIR_PREFIX) ||
-        options.canonical(path.dirname(path.resolve(directory))) !== options.tmpdir
+        options.canonical(path.dirname(path.resolve(/*turbopackIgnore: true*/ directory))) !== options.tmpdir
       ) {
         return false;
       }

@@ -22,6 +22,7 @@ import { RAGING, spendRelentlessEndurance } from "@/lib/srd/class-resources";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
 import { applyDamageMath, wildShapeDamageMath } from "@/lib/dm/mutation-math";
 import { applyDamageDeathHook } from "@/lib/dm/death";
+import { noteCouchHurt } from "@/lib/couch/stress";
 import { releaseGrapplesHeldBy } from "@/lib/dm/set-condition";
 import { isMassiveDamage } from "@/lib/dm/death-logic";
 import { concentrationDamageHook } from "@/lib/dm/concentration";
@@ -353,6 +354,11 @@ export function applyPcDamage(
   // Disintegrate leaves nothing to be dying: the drop is death itself.
   const fatal = input.disintegrate && math.dropped ? { ...math, overkill: Math.max(math.overkill, effectiveMaxHp(sheet)) } : math;
   const deathInfo = applyDamageDeathHook(campaign, turnId, sheet, fatal, input.crit === true);
+  // A couch crew member's wound frightens them, and their fall the others
+  // (src/lib/couch/stress.ts).
+  if (sheet.currentHp > math.currentHp) {
+    noteCouchHurt(campaign, sheet.id, math.dropped);
+  }
   // Unconscious at 0 is incapacitated: a grapple they held ends.
   const letGo = math.dropped ? releaseGrapplesHeldBy(campaign, sheet.id) : [];
   // Concentration: damage forces the CON save server-side. A form that broke

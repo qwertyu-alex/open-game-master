@@ -526,4 +526,5 @@ button.couch-plan-room > small,
 }
 .couch-deck-ways li[data-state="seen"] { border-style: dashed; }
 .couch-deck-ways li small { color: var(--couch-dim); font-size: 0.65rem; letter-spacing: 0.1em; }
+.couch-deck-ways li small[data-hazard] { color: #ff7a5c; font-weight: 700; text-transform: uppercase; }
 .couch-map-legend i[data-fog] { border-style: dotted; opacity: 0.6; }

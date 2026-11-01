@@ -20,7 +20,8 @@
   color: #e8eeea;
 }
 
-.couch-site > * {
+.couch-site > *,
+.couch-site-drift > * {
   position: absolute;
   left: calc(var(--x, 0) * var(--t));
   top: calc(var(--y, 0) * var(--t));
@@ -56,6 +57,8 @@
 .couch-site-floor[data-sight="seen"] { filter: brightness(0.6) saturate(0.5); }
 .couch-site-floor[data-dark][data-sight="seen"] { filter: brightness(0.4) saturate(0.4); }
 .couch-site-floor[data-dark]:not([data-sight="seen"]) { filter: brightness(0.7); }
+/* A zone only heard of (something is marked in it): a bare dashed outline. */
+.couch-site-floor[data-sight="unseen"] { background: rgba(143, 224, 181, 0.03); border: 2px dashed rgba(143, 224, 181, 0.35); filter: none; box-shadow: none; }
 
 .couch-site-wall { background: var(--site-wall); border-radius: 1px; box-shadow: 0 0 calc(var(--t) * 0.2) rgba(0, 0, 0, 0.8); }
 .couch-site-wall[data-axis="h"] { height: calc(var(--t) * 0.18); margin-top: calc(var(--t) * -0.09); }
@@ -75,6 +78,58 @@
 .couch-site-door[data-axis="v"][data-state="open"] { border-top-width: 3px; border-bottom-width: 3px; }
 .couch-site-door[data-state="locked"] { background: var(--site-locked); }
 .couch-site-door[data-state="sealed"] { background: var(--site-sealed); }
+/* A hole blown through a wall: a ragged gap, scorched at its edges. A way
+   to a section that drifted off: a red stub, cut. */
+.couch-site-door[data-kind="breach"] {
+  background: radial-gradient(ellipse closest-side, var(--site-floor) 50%, #ff8a3c 72%, rgba(255, 138, 60, 0) 100%);
+  border: 0;
+  border-radius: 45%;
+}
+.couch-site-door[data-axis="h"][data-kind="breach"] { height: calc(var(--t) * 1.1); margin-top: calc(var(--t) * -0.55); margin-left: calc(var(--t) * -0.3); width: calc((var(--w) + 0.6) * var(--t)); }
+.couch-site-door[data-axis="v"][data-kind="breach"] { width: calc(var(--t) * 1.1); margin-left: calc(var(--t) * -0.55); margin-top: calc(var(--t) * -0.3); height: calc((var(--h) + 0.6) * var(--t)); }
+.couch-site-door[data-state="severed"] { background: repeating-linear-gradient(45deg, var(--site-sealed) 0 4px, #3a1210 4px 8px); box-shadow: 0 0 calc(var(--t) * 0.4) rgba(255, 90, 71, 0.6); }
+
+/* What has happened to a zone, over its floor and under everything else:
+   fire flickers, smoke drifts, vacuum is frost and stars, a wreck is
+   rubble. */
+.couch-site-hazard { pointer-events: none; }
+.couch-site-hazard[data-hazard="fire"] {
+  background: radial-gradient(ellipse at 30% 70%, rgba(255, 120, 40, 0.55), transparent 60%), radial-gradient(ellipse at 70% 40%, rgba(255, 190, 70, 0.45), transparent 55%), rgba(160, 40, 10, 0.25);
+  mix-blend-mode: screen;
+  animation: couch-site-fire 1.3s ease-in-out infinite alternate;
+}
+.couch-site-hazard[data-hazard="smoke"] {
+  background: radial-gradient(circle at 25% 35%, rgba(150, 150, 150, 0.45), transparent 45%), radial-gradient(circle at 70% 65%, rgba(120, 120, 120, 0.5), transparent 50%), rgba(70, 70, 70, 0.35);
+  animation: couch-site-smoke 6s ease-in-out infinite alternate;
+}
+.couch-site-hazard[data-hazard="vacuum"] {
+  background:
+    radial-gradient(circle, rgba(220, 240, 255, 0.8) 1px, transparent 1.5px) 0 0 / calc(var(--t) * 1.3) calc(var(--t) * 1.3),
+    linear-gradient(rgba(60, 120, 200, 0.28), rgba(10, 20, 50, 0.45));
+  outline: 2px dashed rgba(130, 190, 255, 0.7);
+  outline-offset: -3px;
+}
+.couch-site-hazard[data-hazard="wrecked"] {
+  background:
+    linear-gradient(35deg, transparent 45%, rgba(0, 0, 0, 0.7) 46% 52%, transparent 53%) 0 0 / calc(var(--t) * 1.7) calc(var(--t) * 1.3),
+    linear-gradient(-20deg, transparent 40%, rgba(120, 110, 100, 0.8) 41% 49%, transparent 50%) 0 0 / calc(var(--t) * 1.1) calc(var(--t) * 0.9),
+    rgba(40, 34, 30, 0.75);
+}
+@keyframes couch-site-fire { from { opacity: 0.65; } to { opacity: 1; } }
+@keyframes couch-site-smoke { from { background-position: 0 0; opacity: 0.8; } to { background-position: calc(var(--t) * 0.6) calc(var(--t) * -0.4); opacity: 1; } }
+
+/* A section (a docked ship) moves as one piece: it glides off and turns
+   when it undocks, and slides in when it docks. */
+.couch-site-drift {
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  transition: transform 3.2s cubic-bezier(0.45, 0, 0.3, 1), opacity 3.2s ease;
+}
+.couch-site-drift[data-state="adrift"] { opacity: 0.8; }
+.couch-site-drift[data-state="docked"][data-fresh] { animation: couch-site-dock 2.4s cubic-bezier(0.2, 0.7, 0.3, 1); }
+@keyframes couch-site-dock { from { opacity: 0; transform: translate(calc(var(--t) * -3), calc(var(--t) * 1)); } }
 
 /* Furniture, drawn in a few strokes so the room reads at a glance. */
 .couch-site-prop { border: 1px solid rgba(201, 214, 207, 0.35); background: rgba(80, 92, 88, 0.55); border-radius: 2px; }
@@ -116,11 +171,15 @@ button.couch-site-label:focus-visible { outline: 3px solid var(--site-door); out
   line-height: 1.1;
 }
 .couch-site-features { font-size: max(8px, calc(var(--t) * 0.34)); color: var(--site-locked); text-shadow: 0 1px 3px #000; text-transform: uppercase; letter-spacing: 0.08em; }
+.couch-site-features b { color: #ff7a5c; font-weight: 700; }
 .couch-site-label[data-sight="seen"] .couch-site-name { color: rgba(232, 238, 234, 0.55); }
 .couch-site-label[data-sight="here"] .couch-site-name { color: var(--site-door); }
+.couch-site-label[data-sight="unseen"] .couch-site-name { color: rgba(143, 224, 181, 0.6); font-style: italic; }
 
-/* Tokens: crew a green disc with initials, people a pale one, hostiles a
-   red diamond, items and clues an amber square, the threat a black hole. */
+/* Tokens: crew a green disc with initials, people a pale blue disc,
+   hostiles a red diamond, items an amber square, clues a pale one, bodies a
+   dashed one, the threat a black hole, landmarks an amber pin; each with its
+   kind's icon, or its own picture when the night has one. */
 .couch-site-token {
   --size: calc(var(--t) * 1.2);
   width: var(--size);
@@ -139,13 +198,63 @@ button.couch-site-label:focus-visible { outline: 3px solid var(--site-door); out
 .couch-site-token[data-portrait] { --size: calc(var(--t) * 1.3); overflow: hidden; padding: 0; }
 .couch-site-token img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
 .couch-site-token[data-kind="npc"] { background: #2b3440; border: 3px solid #9cc4ff; color: #e6efff; }
-.couch-site-token[data-kind="foe"] { --size: calc(var(--t) * 1); border-radius: 3px; transform: rotate(45deg); background: #3a0d0a; border: 3px solid #ff5a47; }
-.couch-site-token[data-kind="threat"] { --size: calc(var(--t) * 1.8); background: radial-gradient(circle, #000 45%, #ff5a4766 46%, transparent 70%); box-shadow: none; }
+.couch-site-token[data-kind="foe"] { --size: calc(var(--t) * 1.1); border-radius: 3px; transform: rotate(45deg); background: #3a0d0a; border: 3px solid #ff5a47; color: #ff8a7a; }
+.couch-site-token[data-kind="threat"] { --size: calc(var(--t) * 1.8); background: radial-gradient(circle, #000 45%, #ff5a4766 46%, transparent 70%); box-shadow: none; color: #ff5a47; }
 .couch-site-token[data-kind="item"],
-.couch-site-token[data-kind="clue"] { --size: calc(var(--t) * 0.7); border-radius: 3px; background: #f2c46b; border: 2px solid #3a2c08; }
-.couch-site-token[data-kind="clue"] { background: #e8eeea; }
-.couch-site-token[data-kind="body"] { --size: calc(var(--t) * 0.9); border-radius: 40%; background: #4a2420; border: 2px dashed #ff8a7a; }
+.couch-site-token[data-kind="clue"] { --size: calc(var(--t) * 1); border-radius: 22%; background: #f2c46b; border: 2px solid #3a2c08; color: #2a1f05; }
+.couch-site-token[data-kind="clue"] { background: #e8eeea; color: #1a2024; }
+.couch-site-token[data-kind="body"] { --size: calc(var(--t) * 1.05); border-radius: 40%; background: #4a2420; border: 2px dashed #ff8a7a; color: #ffb3a8; }
 .couch-site-token[data-stance="passive"] { opacity: 0.7; }
+/* A landmark: a pin-like amber ring; a person out of sight, a dashed ghost. */
+.couch-site-token[data-kind="landmark"] { --size: calc(var(--t) * 1); border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: #0b0f11; border: 3px solid #f2c46b; color: #f2c46b; }
+.couch-site-token[data-last] { opacity: 0.6; border-style: dashed; }
+.couch-site-icon { width: 66%; height: 66%; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.couch-site-token[data-kind="threat"] .couch-site-icon { width: 46%; height: 46%; }
+/* Turned shapes keep their icon upright. */
+.couch-site-token[data-kind="foe"] .couch-site-icon { transform: rotate(-45deg); }
+.couch-site-token[data-kind="landmark"] .couch-site-icon { transform: rotate(45deg); width: 60%; height: 60%; }
+/* A token wearing its own picture: upright, framed in its kind's colour. */
+.couch-site-token[data-portrait]:not([data-kind="crew"]) { --size: calc(var(--t) * 1.4); transform: none; border-radius: 26%; border: 3px solid currentColor; background: #0b0f11; }
+.couch-site-token[data-portrait][data-kind="npc"] { border-radius: 50%; color: #9cc4ff; }
+.couch-site-token[data-portrait][data-kind="item"],
+.couch-site-token[data-portrait][data-kind="clue"] { color: #f2c46b; }
+.couch-site-token[data-portrait]:not([data-kind="crew"]) img { border-radius: inherit; }
+
+/* Every marked thing's name, readable from the couch, in the box
+   tagPlaces (site-map-logic.ts) found clear of every other name, token and
+   zone title. Its sizes are the ones tagPlaces measures with: keep them in
+   step. */
+.couch-site-tag {
+  display: grid;
+  place-items: center;
+  padding: calc(var(--t) * 0.06) calc(var(--t) * 0.16);
+  border-radius: 4px;
+  background: rgba(3, 5, 6, 0.78);
+  font-size: calc(var(--t) * 0.4);
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: center;
+  white-space: pre;
+  color: #e8eeea;
+  pointer-events: none;
+  transition: left 700ms ease, top 700ms ease;
+}
+.couch-site-tag[data-kind="npc"] { color: #b9d4ff; }
+.couch-site-tag[data-kind="foe"],
+.couch-site-tag[data-kind="threat"] { color: #ff8a7a; }
+.couch-site-tag[data-kind="item"],
+.couch-site-tag[data-kind="landmark"] { color: #f2c46b; }
+.couch-site-tag[data-last] { opacity: 0.7; font-style: italic; }
+/* The line from a name that stood off back to its token. */
+.couch-site-leaders { overflow: visible; pointer-events: none; color: #e8eeea; }
+.couch-site-leaders line { stroke: currentColor; stroke-width: 2px; vector-effect: non-scaling-stroke; stroke-opacity: 0.8; }
+.couch-site-leaders circle { fill: currentColor; }
+.couch-site-leaders [data-kind="npc"] { color: #b9d4ff; }
+.couch-site-leaders [data-kind="foe"],
+.couch-site-leaders [data-kind="threat"] { color: #ff8a7a; }
+.couch-site-leaders [data-kind="body"] { color: #ffb4a8; }
+.couch-site-leaders [data-kind="item"],
+.couch-site-leaders [data-kind="landmark"] { color: #f2c46b; }
 
 /* A motion tracker ping: the room hears it before it sees it. */
 .couch-site-ping::before,
@@ -165,10 +274,32 @@ button.couch-site-label:focus-visible { outline: 3px solid var(--site-door); out
   from { transform: scale(0.2); opacity: 1; }
   to { transform: scale(1.4); opacity: 0; }
 }
+/* The alarm: where something just happened, a wide red ring that throbs
+   until the crew next moves. */
+.couch-site-alert::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--t) * -2.2);
+  top: calc(var(--t) * -2.2);
+  width: calc(var(--t) * 4.4);
+  height: calc(var(--t) * 4.4);
+  border-radius: 50%;
+  border: 3px solid #ff3b2f;
+  box-shadow: 0 0 calc(var(--t) * 0.8) rgba(255, 59, 47, 0.7), inset 0 0 calc(var(--t) * 0.8) rgba(255, 59, 47, 0.5);
+  animation: couch-site-alarm 1.1s ease-in-out infinite alternate;
+}
+@keyframes couch-site-alarm {
+  from { transform: scale(0.75); opacity: 0.35; }
+  to { transform: scale(1); opacity: 1; }
+}
 @media (prefers-reduced-motion: reduce) {
   .couch-site-ping::before,
   .couch-site-ping::after { animation: none; transform: scale(0.8); }
-  .couch-site-token { transition: none; }
+  .couch-site-alert::before,
+  .couch-site-hazard { animation: none; }
+  .couch-site-drift { transition: none; animation: none; }
+  .couch-site-token,
+  .couch-site-tag { transition: none; }
 }
 
 /* The TV, split (CouchTv.tsx data-site): the map on the left 60%, above
@@ -224,6 +355,7 @@ button.couch-site-label:focus-visible { outline: 3px solid var(--site-door); out
 }
 .couch-tv-site-frame { position: absolute; border: 2px solid var(--couch-accent, #8fe0b5); border-radius: 3px; transition: all 1100ms cubic-bezier(0.2, 0.7, 0.2, 1); }
 .couch-site-overview .couch-site-token { box-shadow: none; border-width: 1px; }
+.couch-site-overview .couch-site-icon { display: none; }
 .couch-site-overview .couch-site-ping { display: none; }
 
 /* The phone: scroll the map both ways inside the sheet. */

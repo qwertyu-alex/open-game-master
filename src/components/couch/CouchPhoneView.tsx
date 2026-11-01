@@ -7,6 +7,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { agendaAct, CouchFace, CouchHp, CouchPhoneShell, useAgendaFresh } from "@/components/couch/CouchParts";
 import { CouchDock, CouchTurnLine, useCouchTurn, type CouchMode } from "@/components/couch/CouchDock";
 import { CouchPhoneFight } from "@/components/couch/CouchTvFight";
+import { distancesFromMe } from "@/lib/couch/fight-map-logic";
 import { CouchPhoneTruce } from "@/components/couch/CouchTruce";
 import { couchFight, crewHealthOf } from "@/lib/couch/fight-logic";
 import { CouchStory } from "@/components/couch/CouchStory";
@@ -18,8 +19,9 @@ import { couchCharacter, itemKeys, sectionOnEntry, type CharacterSection, type C
 import { useItemArt, useNewGear } from "@/components/couch/useCouchGear";
 import { itemMoveLine } from "@/lib/couch/item-art-logic";
 import { CouchRollPrompt } from "@/components/couch/CouchRollPrompt";
-import { couchSheetFor, gmAtWork, isDead } from "@/components/couch/couch-logic";
+import { couchGmStatus, couchSheetFor, gmAtWork, isDead } from "@/components/couch/couch-logic";
 import { CouchTakeover } from "@/components/couch/CouchTakeover";
+import { CouchPhoneFinale } from "@/components/couch/CouchPhoneFinale";
 
 type View = "story" | "character";
 
@@ -48,13 +50,21 @@ export function CouchPhoneView({
   // took over (docs/couch-mode-spec.md 2.12).
   const mySheet = useMemo(() => couchSheetFor(sheets, meId, state.activeSheetId), [sheets, meId, state.activeSheetId]);
   const dead = mySheet ? isDead(mySheet) : false;
+  const myStress = mySheet ? state.couchStress?.[mySheet.id] : undefined;
   const takeoverSignal = `${sheets.map((sheet) => `${sheet.id}:${sheet.deathSaves?.dead ? 1 : 0}`).join("|")}#${String((campaign as { couchStamp?: unknown } | null)?.couchStamp ?? "")}`;
   const [view, setView] = useState<View>("story");
+  // Once the night is over the phone shows its closing; the story stays a
+  // tap away to read back.
+  const [readingBack, setReadingBack] = useState(false);
   const [mode, setMode] = useState<CouchMode>("do");
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const turn = useCouchTurn(state);
   const fight = useMemo(() => couchFight(state.encounter, crewHealthOf(sheets)), [state.encounter, sheets]);
   const myCharacterIds = useMemo(() => new Set(sheets.filter((sheet) => sheet.userId === meId).map((sheet) => sheet.id)), [sheets, meId]);
+  // How far each creature stands from this player's character, on their own
+  // board (only what they can see): a sword or a gun.
+  const fightTokens = state.battleMap?.tokens;
+  const fightDistances = useMemo(() => (fightTokens ? distancesFromMe(fightTokens, myCharacterIds) : undefined), [fightTokens, myCharacterIds]);
   const agenda = mySheet?.agenda ?? null;
   const { fresh: agendaFresh, markSeen: markAgendaSeen } = useAgendaFresh(mySheet?.id ?? "", agenda ? agendaAct(agenda) : null);
   const storyNews = useStoryNews(state, view);
@@ -147,6 +157,13 @@ export function CouchPhoneView({
   }
   // A player who joined after the start: a character first, from the crew
   // the forge wrote, as in the lobby.
+  if (campaign.status === "ended" && !readingBack) {
+    return (
+      <CouchPhoneShell title={campaign.title}>
+        <CouchPhoneFinale state={state} onStory={() => setReadingBack(true)} />
+      </CouchPhoneShell>
+    );
+  }
   if (!mySheet) {
     return (
       <CouchPhoneShell title={campaign.title}>
@@ -162,6 +179,7 @@ export function CouchPhoneView({
           view={view}
           onView={switchTo}
           sheet={mySheet}
+          stress={myStress?.stress ?? 0}
           storyMark={storyNews || (view !== "story" && turn.tone === "yours")}
           characterMark={dead ? "" : agendaFresh ? "a new agenda to read" : newGear.fresh.size ? "something new picked up" : ""}
           aside={<CouchMapButton state={state} onMove={dead ? undefined : startWithMove} />}
@@ -178,13 +196,18 @@ export function CouchPhoneView({
           refreshWhispers={refreshWhispers}
           answerAway={whisperWatch.away}
           onAnswerJump={whisperWatch.jump}
-          hidden={view !== "story" || dead}
+          hidden={view !== "story" || dead || Boolean(myStress?.panic)}
           draft={draft}
         />
       }
     >
       <div id="couch-view-story" role="tabpanel" aria-labelledby="couch-tab-story" className="couch-view" hidden={view !== "story"}>
         <h1 className="couch-feed-title">{campaign.title}</h1>
+        {campaign.status === "ended" ? (
+          <button type="button" className="couch-btn couch-phone-finale-back" onClick={() => setReadingBack(false)}>
+            The night is over · see how you did
+          </button>
+        ) : null}
         {/* What the crew must do now (set_objective), at the head of the
             story rather than on the dock: the box keeps the screen it has. */}
         {state.couchObjective ? (
@@ -206,9 +229,22 @@ export function CouchPhoneView({
           sceneTags={state.couchSceneTags}
           mySheetId={mySheet.id}
         />
-        <CouchPhoneFight fight={fight} myCharacterIds={myCharacterIds} />
+        <CouchPhoneFight
+          fight={fight}
+          myCharacterIds={myCharacterIds}
+          distances={fightDistances}
+          moveFeet={fight && state.battleMap?.myTokenId && state.battleMap.turn?.tokenId === state.battleMap.myTokenId ? state.battleMap.budgetLeft * 5 : null}
+        />
         {fight ? <CouchPhoneTruce campaignId={campaign.id} truce={state.couchTruce} myCharacterIds={myCharacterIds} /> : null}
         {/* Dead: where the action box was, who to play on as. */}
+        {/* A panic takes their move (src/lib/couch/stress.ts): the box is
+            hidden and this says why, until it has passed. */}
+        {myStress?.panic && !dead ? (
+          <p className="couch-panic" role="status">
+            <strong>Panicking · {myStress.panic.label}</strong>
+            <span>You sit out {myStress.panic.left === 1 ? "your next move" : `your next ${myStress.panic.left} moves`}. Say it out loud, but the GM plays it.</span>
+          </p>
+        ) : null}
         {dead ? <CouchTakeover campaignId={campaign.id} sheet={mySheet} signal={takeoverSignal} /> : <CouchTurnLine campaignId={campaign.id} turn={turn} />}
       </div>
       <div
@@ -236,7 +272,7 @@ export function CouchPhoneView({
       <CouchRollPrompt state={state} sheet={mySheet} />
       {/* The TV's breathing edge, on every tab: the phone stays free to
           read the story or the sheet while the GM works. */}
-      {gmAtWork(state.dmStatus) ? <div className="couch-gm-edge" aria-hidden="true" /> : null}
+      {gmAtWork(couchGmStatus(state)) ? <div className="couch-gm-edge" aria-hidden="true" /> : null}
     </CouchPhoneShell>
   );
 }
@@ -264,6 +300,7 @@ function ViewTabs({
   view,
   onView,
   sheet,
+  stress,
   storyMark,
   characterMark,
   aside,
@@ -271,6 +308,8 @@ function ViewTabs({
   view: View;
   onView: (view: View) => void;
   sheet: CharacterSheet;
+  // Their stress (src/lib/couch/stress.ts), beside their health.
+  stress: number;
   storyMark: boolean;
   // What waits on the Character tab, for a screen reader; "" for nothing.
   characterMark: string;
@@ -326,11 +365,12 @@ function ViewTabs({
               <span className="couch-tab-hp" aria-hidden="true">
                 <CouchHp current={sheet.currentHp} max={max} />
                 {Math.max(0, sheet.currentHp)}/{max}
+                {stress > 0 ? <span className="couch-tab-stress" data-high={stress >= 7 ? "" : undefined}>Stress {stress}</span> : null}
               </span>
             )}
           </span>
           <span id={hintId} className="sr-only">
-            {isDead(sheet) ? "Your character, dead" : `Your character, health ${Math.max(0, sheet.currentHp)} of ${max}`}
+            {isDead(sheet) ? "Your character, dead" : `Your character, health ${Math.max(0, sheet.currentHp)} of ${max}${stress > 0 ? `, stress ${stress}` : ""}`}
           </span>
           {characterMark ? <Mark label={characterMark} /> : null}
         </button>

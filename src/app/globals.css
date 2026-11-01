@@ -28,6 +28,7 @@
 @import "./styles/couch-map.css";
 @import "./styles/couch-fight.css";
 @import "./styles/couch-site.css";
+@import "./styles/couch-finale.css";
 
 /*
   Arcane night theme. The neutral ramp (stone-*) is redefined as deep

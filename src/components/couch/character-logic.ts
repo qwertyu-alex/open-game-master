@@ -102,7 +102,7 @@ export function couchCharacter(sheet: SheetInput): CouchCharacter {
       const profile = weaponAttackProfile(derived, sheet.proficiencies.weapons, { displayName: item.name, srd, unarmed: false });
       if (weapons.some((weapon) => weapon.name === profile.weapon)) return;
       weapons.push({
-        ...couchItem(item.name, item.qty, item.srdName ?? srd.name),
+        ...couchItem(item.name, item.qty),
         name: profile.weapon,
         toHit: profile.toHit,
         damage: profile.damageExpression,
@@ -110,7 +110,7 @@ export function couchCharacter(sheet: SheetInput): CouchCharacter {
       });
       return;
     }
-    (matchArmor(item) ? worn : gear).push(couchItem(item.name, item.qty, item.srdName));
+    (matchArmor(item) ? worn : gear).push(couchItem(item.name, item.qty));
   });
   const signatureItem = signatureRow >= 0 ? sheet.equipment[signatureRow] : null;
   const signature = signatureItem ? couchItem(signatureItem.name, signatureItem.qty) : null;
@@ -137,9 +137,9 @@ export function couchCharacter(sheet: SheetInput): CouchCharacter {
   };
 }
 
-function couchItem(name: string, qty: number | undefined, srdName?: string): CouchItem {
+function couchItem(name: string, qty: number | undefined): CouchItem {
   const trimmed = name.trim();
-  return { key: itemArtKey(trimmed), name: trimmed, ...itemTitle(trimmed), qty: qty ?? 1, icon: paintedItemIcon(trimmed, srdName) };
+  return { key: itemArtKey(trimmed), name: trimmed, ...itemTitle(trimmed), qty: qty ?? 1, icon: paintedItemIcon(trimmed) };
 }
 
 // Every item's key, for the pictures the night paints and for what is new.

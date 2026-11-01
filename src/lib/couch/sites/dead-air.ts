@@ -100,4 +100,15 @@ export const DEAD_AIR_SITE: SiteMap = {
     { id: "trooper", kind: "foe", name: "Aurex sterilisation trooper", foe: "hobgoblin", zone: "airlock", stance: "active", act: 3, note: "White armour, mirrored visor, stun baton and flamer, off the Halyard. Orders: no witnesses." },
     { id: "chorus", kind: "threat", name: "The Chorus", zone: "trunk", stance: "active", note: "In every cable. Never fought whole: cut, frozen or burned run by run. Speaks through every intercom; moves only where cables run (the trunk and its vents)." },
   ],
+  // The tug can leave: the clamp lets go when the batteries die (act 1's
+  // clock), or the crew blows it to break free (act 3).
+  sections: [
+    {
+      id: "cormorant",
+      name: "The Cormorant",
+      zones: ["cockpit", "hold", "collar"],
+      drift: { x: -6, y: 3, turn: -9 },
+      note: "The crew's salvage tug, docked by its collar to the relay's airlock. adrift when the clamp releases or is blown (whoever is aboard goes with it); absent once it flies off.",
+    },
+  ],
 };

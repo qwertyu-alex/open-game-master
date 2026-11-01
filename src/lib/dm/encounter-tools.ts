@@ -7,6 +7,7 @@ import { holdsOn } from "@/lib/dm/vitals-logic";
 import { fieldedSheets } from "@/lib/dm/roster";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { sceneIds } from "@/lib/ambience/catalog";
+import { couchSoundPack } from "@/lib/couch/sound-logic";
 import { z } from "zod";
 import {
   allocateSeq,
@@ -270,8 +271,9 @@ function handleStartEncounter(
     };
   }
   const args = parsed.args;
-  if (args.scene !== undefined && !sceneIds().includes(args.scene)) {
-    return { error: `Unknown scene "${args.scene}"; use one of: ${sceneIds().join(", ")}.`, retry: true };
+  const scenes = sceneIds(couchSoundPack(campaign));
+  if (args.scene !== undefined && !scenes.includes(args.scene)) {
+    return { error: `Unknown scene "${args.scene}"; use one of: ${scenes.join(", ")}.`, retry: true };
   }
   if (getActiveEncounter(campaign.id)) {
     return {
