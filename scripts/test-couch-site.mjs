@@ -69,17 +69,16 @@ await test("the written site checks clean, a broken one names each mistake, and 
   assert.match(problems, /door workshop–mess: the zones do not touch/);
   assert.match(problems, /Island cannot be reached/);
   for (const site of SITES) assert.deepEqual(checkSiteMap(site), [], `${site.id} checks clean`);
-  // Every night written for a site: its card says so, it seats every
-  // player count it offers, and each of its places is one of the site's
-  // zones, so the pictures, the sound and the whereabouts follow the map.
-  const onMap = WRITTEN_SCENARIOS.filter((scenario) => scenario.site);
-  assert.deepEqual(onMap.map((scenario) => scenario.id).sort(), ["crew-expendable", "dead-air", "haddon-outpost"]);
-  for (const scenario of onMap) {
+  // Every night is played on a map: each written story names a site that
+  // exists, seats every player count its card offers, and each of its
+  // places is one of the site's zones, so the pictures, the sound and the
+  // whereabouts follow the map.
+  assert.deepEqual(WRITTEN_SCENARIOS.map((scenario) => scenario.id).sort(), ["crew-expendable", "dead-air", "haddon-outpost"]);
+  for (const scenario of WRITTEN_SCENARIOS) {
     const site = siteById(scenario.site);
     const card = scenarioCard(scenario.id);
     assert.ok(site, `${scenario.id}'s site exists`);
-    assert.equal(card.onMap, true);
-    assert.equal(card.mood[0], "Played on a map");
+    assert.ok(card, `${scenario.id} has a card`);
     for (const players of [card.players.min, card.players.max]) {
       const forge = writtenForge(scenario.id, players);
       assert.ok("forge" in forge, `${scenario.id} seats ${players}: ${forge.error ?? ""}`);

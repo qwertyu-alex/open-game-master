@@ -11,8 +11,8 @@
 //   only the scene is waited on, rolled for, fielded in a fight and painted;
 //   the GM reads who is where, how long each group has waited and what it
 //   sent; a split crew's messages carry their group for the phones;
-//   the TV's rail names the other groups, the phone's plan marks your room
-//   and the scene's, and the turn line tells an off-scene player to write on;
+//   every seat is told who stands where, the scene's group first, and the
+//   turn line tells an off-scene player to write on;
 //   an ordinary table is untouched.
 import assert from "node:assert/strict";
 import { createElement } from "react";
@@ -39,9 +39,8 @@ const { sceneShotCast } = await import("../src/lib/dm/scene-shot.ts");
 const { currentTableWait } = await import("../src/lib/dm/table-wait.ts");
 const { storyBeats } = await import("../src/components/couch/couch-logic.ts");
 const { couchTurn } = await import("../src/components/couch/phone-logic.ts");
-const { CouchMapRail, CouchMapButton } = await import("../src/components/couch/CouchNavigation.tsx");
+const { mapSplit, myGroup } = await import("../src/lib/couch/navigation-logic.ts");
 const { CouchStory } = await import("../src/components/couch/CouchStory.tsx");
-const { INITIAL_CAMPAIGN_STATE } = await import("../src/app/campaigns/[campaignId]/useCampaignStream.ts");
 
 const crew = ["Ada", "Bo", "Cy", "Di"].map((name) => world.addHero({ name, user: world.addUser(name) }));
 const [ada, bo, cy, di] = crew;
@@ -186,30 +185,17 @@ await test("a split crew's messages carry their group, and an off-scene move sho
   assert.match(phone, /Off scene/);
 });
 
-await test("the TV names the other groups; the phone marks your room and the scene's and lists your exits", () => {
+await test("every seat is told who stands where: the scene's group first, each other group in its own place", () => {
   const nav = couchNavigation(world.campaign());
-  const stateFor = (sheet) => ({ ...INITIAL_CAMPAIGN_STATE, campaign: world.campaign(), me: { id: sheet.userId }, sheets: crew.map((entry) => world.sheet(entry.id)), couchNavigation: nav });
-  const tv = renderToStaticMarkup(createElement(CouchMapRail, { state: stateFor(bo) }));
-  assert.match(tv, /aria-label="Map\. The scene is in Cold store\."/);
-  // Each group's faces sit on its own room of the deck plan.
-  assert.match(tv, /aria-label="Airlock, Ada, Cy, Di"/);
-  assert.match(tv, /aria-label="Cold store, in the scene, Bo"/);
-  assert.doesNotMatch(tv, /aria-label="Elsewhere"/);
-  // Without a plan, the rail puts them in their rooms' boxes, and names under
-  // it only a group whose room it folded away.
-  const rail = renderToStaticMarkup(createElement(CouchMapRail, { state: { ...stateFor(bo), couchNavigation: { ...nav, deck: undefined } } }));
-  assert.match(rail, /<span class="couch-rail-box"><span class="couch-crew-faces" aria-label="Ada, Cy and Di">/);
-  const far = { ...nav, deck: undefined, trail: [nav.groups[1].room, ...["One", "Two", "Three", "Four", "Five"].map((name) => ({ id: name.toLowerCase(), name })), nav.here], side: [] };
-  const folded = renderToStaticMarkup(createElement(CouchMapRail, { state: { ...stateFor(bo), couchNavigation: far } }));
-  assert.match(folded, /aria-label="Elsewhere"/);
-  assert.match(folded, /couch-rail-elsewhere-place">Airlock</);
-  assert.doesNotMatch(tv, /<button/);
-  const phone = renderToStaticMarkup(createElement(CouchMapButton, { state: stateFor(cy) }));
-  assert.match(phone, /You are in Airlock; the scene is in Cold store/);
-  assert.match(phone, /The crew is split in 2 groups/);
-  assert.match(phone, /In the scene/);
-  assert.match(phone, /aria-label="Exits from Airlock"/);
-  assert.match(phone, /aria-label="Airlock, you are here, Ada, Cy, Di"/);
+  assert.equal(nav.here.name, "Cold store");
+  assert.equal(mapSplit(nav), true);
+  assert.deepEqual(nav.groups.map((group) => [group.room.name, group.inScene, group.crew.map((member) => member.name)]), [
+    ["Cold store", true, ["Bo"]],
+    ["Airlock", false, ["Ada", "Cy", "Di"]],
+  ]);
+  assert.equal(myGroup(nav, new Set([cy.id])).room.name, "Airlock");
+  assert.equal(myGroup(nav, new Set([bo.id])).inScene, true);
+  assert.doesNotMatch(JSON.stringify(nav), /agenda|backstory/);
 });
 
 await test("an off-scene player's line says where the story is and to write on, with no Pass", () => {

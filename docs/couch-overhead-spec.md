@@ -1,6 +1,6 @@
-# The overhead night: a couch night played on a map
+# The overhead night: every couch night is played on a map
 
-A second way to play a couch night. The TV shows the site from straight
+How a couch night is played. The TV shows the site from straight
 above, like the rulebook's location maps: walls, doors, furniture, the
 crew's faces and whatever they can see. The scenario's author placed
 everything ahead of time: the rooms, the doors that are locked and what
@@ -13,15 +13,20 @@ three to five phones, secret agendas, stress and panic, dice thrown from
 the phone, fights, death, splitting up. This document covers only what
 changes.
 
-**Status: built.** Two nights play on a map: "The Haddon Distress Call"
-(a mining outpost, 2 to 5 players) and "Dead Air" (a relay station and the
-salvage tug docked to it, 2 to 4 players, about 45 minutes).
+**Status: built, and the only way a night is played.** Three written nights,
+each on its own site: "The Haddon Distress Call" (a mining outpost, 2 to 5
+players), "Dead Air" (a relay station and the salvage tug docked to it, 2
+to 4 players, about 45 minutes) and "Crew Expendable" (an ice hauler and
+the derelict it docks with, 3 or 4 players, about an hour). The seven
+written nights that had no site, the AI-written night from a seed and the
+deck plan that served both were removed when the map became the default;
+their files are in git history before that change.
 
 | Piece | File |
 | --- | --- |
 | The map format, checks, walls, line of sight, the fog, the TV's camera, stealth paths, the tracker, the GM's SITE MAP | `src/lib/couch/site-map-logic.ts` |
 | The live map: its state, the players' view, the move checks, the six map tools | `src/lib/couch/site.ts` |
-| The sites, and the nights written for them | `src/lib/couch/sites/` (`haddon-outpost.ts`, `dead-air.ts`), `src/lib/couch/scenarios/haddon-outpost.ts`, `dead-air.ts` |
+| The sites, and the nights written for them | `src/lib/couch/sites/` (`haddon-outpost.ts`, `dead-air.ts`, `crew-expendable.ts`), the same names in `src/lib/couch/scenarios/` |
 | The drawing, the TV's camera and overview, the phone's map | `src/components/couch/CouchSiteMap.tsx`, `src/app/styles/couch-site.css` |
 | Hooks into the night | `move_party` in `src/lib/dm/turn.ts`; the prompt in `src/lib/couch/navigation.ts`; the tools in `turn.ts`, `invoke-dispatch.ts`, `tool-profiles.ts`; the snapshot's `couchSite` and the `couch_site` event; `CouchTv.tsx`, `CouchNavigation.tsx`, `CouchPhoneView.tsx` |
 | A preview page drawn by the real component | `node scripts/preview-site-map.mjs > docs/prototypes/haddon-outpost.html` |
@@ -48,28 +53,26 @@ couch needs telling what to do next.
 
 1. Run the night as usual (`npm run dev:lan`) and open `/couch` on the
    laptop that drives the TV, signed in.
-2. Under "Tonight's story", pick a card whose first tag is **Played on a
-   map** (The Haddon Distress Call, or Dead Air), and Start the night.
+2. Under "Tonight's story", pick one of the stories, and Start the night.
 3. Players join from their phones with the QR code and take their crew
    cards as on any night. The TV shows the map from the first scene; each
    phone's Map button opens it.
 
-To make another written night play on a map, write a site in
-`src/lib/couch/sites/` (Part 3), add it to `SITES`, put `site: "<id>"` on
-the scenario, make each of its locations a zone by name, and put "Played on
-a map" first in its card's mood with `onMap: true`.
-`scripts/test-couch-site.mjs` checks all of that for every such night.
+To add a night, write its story in `src/lib/couch/scenarios/` with a card
+in `scenario-cards.ts`, write its site in `src/lib/couch/sites/` (Part 3),
+add it to `SITES`, put `site: "<id>"` on the scenario (it is required), and
+make each of its locations a zone by name. `scripts/test-couch-site.mjs`
+checks all of that for every night.
 
 ## Part 2: which night is overhead
 
-**A written scenario with a site plays overhead. Nothing else does.** No
-setting, no toggle, no picker: the card on `/couch` carries "Played on a
-map" as its first mood tag, and that is the whole choice. A night the
-forge writes tonight keeps today's deck plan.
+**Every night.** There is no setting, toggle or picker: `/couch` offers
+only written stories, and every written story has a site.
 
 Why no control (AGENTS.md "Settings, options and toggles"): the map only
 works when someone placed the rooms, doors and foes ahead of time, so it
-belongs to the scenario, not to the room.
+belongs to the scenario, not to the room. A story without a site is not
+offered until its site is written.
 
 ## Part 3: the map is code
 
@@ -262,10 +265,12 @@ no vote and no destination picker.
 
 ## Part 7: next
 
-- A cover picture for the Haddon card (`scripts/paint-scenario-covers.mjs`);
-  until then the card shows its plain backdrop.
-- Forged sites: the forge drafts a `SiteMap` for a story written tonight,
-  and `checkSiteMap` refuses it and asks again on any problem.
+- Sites for the nights that were set aside (Kessler's Moon, The Good
+  Shepherd, Sixty Fathoms, Hollow Night, All Souls Station, Midwinter at
+  Rime Station, Unto Us), restored from git history with a site each.
+- Stories written tonight again, with a forged site: the forge drafts the
+  zones and how they join, code lays out the rectangles, and
+  `checkSiteMap` refuses it and asks again on any problem.
 - A light source drawn on the floor (`set_zone lit` already lifts `dark`).
 - Ships that arrive mid-night need zones written for them: the Aurex
   Halyard docking to Dead Air's relay in act 3 is the obvious first.

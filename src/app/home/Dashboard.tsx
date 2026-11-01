@@ -132,7 +132,7 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
   }
 
   const continueCampaign = loading || loadFailed ? null : pickContinue(campaigns);
-  // Start a night: the AI writes the story, so a server with no storyteller
+  // Start a night: the AI runs the story, so a server with no storyteller
   // has nothing to offer, and an admin may keep table-starting to itself.
   const canStart = user.canCreateCampaigns !== false && offersStoryModel(capabilities);
 

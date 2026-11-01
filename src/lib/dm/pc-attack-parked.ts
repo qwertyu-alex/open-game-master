@@ -16,6 +16,8 @@ import { getActiveEncounter } from "@/lib/db/encounters";
 import type { StoredRoll } from "@/lib/db/rolls";
 import { listSheets } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
+import { publishFx, tokenPosition } from "@/lib/dm/fx";
+import { planAttackFx } from "@/lib/battlemap/fx-plan";
 import { adjudicateHit } from "@/lib/dm/attack-logic";
 import { critDamageExpression } from "@/lib/dm/encounter-logic";
 import { claimHitRiders, liveTypedRiders, strikesAsMagic } from "@/lib/dm/pc-attack-damage";
@@ -194,6 +196,29 @@ export function resolvePendingPcAttack(pending: PendingRoll, roll: StoredRoll): 
   const struck = fight && context.targetEnemyId ? resolveTargetFoe(pending.campaignId, fight, context.targetEnemyId) : null;
   if (struck && pending.characterId) {
     noteSwing(pending.campaignId, pending.characterId, { target: struck.displayName, hit });
+  }
+  // The board plays the swing as the digital path does (pc-attack-resolve.ts
+  // emitAttackFx): thrown dice are how a couch night attacks, and without
+  // this none of its crew's blows ever showed on the board.
+  const from = pending.characterId ? tokenPosition(pending.campaignId, pending.characterId) : null;
+  const to = context.targetEnemyId ? tokenPosition(pending.campaignId, context.targetEnemyId) : null;
+  if (from && to && !to.hidden) {
+    publishFx(
+      pending.campaignId,
+      planAttackFx({
+        from: from.at,
+        to: to.at,
+        fromTokenId: from.tokenId,
+        toTokenId: to.tokenId,
+        hit,
+        crit,
+        fumble: !hit && roll.breakdown.crit === "nat1",
+        ranged: !(context as ParkedAttack).melee,
+        damageType: context.damageType,
+        visibility: roll.visibility,
+        secretNumbers: true,
+      }),
+    );
   }
   if (!hit) {
     return `${context.attacker}'s ${context.weapon} attack rolled ${roll.total} vs AC ${context.targetAc}: MISS${

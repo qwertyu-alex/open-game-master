@@ -10,12 +10,7 @@ import {
   crewPortraitPrompt,
   crewProposal,
   crewSheetFields,
-  forgeReplyTokens,
-  forgeSystemPrompt,
-  forgeUserPrompt,
-  readForge,
   withSignatureItem,
-  type Forge,
   type ForgedCrew,
 } from "@/lib/couch/forge-logic";
 import {
@@ -40,31 +35,28 @@ import {
   type Campaign,
 } from "@/lib/db/campaigns";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
-import { requestDmMessage } from "@/lib/dm/model";
-import { withLanguage } from "@/lib/dm/table-language-logic";
 import { publishPersisted } from "@/lib/events";
 import { toEnglishForImage } from "@/lib/image-english";
 import { generateStoryImage } from "@/lib/image-generate";
 import { enqueueMediaJob } from "@/lib/media-queue";
-import { arcTextTimeoutMs } from "@/lib/model-client";
 import { copyIntoUploads, whenImagesAvailable } from "@/lib/portrait";
 import { configuredDefaultStorySettings } from "@/lib/runtime-defaults";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import { pregenById } from "@/lib/starter/pregens";
-import { stripReasoningArtifacts } from "@/lib/story-prompt";
 import { bindUsageScope } from "@/lib/usage/scope";
 
-// The scenario forge's model call and writes (docs/couch-mode-spec.md 2.1):
-// a couch night is created with its forge running, the forge asks the story
-// model for the scenario and the crew in one structured call, the
-// quick-build engine turns each crew member into a level 1 sheet the table's
-// door admits, and the night is ready: the cards are claimable, the GM's
-// spine is written, the art direction is locked and the portraits paint.
-// What is asked and how the answer is read is src/lib/couch/forge-logic.ts.
+// The scenario forge's writes (docs/couch-mode-spec.md 2.1): a couch night
+// is created with its forge running, the forge reads the night's written
+// story (src/lib/couch/scenarios), the quick-build engine turns each crew
+// member into a level 1 sheet the table's door admits, and the night is
+// ready: the cards are claimable, the GM's spine is written, the art
+// direction is locked and the portraits paint. How a story is read is
+// src/lib/couch/forge-logic.ts.
 
-// scenarioId picks a ready-made story (src/lib/couch/scenarios) in place of
-// one written tonight from the seed; "" is the story model's.
-export type CouchNightInput = { seed: string; players: number; offLimits: string; scenarioId?: string };
+// scenarioId names the written story; every night has one, and plays on
+// its site (src/lib/couch/sites). The crew is players + aiCrew: the AI
+// plays the cards the phones leave (src/lib/couch/ai-crew.ts).
+export type CouchNightInput = { players: number; aiCrew: number; offLimits: string; scenarioId: string };
 
 declare global {
   var __odmCouchForging: Set<string> | undefined;
@@ -108,10 +100,16 @@ export function createCouchNight(userId: string, input: CouchNightInput): Campai
     title: "Couch night",
     description: "",
     theme: "",
-    maxPlayers: input.players + 1,
+    // Every crew seat and the TV. An AI crewmate's seat counts twice: the
+    // AI joins as a member at Begin, and a friend who comes late must still
+    // get in to take that crew member over (src/lib/couch/ai-crew.ts).
+    maxPlayers: input.players + 2 * input.aiCrew + 1,
     startingLevel: 1,
     difficulty: "normal",
-    gameSettings: couchGameSettings(input.offLimits),
+    // A night with AI crew stays open after Begin, so a friend who comes
+    // late can join and take a crew member over from the AI; maxPlayers
+    // above keeps it to that many.
+    gameSettings: { ...couchGameSettings(input.offLimits), midGameJoinOpen: input.aiCrew > 0 },
   });
   // Pictures on, on the server's own painter, every one of them in the
   // night's look: the default until the forge writes the story's own.
@@ -127,9 +125,8 @@ export function createCouchNight(userId: string, input: CouchNightInput): Campai
   return getCampaignById(campaign.id) ?? campaign;
 }
 
-// Off the request that asked for it: the forge takes as long as the story
-// model does (minutes, on an agent program), and the TV polls meanwhile.
-// One forge per campaign at a time.
+// Off the request that asked for it: building the crew's sheets takes a
+// moment, and the TV polls meanwhile. One forge per campaign at a time.
 export function startForge(campaignId: string): void {
   if (forgeRunning(campaignId)) {
     return;
@@ -139,72 +136,22 @@ export function startForge(campaignId: string): void {
   void job()
     .catch((error) => {
       console.error(`[couch] forge failed for campaign ${campaignId}:`, error);
-      failCouchForge(campaignId, "Something went wrong while writing the story. Try again.");
+      failCouchForge(campaignId, "Something went wrong while setting up the night. Try again.");
       publishCouchChange(campaignId);
     })
     .finally(() => forging().delete(campaignId));
 }
 
-// A reforge: the same night's seed asked again, the old cards gone. Only
+// A reforge: the same night's story read again, the old cards gone. Only
 // before anyone has taken a card; the route checks who may ask.
 export function restartForge(campaignId: string): void {
   const forge = getCouchForge(campaignId);
   if (!forge) {
     return;
   }
-  beginCouchForge(campaignId, { players: forge.players, seed: forge.seed, offLimits: forge.offLimits, scenarioId: forge.scenarioId });
+  beginCouchForge(campaignId, { players: forge.players, aiCrew: forge.aiCrew, offLimits: forge.offLimits, scenarioId: forge.scenarioId });
   publishCouchChange(campaignId);
   startForge(campaignId);
-}
-
-// What a backend's refusal said, for the TV's error line: "The server's
-// agent is kept for campaigns an administrator leads" is something the host
-// can fix tonight, where "could not be reached" alone is not.
-async function upstreamReason(error: Response): Promise<string> {
-  const body = (await error.clone().json().catch(() => null)) as { error?: unknown } | null;
-  const said = typeof body?.error === "string" ? body.error : typeof (body?.error as { message?: unknown } | undefined)?.message === "string" ? String((body!.error as { message: string }).message) : "";
-  return said.slice(0, 200);
-}
-
-// Two tries: a reply the reader refuses is asked once more with the reason,
-// which is what a model that slipped one field needs. A backend that is not
-// answering at all is not asked twice.
-async function askForge(campaign: Campaign, players: number, seed: string, offLimits: string): Promise<{ forge: Forge } | { error: string }> {
-  const system = withLanguage(forgeSystemPrompt(players, offLimits), campaign.gameSettings.tableLanguage);
-  let problem = "";
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const { message, error } = await requestDmMessage(
-      campaign.settings,
-      [
-        { role: "system", content: system },
-        {
-          role: "user",
-          content: problem
-            ? `${forgeUserPrompt(seed)}\n\nYour last reply could not be used: ${problem} Write the whole JSON again, exactly as asked.`
-            : forgeUserPrompt(seed),
-        },
-      ],
-      {
-        meta: { task: "couch_forge" },
-        timeoutMs: arcTextTimeoutMs(),
-        thinking: false,
-        maxOutputTokens: forgeReplyTokens(players),
-        // An agent program asks the admin's rule for this campaign, as its
-        // turns will: a forge it would refuse turns is refused too, now.
-        harness: { campaignId: campaign.id },
-      },
-    );
-    if (error) {
-      const said = await upstreamReason(error);
-      return { error: `The storyteller could not be reached, so the story was not written${said ? ` (${said})` : ""}. Try again in a moment.` };
-    }
-    const read = readForge(stripReasoningArtifacts(String(message?.content ?? "")), players);
-    if (read.ok) {
-      return { forge: read.forge };
-    }
-    problem = read.error;
-  }
-  return { error: `The storyteller's story could not be read (${problem}). Try again.` };
 }
 
 // What the quick-build engine may build a crew member from: the careers'
@@ -266,9 +213,9 @@ export async function runForge(campaignId: string, options: { rng?: () => number
   if (!campaign || !row) {
     return;
   }
-  // A ready-made story needs no model call: it is read as the model's
-  // reply would be, and everything after this line treats it the same.
-  const asked = row.scenarioId ? writtenForge(row.scenarioId, row.players) : await askForge(campaign, row.players, row.seed, row.offLimits);
+  // A night from before every night had a written story has nothing to
+  // read: it is refused plainly rather than played without a map.
+  const asked = row.scenarioId ? writtenForge(row.scenarioId, row.players + row.aiCrew) : { error: "This night has no written story to play. Start a new night." };
   if ("error" in asked) {
     failCouchForge(campaignId, asked.error);
     publishCouchChange(campaignId);

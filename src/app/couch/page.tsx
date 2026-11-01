@@ -4,37 +4,33 @@ import { useRouter } from "next/navigation";
 import { use, useEffect, useId, useState, type FormEvent, type ReactNode } from "react";
 import { PageSection, PageShell } from "@/components/PageShell";
 import { cn } from "@/lib/cn";
-import { OFF_LIMITS_MAX, PLAYERS_MAX, SEED_MAX } from "@/lib/couch/limits";
-import { NewStoryTile, ScenarioTile } from "@/components/couch/ScenarioTile";
-import { SCENARIO_CARDS, scenarioCard, scenarioSeats } from "@/lib/couch/scenario-cards";
+import { OFF_LIMITS_MAX, PLAYERS_MAX } from "@/lib/couch/limits";
+import { ScenarioTile } from "@/components/couch/ScenarioTile";
+import { SCENARIO_CARDS, crewSeats, fitAiCrew, scenarioCard } from "@/lib/couch/scenario-cards";
 import { PIXEL_ICONS, ui } from "@/lib/ui";
 
 // Couch night (docs/couch-mode-spec.md Part 1, "Campaign creation and the
 // lobby"): one screen instead of the campaign wizard. Three answers, all of
-// them with a default that serves most rooms: the story (a new one the AI
-// writes from a seed, where empty is "surprise us", or one of the
-// ready-made ones, which the home screen's cards open here with
-// ?scenario=), how many people will play on their phones, and anything off
-// limits, which the repo keeps before the first scene. Everything else
+// them with a default that serves most rooms: the story (one of the written
+// ones, each played on a map of its site; the home screen's cards open here
+// with ?scenario=), how many people will play on their phones (and how many
+// AI crewmates make up the rest of the crew, none unless the story needs
+// more people than came), and anything off limits, which the room keeps
+// before the first scene. Everything else
 // is couch mode's own (src/lib/couch/forge-logic.ts couchGameSettings).
 // Start makes the night on this device's account, which becomes the TV, and
-// opens the TV's screen while the AI writes the story and the crew.
-
-const SEED_PLACEHOLDER =
-  "Surprise us, or give a line: a salvage crew boards a research ship that stopped answering; the night shift on a mining moon goes quiet; a colony's only doctor sends a distress call and then a second one, in a different voice.";
-
-// The new story's choice in the story picker; any other value is a card's id.
-const NEW_STORY = "new";
+// opens the TV's screen while the crew is made.
 
 export default function CouchNightPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const asked = use(searchParams).scenario;
   const router = useRouter();
-  const seedId = useId();
   const limitsId = useId();
-  const [story, setStory] = useState(() => (typeof asked === "string" && scenarioCard(asked) ? asked : NEW_STORY));
-  const card = scenarioCard(story);
-  const [seed, setSeed] = useState("");
-  const [players, setPlayers] = useState(3);
+  const [story, setStory] = useState(() => (typeof asked === "string" && scenarioCard(asked) ? asked : SCENARIO_CARDS[0].id));
+  const card = scenarioCard(story) ?? SCENARIO_CARDS[0];
+  const [players, setPlayers] = useState(() => Math.min(Math.max(3, card.players.min), card.players.max));
+  // The AI crewmates (src/lib/couch/ai-crew.ts): none by default, and kept
+  // inside the story's crew as the head count or the story changes.
+  const [aiCrew, setAiCrew] = useState(0);
   const [offLimits, setOffLimits] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -56,7 +52,7 @@ export default function CouchNightPage({ searchParams }: { searchParams: Promise
       const response = await fetch("/api/couch", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ seed: card ? "" : seed.trim(), players, offLimits: offLimits.trim(), scenario: card?.id ?? "" }),
+        body: JSON.stringify({ scenario: card.id, players, aiCrew, offLimits: offLimits.trim() }),
       });
       const body = (await response.json().catch(() => ({}))) as { campaignId?: string; error?: string };
       if (!response.ok || !body.campaignId) {
@@ -71,14 +67,20 @@ export default function CouchNightPage({ searchParams }: { searchParams: Promise
     }
   }
 
-  // A ready-made story carries a crew of its own size: picking one keeps
-  // the head count inside it.
+  // A story carries a crew of its own size: picking one keeps the head
+  // count inside it, with the AI making up a room too small for it.
   function pickStory(id: string) {
     setStory(id);
     const picked = scenarioCard(id);
-    if (picked && !scenarioSeats(picked, players)) {
-      setPlayers(Math.min(Math.max(players, picked.players.min), picked.players.max));
-    }
+    if (!picked) return;
+    const people = Math.min(players, picked.players.max);
+    setPlayers(people);
+    setAiCrew(fitAiCrew(picked, people, aiCrew));
+  }
+
+  function pickPlayers(count: number) {
+    setPlayers(count);
+    setAiCrew(fitAiCrew(card, count, aiCrew));
   }
 
   return (
@@ -88,17 +90,14 @@ export default function CouchNightPage({ searchParams }: { searchParams: Promise
       width="wide"
       className="max-w-6xl"
       title="Couch night"
-      blurb="One TV, everyone's phone, and a sci-fi horror one-shot the AI runs: a new one it writes tonight, or one already written."
+      blurb="One TV, everyone's phone, and a sci-fi horror one-shot the AI runs, played on a map of the place."
     >
       <form onSubmit={start} className="space-y-4">
         <PageSection heading="The story">
           <fieldset>
             <legend className="text-sm font-medium text-stone-200">Tonight&apos;s story</legend>
-            <p className="mt-1 text-sm text-stone-400">Pick one already written, or let the AI write a new one. Nothing here gives away a twist.</p>
+            <p className="mt-1 text-sm text-stone-400">Each one is played on a map of the place, drawn as the crew finds it. Nothing here gives away a twist.</p>
             <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <StoryChoice id={NEW_STORY} label="Write a new one" checked={story === NEW_STORY} onPick={pickStory}>
-                <NewStoryTile selected={story === NEW_STORY} />
-              </StoryChoice>
               {SCENARIO_CARDS.map((entry) => (
                 <StoryChoice key={entry.id} id={entry.id} label={entry.title} checked={story === entry.id} onPick={pickStory}>
                   <ScenarioTile
@@ -123,61 +122,33 @@ export default function CouchNightPage({ searchParams }: { searchParams: Promise
             </div>
           </fieldset>
 
-          {card ? null : (
-            <>
-              <label htmlFor={seedId} className="mt-5 block text-sm font-medium text-stone-200">
-                Story seed
-              </label>
-              <p id={`${seedId}-hint`} className="mt-1 text-sm text-stone-400">
-                Leave it empty and the AI surprises you.
-              </p>
-              <textarea
-                id={seedId}
-                aria-describedby={`${seedId}-hint`}
-                value={seed}
-                onChange={(event) => setSeed(event.target.value.slice(0, SEED_MAX))}
-                maxLength={SEED_MAX}
-                rows={4}
-                placeholder={SEED_PLACEHOLDER}
-                className={cn(ui.input, "mt-2 min-h-[6rem] text-base focus-visible:ring-2 focus-visible:ring-amber-400/60")}
-              />
-            </>
-          )}
         </PageSection>
 
         <PageSection heading="The room">
-          <fieldset>
-            <legend className="text-sm font-medium text-stone-200">Players on phones</legend>
-            <p className="mt-1 text-sm text-stone-400">
-              {card ? `"${card.title}" is written for ${card.players.min} to ${card.players.max}, best with ${card.players.best}.` : "One crew member is written for each."} The TV does not count.
-            </p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {Array.from({ length: PLAYERS_MAX }, (_, index) => index + 1).map((count) => (
-                <label key={count} className="relative">
-                  <input
-                    type="radio"
-                    name="players"
-                    value={count}
-                    checked={players === count}
-                    disabled={card ? !scenarioSeats(card, count) : false}
-                    onChange={() => setPlayers(count)}
-                    className="peer sr-only"
-                  />
-                  <span
-                    className={cn(
-                      "flex h-11 min-w-11 cursor-pointer items-center justify-center rounded-lg border px-4 font-display text-base",
-                      "border-stone-600/70 bg-stone-900/50 text-stone-200 hover:border-amber-500/50",
-                      "peer-checked:border-amber-400 peer-checked:bg-amber-400/15 peer-checked:text-amber-100",
-                      "peer-disabled:cursor-not-allowed peer-disabled:opacity-40 peer-disabled:hover:border-stone-600/70",
-                      "peer-focus-visible:ring-2 peer-focus-visible:ring-amber-400/70 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-stone-950",
-                    )}
-                  >
-                    {count}
-                  </span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
+          <CountPicker
+            name="players"
+            legend="Players on phones"
+            hint={`"${card.title}" needs a crew of ${card.players.min} to ${card.players.max}, best with ${card.players.best}. The TV does not count.`}
+            counts={Array.from({ length: PLAYERS_MAX }, (_, index) => index + 1)}
+            value={players}
+            allowed={(count) => crewSeats(card, count, fitAiCrew(card, count, aiCrew))}
+            onPick={pickPlayers}
+          />
+
+          <CountPicker
+            name="ai-crew"
+            legend="AI crewmates"
+            hint={
+              players < card.players.min
+                ? `Not enough people for this crew: the AI plays ${card.players.min - players === 1 ? "one more character, with a secret agenda" : `${card.players.min - players} more characters, each with a secret agenda`} of their own. Phones choose first; the AI takes what is left.`
+                : "Short a friend or two? The AI can play more of the crew, each with a secret agenda of their own. Phones choose first; the AI takes what is left."
+            }
+            counts={Array.from({ length: PLAYERS_MAX }, (_, index) => index)}
+            value={aiCrew}
+            allowed={(count) => crewSeats(card, players, count)}
+            onPick={setAiCrew}
+            className="mt-5"
+          />
 
           <label htmlFor={limitsId} className="mt-5 block text-sm font-medium text-stone-200">
             Anything off-limits tonight?
@@ -209,6 +180,65 @@ export default function CouchNightPage({ searchParams }: { searchParams: Promise
         </div>
       </form>
     </PageShell>
+  );
+}
+
+// A row of numbers to pick one from (how many play on phones, how many
+// the AI plays): radios drawn as finger-sized buttons, a count the story
+// cannot seat greyed out.
+function CountPicker({
+  name,
+  legend,
+  hint,
+  counts,
+  value,
+  allowed,
+  onPick,
+  className,
+}: {
+  name: string;
+  legend: string;
+  hint: string;
+  counts: number[];
+  value: number;
+  allowed: (count: number) => boolean;
+  onPick: (count: number) => void;
+  className?: string;
+}) {
+  const hintId = useId();
+  return (
+    <fieldset className={className} aria-describedby={hintId}>
+      <legend className="text-sm font-medium text-stone-200">{legend}</legend>
+      <p id={hintId} className="mt-1 text-sm text-stone-400">
+        {hint}
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {counts.map((count) => (
+          <label key={count} className="relative">
+            <input
+              type="radio"
+              name={name}
+              value={count}
+              checked={value === count}
+              disabled={!allowed(count)}
+              onChange={() => onPick(count)}
+              className="peer sr-only"
+            />
+            <span
+              className={cn(
+                "flex h-11 min-w-11 cursor-pointer items-center justify-center rounded-lg border px-4 font-display text-base",
+                "border-stone-600/70 bg-stone-900/50 text-stone-200 hover:border-amber-500/50",
+                "peer-checked:border-amber-400 peer-checked:bg-amber-400/15 peer-checked:text-amber-100",
+                "peer-disabled:cursor-not-allowed peer-disabled:opacity-40 peer-disabled:hover:border-stone-600/70",
+                "peer-focus-visible:ring-2 peer-focus-visible:ring-amber-400/70 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-stone-950",
+              )}
+            >
+              {count}
+            </span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
   );
 }
 

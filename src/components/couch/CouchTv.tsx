@@ -25,13 +25,14 @@ import { CouchTvSpeaker, useSpeakerNow } from "@/components/couch/CouchTvSpeaker
 import { CouchTvActBreak, useActBreakShowing } from "@/components/couch/CouchTvActBreak";
 import { CouchTvEndNight, CouchTvFinale } from "@/components/couch/CouchTvFinale";
 import { CouchRolls, type RollStageState } from "@/components/couch/CouchRolls";
-import { CouchMapRail, CouchPlaceTitle } from "@/components/couch/CouchNavigation";
+import { CouchPlaceTitle } from "@/components/couch/CouchNavigation";
 import { CouchTvFightHud, CouchTvFightOrder, CouchTvFightOver, useFightArt } from "@/components/couch/CouchTvFight";
 import { CouchTvFightMap } from "@/components/couch/CouchTvFightMap";
 import { useTruceShown } from "@/components/couch/CouchTruce";
 import { couchFight, crewHealthOf, type CouchFight } from "@/lib/couch/fight-logic";
 import { couchAnswersVisible } from "@/lib/couch/answers-logic";
 import type { CouchObjective } from "@/lib/couch/pacing-logic";
+import { isAiCrewUserId } from "@/lib/couch/ai-crew-logic";
 import { itemShowCaption, tvItemShow } from "@/lib/couch/item-show-logic";
 import {
   couchHaltedTurn,
@@ -358,7 +359,7 @@ function CouchTvPlay({ state, narration, ttsOn, replays }: {
           answers it is reading and the dice stay outside, at full
           brightness. */}
       <div className="couch-tv-stage" data-gm-busy={gmBusy ? "" : undefined} data-fight={fight ? "" : undefined} data-site={siteLayout ?? undefined}>
-        {/* A night played on a map splits the stage: the map on the left,
+        {/* The site's map splits the stage: the map on the left,
             the turn's picture in a column on the right with the words over
             it; a fight takes the whole stage back for the creature
             (docs/couch-overhead-spec.md). */}
@@ -384,7 +385,6 @@ function CouchTvPlay({ state, narration, ttsOn, replays }: {
         <div className="couch-tv-top">
           <div className="couch-tv-title">
             <strong>{campaign?.title}</strong>
-            {site ? null : <CouchMapRail state={state} />}
           </div>
           <div className="couch-tv-side">
             {/* A fight sets the objective aside: the screen is the fight's. */}
@@ -539,7 +539,16 @@ function CrewMember({ sheet, away = "", waiting, speaking, inFight, fightTurn, a
             {seen.struck ? <span key={`hit-tag:${seen.struck}`} className="couch-tv-member-tag couch-tv-member-hit-tag" data-tone="danger">Hit</span> : null}
           </span>
         ) : null}
-        <span className="couch-tv-member-name">{sheet.name}</span>
+        <span className="couch-tv-member-name">
+          {/* An AI crewmate (src/lib/couch/ai-crew.ts) says so, so the room
+              knows whose move it waits on is nobody's phone. */}
+          {isAiCrewUserId(sheet.userId) ? (
+            <span className="couch-tv-member-ai">
+              AI<span className="sr-only"> crewmate:</span>
+            </span>
+          ) : null}
+          {sheet.name}
+        </span>
         {dead ? (
           <span className="couch-tv-member-dead">Dead</span>
         ) : (

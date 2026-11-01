@@ -148,6 +148,11 @@ function toOpus(input, layer) {
       { encoding: "utf8" },
     ).stderr;
     const measured = JSON.parse(report.slice(report.lastIndexOf("{"), report.lastIndexOf("}") + 1));
+    // A prompt for "silence" can come back as nothing at all: no loudness to
+    // match, and no take worth keeping.
+    if (!Number.isFinite(Number(measured.input_i))) {
+      throw new Error("the take came back silent; make the prompt name something audible");
+    }
     const filters = [
       `loudnorm=${target}:linear=true:measured_I=${measured.input_i}:measured_TP=${measured.input_tp}:measured_LRA=${measured.input_lra}:measured_thresh=${measured.input_thresh}:offset=${measured.target_offset}`,
       ...(layer === "bed" ? [] : ["afade=t=in:d=0.05,areverse,afade=t=in:d=0.3,areverse"]),

@@ -477,6 +477,9 @@ html[data-theme="light"] .couch-phone {
 .couch-tv-member[data-down] .couch-face { filter: grayscale(1) brightness(0.6); }
 .couch-tv-member-text { display: grid; flex: 1 1 auto; gap: 0.5vh; min-width: 0; }
 .couch-tv-member-name { overflow: hidden; font-size: max(1.05rem, 1.35vw); font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+/* An AI crewmate's mark, before the name: small, quiet, never the name's
+   colour, so it reads as a label and not part of who they are. */
+.couch-tv-member-ai { display: inline-block; margin-right: 0.45em; padding: 0.05em 0.4em; border: 1px solid rgba(225, 238, 230, 0.45); border-radius: 0.35em; font-size: 0.7em; font-weight: 700; letter-spacing: 0.08em; vertical-align: 0.12em; color: rgba(225, 238, 230, 0.8); }
 .couch-tv-member-role { overflow: hidden; font-size: max(0.85rem, 0.95vw); color: rgba(225, 238, 230, 0.72); text-overflow: ellipsis; white-space: nowrap; }
 .couch-tv-member .couch-hp { height: max(6px, 0.5vw); background: rgba(255, 255, 255, 0.14); }
 .couch-tv-member .couch-stress { gap: max(2px, 0.2vw); }

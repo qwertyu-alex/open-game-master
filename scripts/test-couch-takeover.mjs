@@ -152,7 +152,7 @@ async function settledFor(user) {
   throw new Error("the takeover never settled");
 }
 
-const written = writtenForge("good-shepherd", 2);
+const written = writtenForge("dead-air", 2);
 assert.ok("forge" in written);
 const { forge } = written;
 const renn = world.addUser("renn");
@@ -167,9 +167,9 @@ sheets.createSheet(world.campaignId, ada.id, 1, { ...heroInput({ name: "Ada Quil
 store.beginCouchForge(world.campaignId, { players: 2, seed: "", offLimits: "" });
 store.finishCouchForge(world.campaignId, forge, []);
 campaigns.setCampaignStatus(world.campaignId, "active");
-// The orderly is on stage and has a voice; the doctor is still to turn up.
-const tomas = npcs.upsertNpc({ campaignId: world.campaignId, name: "Tomas Bello", attitude: "friendly" });
-npcs.setNpcVoice(world.campaignId, tomas.id, { voiceId: "am_adam", speed: 1 });
+// The comms tech is on stage and has a voice; the director is still to turn up.
+const benny = npcs.upsertNpc({ campaignId: world.campaignId, name: "Benny Oyelaran", attitude: "friendly" });
+npcs.setNpcVoice(world.campaignId, benny.id, { voiceId: "am_adam", speed: 1 });
 
 await test("A living player has nothing to take over, and nobody can ask for them", async () => {
   const view = await call("GET", renn);
@@ -185,10 +185,10 @@ await test("After a death, the dead player's phone lists who to play, the met fi
   sheets.patchSheet(rennSheet.id, { currentHp: 0, deathSaves: DEAD });
   const view = await call("GET", renn);
   assert.equal(view.body.fallen.name, "Renn Calder");
-  assert.equal(view.body.choices[0].name, "Tomas Bello");
+  assert.equal(view.body.choices[0].name, "Benny Oyelaran");
   assert.equal(view.body.choices[0].met, true);
-  assert.ok(view.body.choices.some((choice) => choice.name === "Dr. Celeste Arnaud" && !choice.met));
-  assert.doesNotMatch(JSON.stringify(view.body), /oldest host|brews the tea/, "no secret reaches the phone");
+  assert.ok(view.body.choices.some((choice) => choice.name === "Director Saul Pryce" && !choice.met));
+  assert.doesNotMatch(JSON.stringify(view.body), /tracker in his ear|acceptable losses/, "no secret reaches the phone");
   assert.equal((await call("GET", ada)).body.fallen, null, "only the dead player's phone");
   const wait = currentTableWait(world.campaignId);
   assert.ok(!wait || !wait.waitingOn.some((seat) => seat.userId === renn.id));
@@ -201,21 +201,21 @@ await test("The dead earn no story point and keep no act", () => {
 });
 
 await test("Taking over a met NPC seats them as crew in the player's seat, with the cast's agenda, the NPC's voice, and a note for the room and the GM", async () => {
-  const choice = (await call("GET", renn)).body.choices.find((entry) => entry.name === "Tomas Bello");
+  const choice = (await call("GET", renn)).body.choices.find((entry) => entry.name === "Benny Oyelaran");
   model.script([
     reply({
       text: JSON.stringify({
         available: true,
         gender: "Male",
         career: "Roughneck",
-        crewRole: "Orderly who threw in with the crew",
-        look: "Huge gentle man, shaved head, pastel blue scrubs.",
-        personality: "Kind, stubborn.",
-        backstory: "He served the tea for years.",
+        crewRole: "Comms tech who threw in with the crew",
+        look: "Skinny teenager, shaved head, oversized orange jumpsuit.",
+        personality: "Quick, frightened, loyal.",
+        backstory: "He kept the relay talking for a year.",
         relationships: [{ to: "Ada Quill", line: "would carry her out" }],
-        signatureItem: "a dented tea tray",
-        voice: "Deep, slow.",
-        agenda: ["Keep the crew from drinking the tea.", "Get the crew to the shuttle."],
+        signatureItem: "a headset with one cracked earcup",
+        voice: "Young, fast, South London.",
+        agenda: ["Keep the crew off the cables.", "Get the crew to the tug."],
       }),
     }),
   ]);
@@ -226,20 +226,20 @@ await test("Taking over a met NPC seats them as crew in the player's seat, with 
   const mine = sheets.listSheets(world.campaignId).filter((sheet) => sheet.userId === renn.id);
   assert.equal(mine.length, 2, "the dead sheet stays where it lies");
   const now = mine.find((sheet) => !sheet.deathSaves?.dead);
-  assert.equal(now.name, "Tomas Bello");
-  assert.equal(now.crewRole, "Orderly who threw in with the crew");
+  assert.equal(now.name, "Benny Oyelaran");
+  assert.equal(now.crewRole, "Comms tech who threw in with the crew");
   assert.equal(now.agenda.acts.length, 3);
   assert.equal(now.agenda.hiddenRole, "");
   assert.equal(sheets.getSheetForUser(world.campaignId, renn.id).id, now.id, "the seat is theirs");
-  assert.ok(!npcs.listCastNpcs(world.campaignId).some((entry) => entry.name === "Tomas Bello"), "nobody plays him twice");
+  assert.ok(!npcs.listCastNpcs(world.campaignId).some((entry) => entry.name === "Benny Oyelaran"), "nobody plays him twice");
   const card = store.listCouchCrew(world.campaignId).find((entry) => entry.sheetId === now.id);
   assert.equal(card.claimedBy, renn.id);
   const note = listRecentMessages(world.campaignId, 5).find((message) => message.authorType === "system" && /plays on as/.test(message.content));
-  assert.match(note.content, /Renn Calder is gone\. renn\S* plays on as Tomas Bello/);
+  assert.match(note.content, /Renn Calder is gone\. renn\S* plays on as Benny Oyelaran/);
   const { voiceRoster } = await import("../src/lib/tts-roster.ts");
   assert.equal(voiceRoster(world.campaignId).find((entry) => entry.key === `pc:${now.id}`)?.voice?.voiceId, "am_adam");
   const block = couchAgendaBlock(sheets.listSheets(world.campaignId));
-  assert.match(block, /Tomas Bello/);
+  assert.match(block, /Benny Oyelaran/);
   assert.doesNotMatch(block, /Renn Calder/);
   assert.equal((await call("POST", renn, { choice: "new" })).status, 409, "alive again: nothing more to take");
 });
@@ -247,13 +247,13 @@ await test("Taking over a met NPC seats them as crew in the player's seat, with 
 await test("A reply that says the story has the person dead is handed back, and they leave the list", async () => {
   const kill = sheets.listSheets(world.campaignId).find((sheet) => sheet.name === "Ada Quill");
   sheets.patchSheet(kill.id, { currentHp: 0, deathSaves: DEAD });
-  const doctor = (await call("GET", ada)).body.choices.find((entry) => entry.name === "Dr. Celeste Arnaud");
-  model.script([reply({ text: '{"available": false, "why": "She was taken into the Garden."}' })]);
-  assert.equal((await call("POST", ada, { choice: doctor.key })).status, 202);
+  const director = (await call("GET", ada)).body.choices.find((entry) => entry.name === "Director Saul Pryce");
+  model.script([reply({ text: '{"available": false, "why": "He never left the Halyard."}' })]);
+  assert.equal((await call("POST", ada, { choice: director.key })).status, 202);
   const view = await settledFor(ada);
   assert.equal(view.pending.status, "failed");
-  assert.match(view.pending.error, /taken into the Garden/);
-  assert.ok(!view.choices.some((entry) => entry.name === "Dr. Celeste Arnaud"));
+  assert.match(view.pending.error, /never left the Halyard/);
+  assert.ok(!view.choices.some((entry) => entry.name === "Director Saul Pryce"));
 });
 
 await test("A model that cannot answer still seats someone new", async () => {

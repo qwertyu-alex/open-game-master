@@ -24,9 +24,9 @@ export type WrittenCrew = {
 export type WrittenScenario = {
   // The card's id (src/lib/couch/scenario-cards.ts).
   id: string;
-  // The site an overhead night is played on (src/lib/couch/sites), whose
-  // zones are its locations (docs/couch-overhead-spec.md).
-  site?: string;
+  // The site the night is played on (src/lib/couch/sites), whose zones are
+  // its locations (docs/couch-overhead-spec.md).
+  site: string;
   reply: {
     scenario: {
       title: string;

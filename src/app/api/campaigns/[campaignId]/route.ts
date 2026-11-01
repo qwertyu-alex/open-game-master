@@ -61,6 +61,7 @@ import { beginCouchFinale, couchFinaleView } from "@/lib/couch/finale";
 import type { CouchActBreak } from "@/lib/couch/act-break-logic";
 import { listSceneTags } from "@/lib/couch/whereabouts";
 import { couchNavigation } from "@/lib/couch/navigation";
+import { ensureAiCrew } from "@/lib/couch/ai-crew";
 import { couchSite } from "@/lib/couch/site";
 import { publishCouchRules } from "@/lib/couch/rules";
 import { tableAuthors, workshopClassesFor } from "@/lib/db/homebrew";
@@ -122,6 +123,8 @@ export async function GET(
   // and the party panel offers whoever runs the story the repair for it.
   const libraryRoles = libraryRolesFor(sheets.map((sheet) => sheet.libraryCharacterId ?? ""));
   const messages = listRecentMessages(campaignId, 100);
+  // A night's AI crew plays on after a restart once a screen reads it.
+  if (campaign.gameSettings.couchMode) ensureAiCrew(campaign);
   return Response.json({
     campaign: publicCampaign(campaign),
     // A test fight's workshop (issue 553), for its way back there; null at

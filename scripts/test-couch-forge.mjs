@@ -1,14 +1,14 @@
 // The scenario forge (docs/couch-mode-spec.md 2.1): Start on the couch-night
-// screen makes an AI-run campaign whose creator is the TV, the forge asks
-// the story model for the scenario and the crew in one call, each crew
-// member becomes a level 1 sheet the table's door admits, and the phones
-// claim the cards.
+// screen makes an AI-run campaign whose creator is the TV from one of the
+// written stories, the forge reads it, each crew member becomes a level 1
+// sheet the table's door admits, and the phones claim the cards.
 //
 // Held here, with the model a scripted stand-in (enforce-narrator.mjs
-// fakeModel):
-//   - the reply is read leniently and mended (a crew past the head count, a
-//     second hidden role, a career in the model's own words) or refused with
-//     a reason, and a refused reply is asked once more with that reason;
+// fakeModel) for the turns:
+//   - a story is read leniently and mended (a crew past the head count, a
+//     second hidden role, a career in other words) or refused with a
+//     reason;
+//   - Start needs a written story; a night without one fails plainly;
 //   - every career builds a spell-free 5e sheet the table admits, and a
 //     build the door refuses falls back to a ready-made hero reskinned;
 //   - the night's settings are couch mode's defaults, and its art direction
@@ -179,26 +179,6 @@ await test("the careers read the model's words, and each stands on a class with 
   assert.deepEqual([...logic.COUCH_CLASS_IDS].sort(), ["barbarian", "fighter", "ranger", "rogue"]);
 });
 
-await test("the prompt asks for the whole night, original, with tonight's limits", () => {
-  const system = logic.forgeSystemPrompt(3, "spiders, harm to children");
-  assert.match(system, /exactly 3, ordinary working people/);
-  assert.match(system, /Any universe is welcome/);
-  assert.doesNotMatch(system, /never one from a film|Name no real franchise/, "the table may build on an existing universe");
-  assert.match(system, /exactly ONE crew member has one/, "the owner wants the hidden role in play");
-  assert.match(logic.forgeSystemPrompt(1, ""), /hiddenRole: null/, "a crew of one has none");
-  assert.match(system, /80 to 150 words/);
-  // The night is action-packed (2026-10-31: "more NPCs, more plot twists,
-  // more enemies").
-  assert.match(system, /every act has a fight or a chase with something the crew CAN fight/);
-  assert.match(system, /a twist: a reveal mid-act/);
-  assert.match(system, /cast: four to six NPCs/);
-  assert.match(system, /foes: four to six things the crew can fight/);
-  assert.match(system, /"foes":\[\{"name":string,"what":string,"act":1\|2\|3\}\]/);
-  assert.match(system, /Off limits tonight, never in the story in any form, not even implied: spiders, harm to children/);
-  assert.match(logic.forgeUserPrompt(""), /surprise us/);
-  assert.match(logic.forgeUserPrompt("A mining moon goes quiet"), /Story seed from the table: A mining moon goes quiet/);
-});
-
 await test("the night's settings are couch mode's own", () => {
   const settings = logic.couchGameSettings("No spiders, nothing happening to kids; gore");
   assert.equal(settings.couchMode, true);
@@ -328,18 +308,30 @@ const routes = {
   claim: await world.route("campaigns/[campaignId]/couch/claim"),
   intro: await world.route("campaigns/[campaignId]/couch/intro"),
   reforge: await world.route("campaigns/[campaignId]/couch/reforge"),
+  aiCrew: await world.route("campaigns/[campaignId]/couch/ai-crew"),
   campaign: await world.route("campaigns/[campaignId]"),
 };
 const tv = world.addUser("tv");
 const [ana, ben, cal] = [world.addUser("ana"), world.addUser("ben"), world.addUser("cal")];
 let night = "";
+const readyCards = await import("../src/lib/couch/scenario-cards.ts");
+const written = await import("../src/lib/couch/scenarios/index.ts");
+// Tonight's story, as written and as the forge reads it for three.
+const HADDON = written.writtenScenario("haddon-outpost").reply;
+const haddon = written.writtenForge("haddon-outpost", 3).forge;
+const holder = haddon.crew.findIndex((member) => member.hiddenRole);
+const others = haddon.crew.map((_, index) => index).filter((index) => index !== holder);
+const anyOf = (texts) => new RegExp(texts.map((text) => text.slice(0, 30).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"));
+// What only the sheets carry: the hidden role and the agendas.
+const PRIVATE = anyOf([haddon.crew[holder].hiddenRole, ...haddon.crew.flatMap((member) => member.agenda)]);
+// And what no phone is shown at all, the GM's truth included.
+const SECRETS = anyOf([haddon.crew[holder].hiddenRole, ...haddon.crew.flatMap((member) => member.agenda), HADDON.scenario.truth]);
 
-await test("Start makes an AI-run couch campaign with the TV as its lead, and answers before the forge is done", async () => {
-  model.script([forgeReply()]);
-  const bad = await call(routes.create, "POST", tv, { seed: "x".repeat(601), players: 3 });
-  assert.equal(bad.status, 400);
-  assert.equal((await call(routes.create, "POST", tv, { players: 6 })).status, 400);
-  const made = await call(routes.create, "POST", tv, { seed: "A research tug with its lights on", players: 3, offLimits: "spiders" });
+await test("Start makes an AI-run couch campaign from a written story with the TV as its lead, and answers before the forge is done", async () => {
+  const before = model.requests.length;
+  assert.equal((await call(routes.create, "POST", tv, { players: 3 })).status, 400, "every night is a written story");
+  assert.equal((await call(routes.create, "POST", tv, { scenario: "haddon-outpost", players: 6 })).status, 400);
+  const made = await call(routes.create, "POST", tv, { scenario: "haddon-outpost", players: 3, offLimits: "spiders" });
   assert.equal(made.status, 201, made.body.error);
   night = made.body.campaignId;
   assert.ok(night);
@@ -353,26 +345,28 @@ await test("Start makes an AI-run couch campaign with the TV as its lead, and an
   assert.equal(sheets.listSheets(night).length, 0, "the TV plays no character");
   const forge = await settled(night);
   assert.equal(forge.status, "ready", forge.error);
-  const request = model.requests.at(-1);
-  assert.match(request.messages[0].content, /exactly 3, ordinary working people/);
-  assert.match(request.messages[0].content, /Off limits tonight[^\n]*spiders/);
-  assert.match(request.messages[1].content, /A research tug with its lights on/);
+  assert.equal(forge.scenarioId, "haddon-outpost");
+  assert.equal(model.requests.length, before, "the story is read, never asked of a model");
 });
 
 await test("the forge writes the title, the GM's outline without anyone's secret, and the art direction", () => {
   const campaign = campaigns.getCampaignById(night);
-  assert.equal(campaign.title, FORGE.scenario.title);
-  assert.equal(campaign.description, FORGE.scenario.logline);
-  assert.match(campaign.dmOutline, /COUCH ONE-SHOT "The Quiet of the Tamsin Reach"/);
-  assert.match(campaign.dmOutline, /The truth \(never tell it; let the crew dig it out\): The Halden carried a spore colony/);
-  assert.match(campaign.dmOutline, /Act 3 "The Shuttle": Get off the Tamsin Reach alive\./);
-  assert.match(campaign.dmOutline, /Captain Ilse Marr \(captain\)/);
-  assert.match(campaign.dmOutline, /Halden airlock: frost on the inner door/);
-  assert.match(campaign.dmOutline, /Twist \(spring it mid-act\): The Halden's beacon was switched on by the Combine/);
-  assert.match(campaign.dmOutline, /Foes \(bring each in its act[^\n]*\n- act 1: Spore-ridden tug crew: Grey-skinned/);
-  assert.doesNotMatch(campaign.dmOutline, /Combine synthetic|Recover a living sample|sample case sealed/, "agendas and the hidden role ride the sheets, not the outline");
+  const outline = campaign.dmOutline;
+  const has = (text) => assert.ok(outline.includes(text), `the outline holds: ${text.slice(0, 60)}`);
+  assert.equal(campaign.title, HADDON.scenario.title);
+  assert.equal(campaign.description, HADDON.scenario.logline);
+  has(`COUCH ONE-SHOT "${HADDON.scenario.title}"`);
+  has(`The truth (never tell it; let the crew dig it out): ${HADDON.scenario.truth.slice(0, 60)}`);
+  has(`Act 3 "${HADDON.scenario.acts[2].title}": ${HADDON.scenario.acts[2].goal}`);
+  has(`${HADDON.scenario.cast[0].name} (${HADDON.scenario.cast[0].role}`);
+  has(`${HADDON.scenario.locations[0].name}: ${HADDON.scenario.locations[0].look.slice(0, 40)}`);
+  has(`Twist (spring it mid-act): ${HADDON.scenario.acts[0].twist.slice(0, 40)}`);
+  assert.match(outline, /Foes \(bring each in its act[^\n]*\n- act 1: /);
+  has(`- act 1: ${HADDON.scenario.foes[0].name}: `);
+  assert.doesNotMatch(outline, PRIVATE, "agendas and the hidden role ride the sheets, not the outline");
   assert.equal(campaign.settings.artStyle, "custom");
-  assert.equal(campaign.settings.artStyleScene, FORGE.styleLock);
+  // The setting holds the style lock's first 200 characters.
+  assert.ok(campaign.settings.artStyleScene && HADDON.styleLock.startsWith(campaign.settings.artStyleScene), campaign.settings.artStyleScene);
   const ready = latestEventOfType(night, ["campaign_updated"]);
   assert.equal(ready.payload.couchStatus, "ready", "the lobbies are told");
 });
@@ -380,30 +374,30 @@ await test("the forge writes the title, the GM's outline without anyone's secret
 await test("the lobby shows the scenario's public face and the cards, and nothing secret", async () => {
   const view = await call(routes.view, "GET", tv, undefined, { campaignId: night });
   assert.equal(view.status, 200);
-  assert.deepEqual(Object.keys(view.body).sort(), ["crew", "error", "intro", "scenario", "status"]);
+  assert.deepEqual(Object.keys(view.body).sort(), ["aiCrew", "crew", "error", "intro", "scenario", "status"]);
   assert.equal(view.body.intro.step, 0, "the TV opens on the briefing");
   assert.equal(view.body.intro.total, 4, "the briefing and three crew members");
   assert.match(view.body.intro.key, /^[0-9a-f]{16}$/);
   assert.equal(view.body.status, "ready");
   assert.equal(view.body.error, "");
-  assert.deepEqual(view.body.scenario, { title: FORGE.scenario.title, logline: FORGE.scenario.logline, briefing: FORGE.scenario.briefing });
+  assert.deepEqual(view.body.scenario, { title: HADDON.scenario.title, logline: HADDON.scenario.logline, briefing: HADDON.scenario.briefing });
   assert.equal(view.body.crew.length, 3);
   for (const card of view.body.crew) {
     assert.deepEqual(Object.keys(card).sort(), ["backstory", "claimedBy", "crewRole", "id", "name", "personality", "portraitUrl", "signatureItem", "ties"]);
     assert.equal(card.claimedBy, null);
     assert.equal(card.portraitUrl, null, "no painter here, so no portrait");
   }
-  assert.deepEqual(view.body.crew.map((card) => card.name), ["Kara Voss", "Brakk Oduya", "Lio Tanaka"]);
-  assert.equal(view.body.crew[2].crewRole, "Combine liaison, along for the audit");
+  assert.deepEqual(view.body.crew.map((card) => card.name), HADDON.crew.slice(0, 3).map((member) => member.name));
+  assert.equal(view.body.crew[holder].crewRole, HADDON.crew[holder].crewRole);
   // What the TV introduces them with: the backstory without its ties line,
   // which comes apart, only toward someone at the table.
-  const kara = view.body.crew[0];
-  assert.equal(kara.backstory, crewMember().backstory);
-  assert.equal(kara.personality, "Dry, loyal, stubborn; flaw: never admits fear.");
-  assert.equal(kara.signatureItem, "Dented steel thermos");
-  assert.deepEqual(kara.ties, [{ to: "Brakk Oduya", line: "owes him her life" }]);
+  const first = view.body.crew[0];
+  assert.equal(first.backstory, HADDON.crew[0].backstory);
+  assert.equal(first.personality, HADDON.crew[0].personality);
+  assert.equal(first.signatureItem, HADDON.crew[0].signatureItem);
+  assert.deepEqual(first.ties, HADDON.crew[0].relationships.filter((tie) => HADDON.crew.slice(0, 3).some((member) => member.name === tie.to)));
   const text = JSON.stringify(view.body);
-  assert.doesNotMatch(text, /synthetic|Recover a living sample|spore colony|sample case/, "no agenda, hidden role or truth");
+  assert.doesNotMatch(text, SECRETS, "no agenda, hidden role or truth");
   const outsider = await call(routes.view, "GET", world.addUser("outsider"), undefined, { campaignId: night });
   assert.equal(outsider.status, 404, "members only");
   const plain = await call(routes.view, "GET", world.owner, undefined, { campaignId: world.campaignId });
@@ -445,29 +439,29 @@ await test("a card is claimed once, one per player, never by the TV, and seats t
   const byTv = await call(routes.claim, "POST", tv, { crewId: cards[0].id }, params);
   assert.equal(byTv.status, 409, "the TV plays no character");
   assert.match(byTv.body.error, /TV/);
-  const first = await call(routes.claim, "POST", ana, { crewId: cards[2].id }, params);
+  const first = await call(routes.claim, "POST", ana, { crewId: cards[holder].id }, params);
   assert.equal(first.status, 200, first.body.error);
   assert.equal(first.body.ok, true);
   const sheet = sheets.getSheetById(first.body.sheetId);
   assert.equal(sheet.userId, ana.id);
-  assert.equal(sheet.name, "Lio Tanaka");
-  assert.equal(sheet.agenda.hiddenRole, HIDDEN);
+  assert.equal(sheet.name, HADDON.crew[holder].name);
+  assert.equal(sheet.agenda.hiddenRole, haddon.crew[holder].hiddenRole);
   assert.equal(sheet.agenda.act, 0);
-  assert.equal(sheet.crewRole, "Combine liaison, along for the audit");
+  assert.equal(sheet.crewRole, HADDON.crew[holder].crewRole);
   assert.equal(sheet.level, 1);
   assert.equal(campaigns.getMember(night, ana.id).ready, true, "choosing the card is readying up");
-  const taken = await call(routes.claim, "POST", ben, { crewId: cards[2].id }, params);
+  const taken = await call(routes.claim, "POST", ben, { crewId: cards[holder].id }, params);
   assert.equal(taken.status, 409);
-  assert.match(taken.body.error, /Lio Tanaka is already taken/);
-  const second = await call(routes.claim, "POST", ana, { crewId: cards[0].id }, params);
+  assert.ok(taken.body.error.includes(`${HADDON.crew[holder].name} is already taken`), taken.body.error);
+  const second = await call(routes.claim, "POST", ana, { crewId: cards[others[0]].id }, params);
   assert.equal(second.status, 409, "one card each");
   assert.equal((await call(routes.claim, "POST", ben, { crewId: "nope" }, params)).status, 404);
   const view = await call(routes.view, "GET", ben, undefined, params);
-  assert.deepEqual(view.body.crew[2].claimedBy, { userId: ana.id, name: ana.username });
+  assert.deepEqual(view.body.crew[holder].claimedBy, { userId: ana.id, name: ana.username });
   // The other phones are sent the sheet without the agenda.
   const snapshot = await call(routes.campaign, "GET", ben, undefined, params);
   assert.equal(snapshot.body.sheets.find((entry) => entry.id === sheet.id).agenda, null);
-  assert.doesNotMatch(JSON.stringify(snapshot.body), /Combine synthetic|Recover a living sample/);
+  assert.doesNotMatch(JSON.stringify(snapshot.body), SECRETS);
 });
 
 await test("a forge that already has a taken card is not asked again, and only the lead may ask", async () => {
@@ -483,14 +477,14 @@ await test("Begin waits for everyone who joined, then opens with the TV holding 
   const early = await call(routes.campaign, "PATCH", tv, { status: "active" }, params);
   assert.equal(early.status, 400);
   assert.match(early.body.error, /crew card/);
-  assert.equal((await call(routes.claim, "POST", ben, { crewId: cards[0].id }, params)).status, 200);
-  assert.equal((await call(routes.claim, "POST", cal, { crewId: cards[1].id }, params)).status, 200);
+  assert.equal((await call(routes.claim, "POST", ben, { crewId: cards[others[0]].id }, params)).status, 200);
+  assert.equal((await call(routes.claim, "POST", cal, { crewId: cards[others[1]].id }, params)).status, 200);
   model.script([]);
   const begun = await call(routes.campaign, "PATCH", tv, { status: "active" }, params);
   assert.equal(begun.status, 200, begun.body.error);
   assert.equal(sheets.getSheetForUser(night, tv.id), null);
   // The opening scene runs on the scripted model; it is done before the
-  // next test scripts the forge's replies.
+  // next test begins.
   await settleQueue(night);
   const tasks = model.requests.map((request) => request.messages?.[0]?.content ?? "");
   assert.ok(!tasks.some((content) => /You design the seed of a D&D 5e campaign/.test(content)), "no setup pass over the forge's outline");
@@ -501,16 +495,16 @@ const whispersFor = (userId) =>
 
 await test("the act turns for every crew member, each told their new agenda privately, and the TV shows the act", () => {
   assert.equal(play.advanceCouchAct(night), 1);
-  const lio = sheets.getSheetForUser(night, ana.id);
-  const kara = sheets.getSheetForUser(night, ben.id);
-  assert.equal(lio.agenda.act, 1);
-  assert.equal(kara.agenda.act, 1);
-  assert.deepEqual(whispersFor(ana.id), ["Act II begins. Your agenda now: Keep the crew from destroying it."]);
-  assert.deepEqual(whispersFor(ben.id), ["Act II begins. Your agenda now: Make sure Dana never reaches the radio."]);
+  const anas = sheets.getSheetForUser(night, ana.id);
+  const bens = sheets.getSheetForUser(night, ben.id);
+  assert.equal(anas.agenda.act, 1);
+  assert.equal(bens.agenda.act, 1);
+  assert.deepEqual(whispersFor(ana.id), [`Act II begins. Your agenda now: ${HADDON.crew[holder].agenda[1]}`]);
+  assert.deepEqual(whispersFor(ben.id), [`Act II begins. Your agenda now: ${HADDON.crew[others[0]].agenda[1]}`]);
   assert.deepEqual(whispersFor(tv.id), [], "the TV is never whispered");
   const card = latestEventOfType(night, ["title_card"]);
   assert.equal(card.payload.title, "Act II");
-  assert.equal(card.payload.subtitle, "Something Aboard");
+  assert.equal(card.payload.subtitle, HADDON.scenario.acts[1].title);
   assert.equal(card.payload.tone, "act");
   assert.equal(play.advanceCouchAct(night), 2);
   assert.equal(play.advanceCouchAct(night), 2, "nothing past the last act");
@@ -519,52 +513,46 @@ await test("the act turns for every crew member, each told their new agenda priv
 });
 
 await test("a story point lands on the crew member's agenda, three at most (ALIEN's cap), and only on crew", () => {
-  const lio = sheets.getSheetForUser(night, ana.id);
-  assert.deepEqual(play.awardStoryPoint(night, lio.id), { ok: true, storyPoints: 1 });
-  assert.equal(sheets.getSheetById(lio.id).agenda.storyPoints, 1);
-  for (let index = 0; index < 12; index += 1) play.awardStoryPoint(night, lio.id);
-  assert.equal(sheets.getSheetById(lio.id).agenda.storyPoints, 3);
+  const anas = sheets.getSheetForUser(night, ana.id);
+  assert.deepEqual(play.awardStoryPoint(night, anas.id), { ok: true, storyPoints: 1 });
+  assert.equal(sheets.getSheetById(anas.id).agenda.storyPoints, 1);
+  for (let index = 0; index < 12; index += 1) play.awardStoryPoint(night, anas.id);
+  assert.equal(sheets.getSheetById(anas.id).agenda.storyPoints, 3);
   // A night from before the cap keeps what it holds.
-  sheets.setSheetAgenda(lio.id, { ...sheets.getSheetById(lio.id).agenda, storyPoints: 4 });
-  assert.deepEqual(play.awardStoryPoint(night, lio.id), { ok: true, storyPoints: 4 });
+  sheets.setSheetAgenda(anas.id, { ...sheets.getSheetById(anas.id).agenda, storyPoints: 4 });
+  assert.deepEqual(play.awardStoryPoint(night, anas.id), { ok: true, storyPoints: 4 });
   assert.equal(play.awardStoryPoint(night, "nobody").ok, false);
   const other = world.addHero({ name: "Elsewhere" });
   assert.equal(play.awardStoryPoint(night, other.id).ok, false, "another table's sheet");
 });
 
-await test("a reply that cannot be read is asked once more with the reason, and a second failure fails the night plainly", async () => {
+await test("a night with no written story fails plainly; a story night seats its crew, and a reforge reads it again", async () => {
   const user = world.addUser("tv2");
-  model.script([reply({ text: "Sorry, no." }), forgeReply()]);
-  const made = await call(routes.create, "POST", user, { seed: "", players: 3 });
-  assert.equal(made.status, 201);
-  const forge = await settled(made.body.campaignId);
-  assert.equal(forge.status, "ready", forge.error);
-  assert.match(model.requests.at(-1).messages[1].content, /Your last reply could not be used: The reply was not a JSON object\./);
-  assert.match(model.requests.at(-1).messages[1].content, /surprise us/);
-
-  model.script([reply({ text: "nope" }), reply({ text: "{}" })]);
-  const failing = await call(routes.create, "POST", user, { players: 2 });
-  const failed = await settled(failing.body.campaignId);
-  assert.equal(failed.status, "failed");
-  const view = await call(routes.view, "GET", user, undefined, { campaignId: failing.body.campaignId });
+  const old = campaigns.createCampaign(user.id, { title: "From before", description: "", theme: "", maxPlayers: 3, startingLevel: 1, difficulty: "normal", gameSettings: logic.couchGameSettings("") });
+  store.beginCouchForge(old.id, { players: 2, offLimits: "" });
+  await forgeMod.runForge(old.id);
+  const view = await call(routes.view, "GET", user, undefined, { campaignId: old.id });
   assert.equal(view.body.status, "failed");
-  assert.match(view.body.error, /could not be read/);
+  assert.match(view.body.error, /no written story/);
   assert.deepEqual(view.body.crew, []);
   assert.equal(view.body.scenario, null);
 
-  model.script([forgeReply()]);
-  const again = await call(routes.reforge, "POST", user, undefined, { campaignId: failing.body.campaignId });
+  const made = await call(routes.create, "POST", user, { scenario: "dead-air", players: 2 });
+  assert.equal(made.status, 201, made.body.error);
+  const night2 = made.body.campaignId;
+  assert.equal((await settled(night2)).status, "ready");
+  const again = await call(routes.reforge, "POST", user, undefined, { campaignId: night2 });
   assert.equal(again.status, 200, again.body.error);
-  const redone = await settled(failing.body.campaignId);
+  const redone = await settled(night2);
   assert.equal(redone.status, "ready", redone.error);
-  assert.equal(store.listCouchCrew(failing.body.campaignId).length, 2, "two players, two cards");
+  assert.equal(store.listCouchCrew(night2).length, 2, "two players, two cards");
   // A friend who takes a card after the acts have turned starts on the act
   // the rest of the crew is on.
   const late = world.addUser("late");
-  assert.ok(!("error" in campaigns.joinByInviteCode(late.id, campaigns.getCampaignById(failing.body.campaignId).inviteCode)));
-  assert.equal(play.advanceCouchAct(failing.body.campaignId), 1);
-  assert.equal((await call(routes.intro, "POST", user, { from: 0, to: 3 }, { campaignId: failing.body.campaignId })).status, 200);
-  const claimed = await call(routes.claim, "POST", late, { crewId: store.listCouchCrew(failing.body.campaignId)[0].id }, { campaignId: failing.body.campaignId });
+  assert.ok(!("error" in campaigns.joinByInviteCode(late.id, campaigns.getCampaignById(night2).inviteCode)));
+  assert.equal(play.advanceCouchAct(night2), 1);
+  assert.equal((await call(routes.intro, "POST", user, { from: 0, to: 3 }, { campaignId: night2 })).status, 200);
+  const claimed = await call(routes.claim, "POST", late, { crewId: store.listCouchCrew(night2)[0].id }, { campaignId: night2 });
   assert.equal(claimed.status, 200, claimed.body.error);
   assert.equal(sheets.getSheetById(claimed.body.sheetId).agenda.act, 1);
 });
@@ -572,16 +560,13 @@ await test("a reply that cannot be read is asked once more with the reason, and 
 await test("a forge a restart cut off reads as failed, so the lead can ask again", async () => {
   const user = world.addUser("tv3");
   const campaign = campaigns.createCampaign(user.id, { title: "Cut off", description: "", theme: "", maxPlayers: 4, startingLevel: 1, difficulty: "normal", gameSettings: logic.couchGameSettings("") });
-  store.beginCouchForge(campaign.id, { players: 3, seed: "", offLimits: "" });
+  store.beginCouchForge(campaign.id, { players: 3, offLimits: "", scenarioId: "haddon-outpost" });
   const view = await call(routes.view, "GET", user, undefined, { campaignId: campaign.id });
   assert.equal(view.body.status, "failed");
   assert.match(view.body.error, /restarted/);
 });
 
-// ---- the ready-made nights ----
-
-const readyCards = await import("../src/lib/couch/scenario-cards.ts");
-const written = await import("../src/lib/couch/scenarios/index.ts");
+// ---- the written nights ----
 
 await test("every ready-made card has its story and every story its card", () => {
   assert.deepEqual(
@@ -641,8 +626,8 @@ await test("a ready-made story reads whole at every table size it offers: nothin
   const short = written.writtenForge("dead-air", 3).forge;
   assert.equal(short.scenario.minutes, 45);
   assert.match(logic.couchOutline(short), /three acts, about 45 minutes; land the ending in act 3/);
-  assert.equal(written.writtenForge("unto-us", 3).forge.scenario.minutes, undefined, "a full night says nothing");
-  assert.match(logic.couchOutline(written.writtenForge("unto-us", 3).forge), /about two and a half hours/);
+  assert.equal(haddon.scenario.minutes, undefined, "a full night says nothing");
+  assert.match(logic.couchOutline(haddon), /about two and a half hours/);
   assert.match(written.writtenForge("nope", 3).error, /not on this server/);
 });
 
@@ -661,32 +646,77 @@ await test("every ready-made crew member becomes a sheet the table admits", () =
   }
 });
 
-await test("Start with a ready-made story seats its crew without asking the story model, and a reforge reads it again", async () => {
+await test("Start refuses a story it does not have or a crew it was not written for, and the lobby keeps the story's secrets", async () => {
   const user = world.addUser("tv-ready");
-  const before = model.requests.length;
   assert.equal((await call(routes.create, "POST", user, { scenario: "nope", players: 3 })).status, 400);
-  assert.equal((await call(routes.create, "POST", user, { scenario: "good-shepherd", players: 1 })).status, 400, "below its crew");
-  const made = await call(routes.create, "POST", user, { scenario: "good-shepherd", seed: "ignored", players: 4, offLimits: "spiders" });
+  assert.equal((await call(routes.create, "POST", user, { scenario: "crew-expendable", players: 2 })).status, 400, "below its crew");
+  const made = await call(routes.create, "POST", user, { scenario: "haddon-outpost", players: 4, offLimits: "spiders" });
   assert.equal(made.status, 201, made.body.error);
   const forge = await settled(made.body.campaignId);
   assert.equal(forge.status, "ready", forge.error);
-  assert.equal(forge.scenarioId, "good-shepherd");
-  assert.equal(forge.seed, "", "the seed is not read for a written story");
-  assert.equal(model.requests.length, before, "no model call");
   const campaign = campaigns.getCampaignById(made.body.campaignId);
-  assert.equal(campaign.title, "The Good Shepherd");
+  assert.equal(campaign.title, HADDON.scenario.title);
   assert.deepEqual(campaign.gameSettings.safety.lines, ["spiders"]);
-  assert.match(campaign.dmOutline, /COUCH ONE-SHOT "The Good Shepherd"/);
   assert.equal(store.listCouchCrew(made.body.campaignId).length, 4);
   const view = await call(routes.view, "GET", user, undefined, { campaignId: made.body.campaignId });
-  assert.doesNotMatch(JSON.stringify(view.body), /Concord Combine plant|inhibitor/, "the lobby shows no secret");
+  assert.doesNotMatch(JSON.stringify(view.body), SECRETS, "the lobby shows no secret");
+});
 
-  const again = await call(routes.reforge, "POST", user, undefined, { campaignId: made.body.campaignId });
-  assert.equal(again.status, 200, again.body.error);
-  const redone = await settled(made.body.campaignId);
-  assert.equal(redone.status, "ready", redone.error);
-  assert.equal(redone.scenarioId, "good-shepherd");
-  assert.equal(model.requests.length, before);
+await test("one person and two AI crewmates: the crew is cut for three, the phone picks first, Begin gives the AI the rest", async () => {
+  const user = world.addUser("tv-solo");
+  const solo = world.addUser("solo");
+  assert.equal((await call(routes.create, "POST", user, { scenario: "haddon-outpost", players: 1 })).status, 400, "one person alone is under the crew");
+  assert.equal((await call(routes.create, "POST", user, { scenario: "haddon-outpost", players: 3, aiCrew: 3 })).status, 400, "past the crew");
+  const made = await call(routes.create, "POST", user, { scenario: "haddon-outpost", players: 1, aiCrew: 2 });
+  assert.equal(made.status, 201, made.body.error);
+  const id = made.body.campaignId;
+  const params = { campaignId: id };
+  const forge = await settled(id);
+  assert.equal(forge.status, "ready", forge.error);
+  assert.equal(forge.aiCrew, 2);
+  assert.equal(campaigns.getCampaignById(id).maxPlayers, 6, "a phone, two AI crewmates, room for two friends to take them over, and the TV");
+  const cards = store.listCouchCrew(id);
+  assert.equal(cards.length, 3);
+  assert.equal((await call(routes.intro, "POST", user, { from: 0, to: 4 }, params)).status, 200);
+  const lobby = await call(routes.view, "GET", user, undefined, params);
+  assert.equal(lobby.body.aiCrew, 2, "the lobby knows the AI takes two");
+  assert.equal((await call(routes.aiCrew, "POST", solo, undefined, params)).status, 404, "a stranger is not the host");
+  assert.ok(!("error" in campaigns.joinByInviteCode(solo.id, campaigns.getCampaignById(id).inviteCode)), "the phone joins");
+  assert.equal((await call(routes.claim, "POST", solo, { crewId: cards[1].id }, params)).status, 200, "the phone takes the second card");
+  assert.equal((await call(routes.aiCrew, "POST", solo, undefined, params)).status, 403, "only the host hands cards to the AI");
+  const seated = await call(routes.aiCrew, "POST", user, undefined, params);
+  assert.equal(seated.status, 200, seated.body.error);
+  assert.deepEqual(seated.body.seated, [cards[0].name, cards[2].name], "the AI takes what the phone left, in order");
+  assert.deepEqual((await call(routes.aiCrew, "POST", user, undefined, params)).body.seated, [], "asked again, nobody new");
+  const after = store.listCouchCrew(id);
+  assert.ok(after.every((card) => card.claimedBy && card.sheetId), "every card has its player");
+  const aiSheets = sheets.listSheets(id).filter((sheet) => sheet.userId.startsWith("comp_crew_"));
+  assert.equal(aiSheets.length, 2);
+  assert.ok(aiSheets.every((sheet) => sheet.agenda?.acts.length && !sheet.isCompanion), "an AI crewmate is crew, agenda and all");
+  const view = await call(routes.view, "GET", user, undefined, params);
+  assert.equal(view.body.aiCrew, 0);
+  assert.deepEqual(view.body.crew.map((card) => card.claimedBy.ai === true), [true, false, true]);
+  assert.doesNotMatch(JSON.stringify(view.body), SECRETS, "the AI's cards keep their secrets too");
+  const begun = await call(routes.campaign, "PATCH", user, { status: "active" }, params);
+  assert.equal(begun.status, 200, begun.body.error);
+
+  // A friend who came late takes the first card over from the AI.
+  const late = world.addUser("late-friend");
+  assert.ok(!("error" in campaigns.joinByInviteCode(late.id, campaigns.getCampaignById(id).inviteCode)));
+  const aiUser = store.getCouchCrew(cards[0].id).claimedBy;
+  const sheetId = store.getCouchCrew(cards[0].id).sheetId;
+  assert.equal((await call(routes.claim, "POST", solo, { crewId: cards[0].id }, params)).status, 409, "one card each, from the AI too");
+  const taken = await call(routes.claim, "POST", late, { crewId: cards[0].id }, params);
+  assert.equal(taken.status, 200, taken.body.error);
+  assert.equal(taken.body.sheetId, sheetId, "the same sheet, wounds, gear and agenda, changes hands");
+  assert.equal(sheets.getSheetById(sheetId).userId, late.id);
+  assert.equal(store.getCouchCrew(cards[0].id).claimedBy, late.id);
+  assert.equal(campaigns.getCampaignForUser(id, aiUser), null, "the AI's seat left the table");
+  const handed = await call(routes.view, "GET", user, undefined, params);
+  assert.deepEqual(handed.body.crew.map((card) => card.claimedBy.ai === true), [false, false, true]);
+  const later = world.addUser("later");
+  assert.ok(!("error" in campaigns.joinByInviteCode(later.id, campaigns.getCampaignById(id).inviteCode)));
+  assert.equal((await call(routes.claim, "POST", later, { crewId: cards[0].id }, params)).status, 409, "a person's card is not taken");
 });
 
 model.close();

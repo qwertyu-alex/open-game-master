@@ -18,6 +18,7 @@ import {
   botRolls,
   botTruceAnswers,
   dueBots,
+  lastGmSeq,
   nightPaused,
   parseMove,
   playerPrompt,
@@ -39,6 +40,9 @@ import { bindUsageScope } from "@/lib/usage/scope";
 // only for the host. The moves go through the real routes, signed in as
 // each player for that one request, so a stand-in's move is held, refused
 // and answered exactly as a phone's would be.
+//
+// The same round, kept to the AI crewmates' seats and with a crewmate's
+// prompt, is how a night's AI crew plays (src/lib/couch/ai-crew.ts).
 
 export function couchAutoplayAllowed(): boolean {
   return process.env.NODE_ENV !== "production" || process.env.COUCH_AUTOPLAY === "1";
@@ -60,12 +64,30 @@ declare global {
 // waits for the same round rather than writing every move twice.
 const rounds = (globalThis.__odmCouchAutoplay ??= new Map());
 
-export function playCouchTurn(campaign: Campaign): Promise<AutoplayResult> {
+// seats: play only these players (the AI crew); every crew seat when
+// absent. handled: the newest GM passage each seat has already been asked
+// to answer, by user id, so a move a route refused is not written again
+// for the same passage; the round writes into it. crewmate: the AI crew's
+// prompt rather than a test player's.
+// misses: how often the model gave a seat no move for a passage, keyed
+// "userId:seq"; the seat is tried again (on the next wake) until MOVE_TRIES.
+export type RoundOptions = { seats?: readonly string[]; handled?: Record<string, number>; misses?: Record<string, number>; crewmate?: boolean };
+
+// How often a seat's move is asked of the model for one passage before the
+// seat sits it out (the table's wait clock then moves the round on).
+export const MOVE_TRIES = 3;
+
+export function playCouchTurn(campaign: Campaign, options: RoundOptions = {}): Promise<AutoplayResult> {
   const running = rounds.get(campaign.id);
   if (running) return running;
-  const round = bindUsageScope(() => runRound(campaign), { campaignId: campaign.id })().finally(() => rounds.delete(campaign.id));
+  const round = bindUsageScope(() => runRound(campaign, options), { campaignId: campaign.id })().finally(() => rounds.delete(campaign.id));
   rounds.set(campaign.id, round);
   return round;
+}
+
+// Whether a round is being played for the night now.
+export function couchRoundRunning(campaignId: string): boolean {
+  return rounds.has(campaignId);
 }
 
 function viewOf(campaign: Campaign): AutoplayView {
@@ -84,7 +106,7 @@ function viewOf(campaign: Campaign): AutoplayView {
   };
 }
 
-async function runRound(campaign: Campaign): Promise<AutoplayResult> {
+async function runRound(campaign: Campaign, { seats: only, handled, misses, crewmate = false }: RoundOptions): Promise<AutoplayResult> {
   const view = viewOf(campaign);
   const paused = nightPaused(view);
   if (paused) return { played: [], refused: [], idle: `Nothing to play: ${paused}.` };
@@ -93,8 +115,10 @@ async function runRound(campaign: Campaign): Promise<AutoplayResult> {
   if (currentCoordination(campaign.id)) {
     return { played: [], refused: [], idle: "A coordinated plan is open: set it aside in Host controls first." };
   }
-  // Every crew seat but the TV's own.
-  const sheets = view.sheets.filter((sheet) => !sheet.isCompanion && sheet.userId !== campaign.leadUserId);
+  // Every crew seat but the TV's own (or only the ones asked for).
+  const sheets = view.sheets.filter(
+    (sheet) => !sheet.isCompanion && sheet.userId !== campaign.leadUserId && (!only || only.includes(sheet.userId)) && !sheet.deathSaves?.dead,
+  );
   const players = [...new Set(sheets.map((sheet) => sheet.userId))];
   const nameOf = (userId: string) => sheets.find((sheet) => sheet.userId === userId)?.name ?? "A player";
   const played: string[] = [];
@@ -115,16 +139,32 @@ async function runRound(campaign: Campaign): Promise<AutoplayResult> {
   // A roll or a truce answer may have woken the GM: its passage comes first.
   if (played.length || refused.length) return { played, refused, idle: "" };
 
-  const due = dueBots(view, players);
+  const due = dueBots(view, players, handled);
+  const gmSeq = lastGmSeq(view.messages);
+  // A seat is done with a passage once its move was posted or refused, or
+  // once the model has failed it MOVE_TRIES times.
+  const done = (userId: string) => {
+    if (handled) handled[userId] = gmSeq;
+  };
+  const missed = (userId: string) => {
+    if (!misses) return done(userId);
+    const key = `${userId}:${gmSeq}`;
+    misses[key] = (misses[key] ?? 0) + 1;
+    if (misses[key] >= MOVE_TRIES) done(userId);
+  };
   if (!due.length) {
     return { played, refused, idle: view.dmStatus !== "idle" ? "The GM is still writing." : "Nobody is waiting to move." };
   }
   await Promise.all(
     due.map(async (userId) => {
       const sheet = sheets.find((entry) => entry.userId === userId)!;
-      const move = await writeMove(campaign, view, sheet);
-      if (!move) return refused.push(`${sheet.name}: the model gave no move.`);
+      const move = await writeMove(campaign, view, sheet, crewmate);
+      if (!move) {
+        missed(userId);
+        return refused.push(`${sheet.name}: the model gave no move.`);
+      }
       const answer = await asPlayer(campaign.id, userId, "/actions", { content: move.content, kind: move.kind, characterId: sheet.id });
+      done(userId);
       if (answer.ok) played.push(`${sheet.name} ${move.kind === "say" ? "says" : "does"}: ${move.content}`);
       else refused.push(`${sheet.name}: ${answer.error}`);
     }),
@@ -132,15 +172,15 @@ async function runRound(campaign: Campaign): Promise<AutoplayResult> {
   return { played, refused, idle: "" };
 }
 
-async function writeMove(campaign: Campaign, view: AutoplayView, sheet: AutoplaySheet) {
+async function writeMove(campaign: Campaign, view: AutoplayView, sheet: AutoplaySheet, crewmate: boolean) {
   const { message, error } = await requestDmMessage(
     campaign.settings,
     [
       { role: "system", content: "You play one character at a tabletop game night. Answer with one line only." },
-      { role: "user", content: playerPrompt({ view, sheet }) },
+      { role: "user", content: playerPrompt({ view, sheet, crewmate }) },
     ],
     {
-      meta: { task: "couch_autoplay" },
+      meta: { task: crewmate ? "couch_ai_crew" : "couch_autoplay" },
       timeoutMs: arcTextTimeoutMs(),
       thinking: false,
       maxOutputTokens: 300,
@@ -148,7 +188,7 @@ async function writeMove(campaign: Campaign, view: AutoplayView, sheet: Autoplay
     },
   );
   if (error) {
-    console.warn(`[couch] autoplay move for ${sheet.name} failed (${error.status}).`);
+    console.warn(`[couch] ${crewmate ? "AI crewmate" : "autoplay"} move for ${sheet.name} failed (${error.status}).`);
     return null;
   }
   return parseMove(stripReasoningArtifacts(String(message?.content ?? "")));

@@ -6,7 +6,7 @@ import type { CampaignState } from "@/app/campaigns/[campaignId]/useCampaignStre
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { AgendaCard, CouchFace, CouchPhoneShell } from "@/components/couch/CouchParts";
 import { useCouchRoster } from "@/components/couch/useCouchRoster";
-import { introducedCard, introRunning, type CouchCrewCard, type CouchRoster } from "@/components/couch/couch-logic";
+import { freeCardWords, introducedCard, introRunning, peopleNeeded, type CouchCrewCard, type CouchRoster } from "@/components/couch/couch-logic";
 import { splitFlaw } from "@/lib/couch/intro-logic";
 
 // The phone before the game opens (docs/couch-mode-spec.md 2.1 step 4):
@@ -88,8 +88,8 @@ function CrewChoice({
   if (roster.status === "forging") {
     return (
       <Waiting
-        title="The GM is writing tonight's crew…"
-        hint="A scenario and a character for each of you. It takes a minute or two; this screen fills in by itself."
+        title="The GM is setting up tonight's crew…"
+        hint="A character for each of you. It takes a moment; this screen fills in by itself."
         pulse
       />
     );
@@ -97,7 +97,7 @@ function CrewChoice({
   if (roster.status === "failed") {
     return (
       <Waiting
-        title="The scenario could not be written"
+        title="The night could not be set up"
         hint={`${roster.error || "Something went wrong."} The host can try again from the TV.`}
       />
     );
@@ -119,7 +119,10 @@ function CrewChoice({
       ) : null}
       <ul className="couch-crew-list">
         {roster.crew.map((card) => {
-          const takenBy = card.claimedBy && card.claimedBy.userId !== meId ? card.claimedBy : null;
+          // A card the AI plays is still yours to take over (a friend who
+          // came late); a person's is not.
+          const fromAi = Boolean(card.claimedBy?.ai);
+          const takenBy = card.claimedBy && card.claimedBy.userId !== meId && !fromAi ? card.claimedBy : null;
           const open = chosen === card.id && !takenBy;
           return (
             <li key={card.id} className="couch-card couch-crew" data-state={takenBy ? "taken" : open ? "chosen" : "open"}>
@@ -135,13 +138,14 @@ function CrewChoice({
                   <span className="couch-me-name">{card.name}</span>
                   {card.crewRole ? <span className="couch-me-role">{card.crewRole}</span> : null}
                   {takenBy ? <span className="couch-label">Taken by {takenBy.name || "another player"}</span> : null}
+                  {fromAi ? <span className="couch-label">Played by the AI. Yours if you want them.</span> : null}
                 </span>
               </button>
               {card.backstory ? <p className="couch-crew-story">{card.backstory}</p> : null}
               {open ? <CrewDetails card={card} /> : null}
               {open ? (
                 <button type="button" className="couch-btn couch-btn-primary w-full" disabled={busy} onClick={() => void take(card)}>
-                  {busy ? "Taking…" : `Play as ${card.name}`}
+                  {busy ? "Taking…" : fromAi ? `Take over ${card.name} from the AI` : `Play as ${card.name}`}
                 </button>
               ) : null}
             </li>
@@ -159,6 +163,8 @@ function Claimed({ sheet, roster, meId }: { sheet: CharacterSheet; roster: Couch
   const backstory = sheet.backstory.trim() || card?.backstory || "";
   const crew = roster?.crew ?? [];
   const open = crew.filter((entry) => !entry.claimedBy).length;
+  // The AI crewmates take what the phones leave when the host begins.
+  const needed = roster ? peopleNeeded(roster) : open;
   return (
     <>
       <section className="couch-card grid gap-3 p-4" aria-label="Your character">
@@ -176,9 +182,11 @@ function Claimed({ sheet, roster, meId }: { sheet: CharacterSheet; roster: Couch
       <section className="couch-card grid gap-3 p-4" aria-live="polite">
         <span className="couch-label">Waiting for everyone</span>
         <p className="text-[1.05rem]">
-          {open > 0
-            ? `${open} ${open === 1 ? "character is" : "characters are"} still free.`
-            : "Everyone has a character. The host starts the game from the TV."}
+          {needed > 0
+            ? `${open} ${open === 1 ? "character is" : "characters are"} still free.${open > needed ? ` The AI plays ${open - needed === 1 ? "one" : open - needed} of them.` : ""}`
+            : open > 0
+              ? `Everyone has a character, and the AI plays the ${open === 1 ? "one" : open} left. The host starts the game from the TV.`
+              : "Everyone has a character. The host starts the game from the TV."}
         </p>
         {crew.length ? (
           <ul className="grid gap-2">
@@ -189,10 +197,10 @@ function Claimed({ sheet, roster, meId }: { sheet: CharacterSheet; roster: Couch
                 {entry.claimedBy ? (
                   <span className="couch-muted inline-flex items-center gap-1 text-sm">
                     <Check className="size-4" aria-hidden="true" />
-                    {entry.claimedBy.userId === meId ? "You" : entry.claimedBy.name || "Taken"}
+                    {entry.claimedBy.userId === meId ? "You" : entry.claimedBy.ai ? "AI crewmate" : entry.claimedBy.name || "Taken"}
                   </span>
                 ) : (
-                  <span className="couch-muted text-sm">Free</span>
+                  <span className="couch-muted text-sm">{freeCardWords(roster)}</span>
                 )}
               </li>
             ))}

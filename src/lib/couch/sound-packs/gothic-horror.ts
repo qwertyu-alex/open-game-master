@@ -58,7 +58,7 @@ export const GOTHIC_HORROR: SoundPack = {
         label: "Ballroom",
         blurb: "A huge empty room that remembers a party.",
         keywords: ["ballroom", "great hall", "dining hall", "gallery", "drawing room"],
-        prompt: "Vast empty abandoned ballroom, huge reverberant silence, a chandelier's crystals tinkling faintly in a draught, distant wind, dust",
+        prompt: "Vast empty abandoned ballroom at night, a crystal chandelier swaying and tinkling in a cold draught, wind moaning through broken high windows, old parquet floor creaking, long cavernous reverb",
       },
       servants_stair: {
         label: "Servants' passages",

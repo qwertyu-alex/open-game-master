@@ -45,7 +45,7 @@ export const COSMIC_HORROR: SoundPack = {
         label: "Museum",
         blurb: "Marble halls, a radiator ticking, the exhibits watching.",
         keywords: ["museum", "university", "gallery", "archive", "exhibit", "collection"],
-        prompt: "A vast empty museum hall at night, a huge marble hush, a radiator ticking, a far-off footstep echoing, a faint electrical hum of an old lamp",
+        prompt: "A vast empty marble museum hall at night, an old steam radiator ticking and knocking, rain on a high glass roof, slow footsteps echoing far off, a low electrical hum",
       },
       steam_train: {
         label: "Train",

@@ -6,56 +6,35 @@ import { followSceneAmbience } from "@/lib/dm/ambience-tools";
 import { rollInitiativeNow } from "@/lib/dm/encounter-tools";
 import type { ToolResult } from "@/lib/dm/tool-errors";
 import { publishPersisted } from "@/lib/events";
-import { crewMap, type CouchNavigation, type MapCrew } from "./navigation-logic";
-import { currentDeckPlan } from "./deck-plan";
-import { couchSiteMap, couchSitePrompt, publishCouchSite } from "./site";
-import { deckPlanPrompt, deckView } from "./deck-plan-logic";
-import { textKey } from "@/lib/language/text-logic";
+import { crewMap, type CouchNavigation } from "./navigation-logic";
+import { couchSitePrompt, publishCouchSite } from "./site";
 import { listPlaceShots } from "./place-shots";
 import { placePicture } from "./place-shots-logic";
 import { couchCrew, couchGroups, cutScene, offSceneWaits, pinCrewHere, placeCrew } from "./whereabouts";
 import { floorAfterCut, isSplit, planMove, spotlightGroup, whereaboutsPrompt, type CrewGroup } from "./whereabouts-logic";
 
-// The crew's map, as the snapshot and the couch_navigation event carry it
-// to every seat (docs/couch-navigation.md). Derived from the location
-// records the GM keeps with move_party and update_location, each place's
-// establishing shot (src/lib/couch/place-shots.ts), and who stands where
-// (src/lib/couch/whereabouts.ts).
+// Where the crew stands, as the snapshot and the couch_navigation event
+// carry it to every seat (docs/couch-navigation.md): the scene's place and
+// its establishing shot (src/lib/couch/place-shots.ts), and who stands
+// where once the crew splits (src/lib/couch/whereabouts.ts). The map
+// itself is the site's (src/lib/couch/site.ts couchSite).
 export function couchNavigation(campaign: Campaign): CouchNavigation | null {
   if (!campaign.gameSettings.couchMode) return null;
   const current = getCurrentLocation(campaign.id);
   if (!current) return null;
   const shots = listPlaceShots(campaign.id);
   const places = listLocations(campaign.id).map((place) => ({ ...place, picture: placePicture(shots.get(place.id) ?? null) }));
-  const groups = couchGroups(campaign) ?? [];
-  const map = crewMap(places, current, groups);
-  const plan = couchSiteMap(campaign) ? null : currentDeckPlan(campaign);
-  if (!plan) return map;
-  const pictures = new Map(places.flatMap((place) => (place.picture ? [[textKey(place.name), place.picture] as const] : [])));
-  const crewAt = new Map<string, MapCrew[]>(groups.map((group) => [group.placeId, group.members.map((member) => ({ id: member.id, name: member.name, portraitUrl: member.portraitUrl }))]));
-  const deck = deckView({
-    plan,
-    visited: new Set(places.filter((place) => place.visited).map((place) => textKey(place.name))),
-    here: current.name,
-    trail: map.trail.map((room) => room.id),
-    pictures,
-    crewAt,
-  });
-  return { ...map, deck };
+  return crewMap(places, current, couchGroups(campaign) ?? []);
 }
 
 // The GM's half of who stands where: the groups, how long each off scene
 // has waited and what its players sent meanwhile.
 export function couchWhereaboutsPrompt(campaign: Campaign): string {
-  // A night played on a map reads its site instead of a deck plan, from
-  // before the first move (src/lib/couch/site.ts).
+  // The night's site, from before the first move (src/lib/couch/site.ts).
   const site = couchSitePrompt(campaign);
   const groups = couchGroups(campaign);
   if (!groups) return site;
-  if (site) return [site, whereaboutsPrompt(groups, offSceneWaits(campaign, groups))].join("\n");
-  const plan = currentDeckPlan(campaign);
-  const here = getCurrentLocation(campaign.id)?.name ?? "";
-  return [plan ? deckPlanPrompt(plan, here) : "", whereaboutsPrompt(groups, offSceneWaits(campaign, groups))].filter(Boolean).join("\n");
+  return [site, whereaboutsPrompt(groups, offSceneWaits(campaign, groups))].filter(Boolean).join("\n");
 }
 
 export function publishCouchNavigation(campaign: Campaign): void {

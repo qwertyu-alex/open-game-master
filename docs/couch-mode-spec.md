@@ -130,21 +130,25 @@ passage stays on screen and in the transcript.
 
 | Today | Couch mode |
 | --- | --- |
-| A three-step wizard: title, who runs it, players, level, difficulty, 8 genres, theme, premise, language, world pack, length, character rules, house rules, lore, storyboard, safety, AI storytelling, bonds, battle board, variant rules, voice | **One screen.** Pick a scenario seed (or "Surprise us"), set the number of players, add one "anything off-limits tonight?" line, then Start. Safety stays because the repo keeps it before the first scene. |
-| Every player builds a character in the builder, or picks one of four fixed 5e pregens | **The AI writes the crew** (Part 2.1). Players pick a character from cards on their phone. |
-| Every non-GM member needs a sheet and has to ready up before Begin (`viewer.ts:230-245`) | The display seat is exempt. Begin unlocks once every crew card is claimed. |
+| A three-step wizard: title, who runs it, players, level, difficulty, 8 genres, theme, premise, language, world pack, length, character rules, house rules, lore, storyboard, safety, AI storytelling, bonds, battle board, variant rules, voice | **One screen.** Pick one of the written stories, each played on a map of its site ([couch-overhead-spec.md](couch-overhead-spec.md)), set the number of players (and any AI crewmates, 2.14), add one "anything off-limits tonight?" line, then Start. Safety stays because the repo keeps it before the first scene. |
+| Every player builds a character in the builder, or picks one of four fixed 5e pregens | **Each story comes with its crew** (Part 2.1). Players pick a character from cards on their phone. |
+| Every non-GM member needs a sheet and has to ready up before Begin (`viewer.ts:230-245`) | The display seat is exempt. Begin unlocks once every crew card is claimed, or every card left is the AI crewmates' to take (2.14). |
 | Joining needs a username and password, or Discord | **Name-only join** from the TV's QR code. `ODM_DEVICE_WORLD=1` already does this; check what else that flag changes, or lift just its guest path into couch mode. |
 
 ---
 
 ## Part 2: what we add
 
-### 2.1 Scenario forge: the AI writes the story and the crew
+### 2.1 Scenario forge: the written story and its crew
 
-When the host presses Start, one structured model call (JSON, validated with zod)
-produces the whole one-shot. It extends the existing story setup
-(`src/lib/dm/setup.ts`) and the one-shot pattern (`src/lib/starter/one-shot.ts`),
-and it is written with the ALIEN cinematic scenario as the template:
+Every night is one of the written one-shots in `src/lib/couch/scenarios/`,
+each played on its site. When the host presses Start, the forge reads it
+(`readForge`, validated with zod) for the number of players: the crew cut
+to the head count, ties to anyone not seated dropped, the hidden role given
+to its holder. A story is written in this shape, with the ALIEN cinematic
+scenario as the template. (Stories were once written by a model on Start
+from the room's seed, in the same shape; that path was removed when every
+night moved onto a map, and is in git history.)
 
 ```
 scenario
@@ -564,7 +568,7 @@ where the roll is stored), and the GM names a long shot before the throw.
 Extend `src/app/campaigns/[campaignId]/table/page.tsx`. It is already a
 chrome-free TV route, but it shows no story text and plays no sound.
 
-- **Lobby.** While the forge writes: the title, a large QR code and LAN
+- **Lobby.** While the forge sets up: the title, a large QR code and LAN
   address (`InviteQr`, `src/lib/server-address.ts`). Then the introductions
   (2.1 step 4, `CouchTvIntro.tsx`): the briefing over the cover, then each
   crew member full screen, the crew strip along the foot and a small join
@@ -636,9 +640,9 @@ whisper or your turn on Story, an unread agenda on Character.
    opens while it holds one). When an unread one is out of sight, "The GM
    wrote to you privately" above the action box brings it up. "Ask a
    follow-up" opens the action box in Ask GM.
-3. **The map**, behind a Map button beside the tabs: the deck plan of where
-   the crew has been, as a sheet (docs/couch-navigation.md). Nobody votes;
-   players say where they go.
+3. **The map**, behind a Map button beside the tabs: the night's site from
+   above, as a sheet (docs/couch-navigation.md,
+   docs/couch-overhead-spec.md). Nobody votes; players say where they go.
 4. **The action box**, pinned to the foot and drawn like a chat app's. At
    rest it is one rounded line with a send button. While you write it is a
    card with three toggles beside the send: Do, Say and Ask GM. Ask GM
@@ -698,8 +702,7 @@ dropped out.
 Add a `scifi-horror` preset beside the others in `src/lib/genres.ts`:
 dmFlavor, portraitStyle, sceneStyle, nameHints, and careers instead of
 classes. Franchise names are allowed: a night can build on any existing
-universe, its creatures, companies and ships. Type whatever premise you like
-into the seed box; with no seed the forge invents its own.
+universe, its creatures, companies and ships, as Crew Expendable does.
 
 Tone lines for the GM: "slow dread, then violence; scarcity of ammo, air and
 time; the Company always has a second agenda; let the crew distrust each
@@ -899,8 +902,11 @@ whom at a glance and nothing covers the faces in the scene:
   the fight's own battle map cropped to the fighters, with walls, water and
   rough ground, each crew member and creature as their picture on their
   square, each creature's reach dashed red, where the crew member whose
-  move it is can walk in green (their speed, rough ground at double cost,
-  never through a wall or a creature), and a line from them to each
+  move it is can still walk in green, with the feet left in the legend
+  (the board's own lit squares and budget, `pcMoveBudget`: movement
+  already spent this turn, Dash, prone and conditions count; when the
+  floor is not on initiative the TV walks the feet left out itself,
+  rough ground at double cost, never through a wall or a creature), and a line from them to each
   creature with the distance ("20 ft", or "In reach"), so the room can
   tell a swing from a shot. The TV signs in as the host, who plays no
   character, so the board's own projection would show it no creature; the
@@ -914,8 +920,12 @@ whom at a glance and nothing covers the faces in the scene:
   "Runs 45 ft" past its speed; a check thrown in the fight plays on the
   thrower (talk ripples for Persuasion, Deception, Intimidation; a sneak
   fades them; Athletics and Acrobatics leap; a search sweeps; a save
-  braces) with what they did and whether it worked. With reduced motion
-  each effect fades in place instead;
+  braces) with what they did and whether it worked. A crew member's
+  attack thrown from their phone plays as a digital one does
+  (`pc-attack-parked.ts` publishes the swing once the d20 lands). With
+  reduced motion each effect fades in place instead. On a tall screen the
+  grid takes the full width under the order, the creatures sit in a band
+  under it, then the prompt, the story line and the crew;
 - the story as one sentence at a time under the grid, no earlier
   passage (the voice reads all of it, the phones hold it); the answers and
   the dice move left of the creatures, and the answers give way to a roll
@@ -925,7 +935,9 @@ whom at a glance and nothing covers the faces in the scene:
   the creature's down picture, stamped.
 
 **On the phone**: a strip over the turn line with the round and each
-creature's health in words and pips; the turn line says "Your move in the
+creature's health in words and pips, how far each stands from the
+player's character on their own board ("Next to you", "30 ft"; only what
+that phone's board shows), and on their move how far they can still walk; the turn line says "Your move in the
 fight" with "One action: strike, shoot, run, hide, help someone, or offer a truce. Say it.",
 or whose move it is and "You're up next." The story's dice lines name a
 creature's attack by the creature, not by the crew member it hit.
@@ -1042,6 +1054,57 @@ massive damage), so the dice keep the last word.
   strike names it (`start_encounter` with `surprised: party`), beside the
   ship hurting the crew and a hidden effect paying off.
 
+### 2.14 AI crewmates: a small room still fills the crew
+
+A story's crew has a minimum, and a room may be smaller than it, or want a
+bigger crew than it has people. The start screen's second count, **AI
+crewmates**, says how many of the crew the AI plays besides the players on
+phones. Players and AI together must fit the story's crew, and at least one
+person plays. It starts at none and rises on its own only as far as the
+story's minimum (one person picking a two-to-five story gets one AI
+crewmate). `crewSeats` and `fitAiCrew` in `src/lib/couch/scenario-cards.ts`.
+
+1. **The forge cuts the crew for everyone.** `couch_forges.ai_crew` sits
+   beside `players`, and the forge reads the story for their sum, so the
+   ties and the hidden role are cut exactly as for that many people.
+2. **Phones choose first.** The lobby (TV and phone) waits only on the
+   people the AI does not stand in for (`peopleNeeded`), and marks the
+   free cards "AI plays" once that is all that is left.
+3. **Begin gives the AI the rest.** The TV's Begin first asks
+   `POST /api/campaigns/[id]/couch/ai-crew` (host only, lobby only): the
+   AI takes the free cards in the story's order, as many as it has
+   crewmates (`aiCrewCards`). Each is an ordinary claim
+   (`claimCrew`) by a member nobody can sign in as (`addAiCrewMember`, a
+   `comp_crew_` user with no password, swept with the campaign like a
+   companion's owner). So the crew strip, the agenda and its act moves,
+   story points, the GM's party, the table's wait, fights and death treat
+   an AI crewmate as they treat a phone. The cards show "AI crewmate".
+4. **It plays through the phone's routes.** A driver per night
+   (`src/lib/couch/ai-crew.ts`) listens on the night's event bus and, once
+   it falls quiet (a passage written, a roll called, a truce offered),
+   plays the stand-ins' round (`src/lib/couch/autoplay.ts`) kept to the AI
+   seats, with a crewmate's prompt: leave the people in the room the big
+   moments, back their plans, chase the secret agenda quietly. Moves, rolls
+   (thrown digitally) and truce answers go through the same routes a phone
+   uses, signed in as the seat for that one request. A move a route
+   refused is not written again for the same passage; a move the model
+   failed to write is asked again a few seconds later, up to three times,
+   before the seat sits the passage out and the table's wait clock moves
+   on. After a restart the driver comes back the next time a screen reads
+   the night (`GET /api/campaigns/[id]`), and in development a hot reload
+   swaps a driver still running the old code. A dead AI crewmate plays no
+   more and takes nobody over.
+5. **The TV says who is AI.** The crew strip puts a small "AI" tag before
+   an AI crewmate's name (read as "AI crewmate:").
+6. **A friend who comes late takes one over.** A night with AI crew keeps
+   joining open after Begin (`midGameJoinOpen`), with room for one person
+   per AI seat (`maxPlayers` counts AI seats twice). Their phone offers the
+   AI's cards ("Played by the AI. Yours if you want them."), and taking one
+   hands over the sheet as it stands, wounds, gear and agenda, with any
+   roll it still owes; the AI's seat leaves the table
+   (`handCrewCardFromAi`). Not during a fight, whose turn order names its
+   seats: the phone is told to take them over once it ends.
+
 ## Part 3: one turn, end to end
 
 1. The TV shows the scene and "Waiting on: Kara, Brakk, Sam".
@@ -1075,8 +1138,8 @@ massive damage), so the dice keep the last word.
 2. The display seat: exempt from the wait and ready gates, never sent whispers.
 3. Name-only join from the QR code.
 4. ElevenLabs backend, with narration playing only on the TV.
-5. The scenario forge: crew, portraits, agendas, the outline, and claiming crew
-   cards on the phone.
+5. The scenario forge: the written story's crew, portraits, agendas, the
+   outline, and claiming crew cards on the phone.
 6. The agenda field, GM prompt injection and the phone agenda card.
 7. A picture every turn with reference portraits (OpenAI edits).
 8. The TV view: scene, subtitles, crew strip, waiting-on list and the lobby QR.

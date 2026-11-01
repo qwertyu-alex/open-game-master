@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Clock, Flame, PenLine, Snowflake, Sparkles, Users, type LucideIcon } from "lucide-react";
+import { Check, Clock, Flame, Snowflake, Users, type LucideIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { INTENSITY_LABELS, scenarioCover, type ScenarioCard } from "@/lib/couch/scenario-cards";
@@ -72,41 +72,11 @@ export function ScenarioTile({ card, selected = false, footer }: { card: Scenari
   );
 }
 
-// The picker's first choice, drawn like the stories beside it: a story
-// the AI writes tonight from the room's own line.
-export function NewStoryTile({ selected = false }: { selected?: boolean }) {
-  return (
-    <TileFrame selected={selected} dashed>
-      <div className="relative flex aspect-[16/9] items-center justify-center overflow-hidden bg-[radial-gradient(ellipse_at_center,_rgba(212,171,58,0.18),_transparent_65%)]">
-        <span className="flex size-16 items-center justify-center rounded-full border border-amber-400/50 bg-black/40 text-amber-200">
-          <PenLine className="size-7" aria-hidden="true" />
-        </span>
-        <SelectedMark selected={selected} />
-        <div className="absolute inset-x-0 bottom-0 p-4">
-          <p className="text-xs font-medium uppercase tracking-[0.2em] text-amber-200/90">Anywhere you like</p>
-          <h3 className="mt-1 font-display text-xl leading-tight text-stone-100">Write a new one</h3>
-        </div>
-      </div>
-      <div className="flex flex-1 flex-col gap-3 p-4">
-        <p className="text-sm leading-relaxed text-stone-300">
-          Give the AI one line, or nothing at all, and it writes a fresh story and a crew for tonight. Nobody at the table knows what is coming, not even the host.
-        </p>
-        <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-stone-200" aria-label="At a glance">
-          <Fact icon={Users} label="1–5 players" />
-          <Fact icon={Clock} label="2–3 hours" />
-          <Fact icon={Sparkles} label="Ready in a minute or two" />
-        </ul>
-      </div>
-    </TileFrame>
-  );
-}
-
-function TileFrame({ selected, dashed = false, children }: { selected: boolean; dashed?: boolean; children: ReactNode }) {
+function TileFrame({ selected, children }: { selected: boolean; children: ReactNode }) {
   return (
     <span
       className={cn(
         "group flex h-full flex-col overflow-hidden rounded-xl border bg-stone-950/70 shadow-lg transition",
-        dashed ? "border-dashed" : "",
         selected
           ? "border-amber-400 ring-2 ring-amber-400/60 shadow-amber-900/30"
           : "border-stone-700/70 hover:-translate-y-0.5 hover:border-amber-500/60 hover:shadow-xl",

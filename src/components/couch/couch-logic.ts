@@ -392,7 +392,8 @@ export type CouchCrewCard = {
   signatureItem: string;
   ties: Array<{ to: string; line: string }>;
   portraitUrl: string | null;
-  claimedBy: { userId: string; name: string } | null;
+  // ai: an AI crewmate holds it (src/lib/couch/ai-crew.ts).
+  claimedBy: { userId: string; name: string; ai?: boolean } | null;
 };
 
 export type CouchRoster = {
@@ -403,6 +404,8 @@ export type CouchRoster = {
   // briefing, step i the crew card at i - 1, and the cards open once step
   // reaches total.
   intro: { step: number; total: number; key: string };
+  // The AI crewmates still to take a card at Begin (src/lib/couch/ai-crew.ts).
+  aiCrew: number;
   crew: CouchCrewCard[];
 };
 
@@ -427,6 +430,7 @@ export function normalizeRoster(raw: unknown): CouchRoster {
       ? { title: text(scenarioRaw.title), logline: text(scenarioRaw.logline), briefing: text(scenarioRaw.briefing) }
       : null,
     intro: { step: Math.min(count(introRaw.step), total), total, key: text(introRaw.key) },
+    aiCrew: count(body.aiCrew),
     crew: crew.flatMap((entry): CouchCrewCard[] => {
       const card = (entry && typeof entry === "object" ? entry : {}) as Record<string, unknown>;
       const id = text(card.id);
@@ -447,7 +451,7 @@ export function normalizeRoster(raw: unknown): CouchRoster {
             return text(entry.to) && text(entry.line) ? [{ to: text(entry.to), line: text(entry.line) }] : [];
           }),
           portraitUrl: text(card.portraitUrl) || null,
-          claimedBy: claimed && text(claimed.userId) ? { userId: text(claimed.userId), name: text(claimed.name) } : null,
+          claimedBy: claimed && text(claimed.userId) ? { userId: text(claimed.userId), name: text(claimed.name), ...(claimed.ai === true ? { ai: true } : {}) } : null,
         },
       ];
     }),
@@ -469,6 +473,18 @@ export function introducedCard(roster: Pick<CouchRoster, "status" | "intro" | "c
 // (the server's gate decides; this only says why the button waits).
 export function unclaimedCount(roster: Pick<CouchRoster, "crew"> | null): number {
   return roster ? roster.crew.filter((card) => !card.claimedBy).length : 0;
+}
+
+// The people the lobby still waits on: the free cards beyond those the AI
+// crewmates take at Begin.
+export function peopleNeeded(roster: Pick<CouchRoster, "crew" | "aiCrew"> | null): number {
+  return roster ? Math.max(0, unclaimedCount(roster) - roster.aiCrew) : 0;
+}
+
+// What a free card's line says in the lobby: the AI's, once the phones
+// leave no more than the AI will take.
+export function freeCardWords(roster: Pick<CouchRoster, "crew" | "aiCrew"> | null): string {
+  return roster && roster.aiCrew > 0 && peopleNeeded(roster) === 0 ? "AI plays" : "Free";
 }
 
 // ---- the GM at work ----

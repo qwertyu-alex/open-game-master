@@ -74,3 +74,8 @@ public/generated-audio
 
 # local audit handoff
 /docs/app-usability-audit-2026-10-16.md
+
+# Fan scenarios: commit the notes only, never the authors' files (see docs/fan-scenarios/README.md)
+/docs/fan-scenarios/**/*
+!/docs/fan-scenarios/**/
+!/docs/fan-scenarios/**/*.md

@@ -4,10 +4,12 @@ import { actName } from "@/lib/couch/prompt-logic";
 import { actBreakSpeech, actRollCall, readActRecap, type CouchActBreak } from "@/lib/couch/act-break-logic";
 import { enqueueNarrationAudio } from "@/lib/tts";
 import { forgedMember, introDone, introTotal } from "@/lib/couch/intro-logic";
+import { aiCrewStillToSeat, isAiCrewUserId } from "@/lib/couch/ai-crew-logic";
 import { publishCouchNavigation } from "@/lib/couch/navigation";
 import {
   failCouchForge,
   getCouchCrew,
+  handCrewCardFromAi,
   getCouchForge,
   listCouchCrew,
   recordCrewSheet,
@@ -19,6 +21,7 @@ import {
 } from "@/lib/couch/store";
 import { getCampaignById, listMembers, setMemberReady, type Campaign } from "@/lib/db/campaigns";
 import { insertWhisper } from "@/lib/db/dm-whispers";
+import { getActiveEncounter } from "@/lib/db/encounters";
 import { createSheet, getSheetById, getSheetForUser, listSheets, setSheetAgenda } from "@/lib/db/sheets";
 import { seatAddedSheet } from "@/lib/character-seat";
 import { publishTitleCard } from "@/lib/dm/scene-state";
@@ -39,6 +42,10 @@ export type CouchView = {
   // on, how many there are, and a key that changes with the words, so a
   // clip of last story's crew is never played for this one's.
   intro: { step: number; total: number; key: string };
+  // The AI crewmates still to take a card (src/lib/couch/ai-crew.ts): the
+  // AI takes this many of the free cards when the host begins, so the
+  // lobby waits on that many fewer people.
+  aiCrew: number;
   crew: Array<{
     id: string;
     name: string;
@@ -49,7 +56,8 @@ export type CouchView = {
     signatureItem: string;
     ties: Array<{ to: string; line: string }>;
     portraitUrl: string | null;
-    claimedBy: { userId: string; name: string } | null;
+    // ai: the card is an AI crewmate's.
+    claimedBy: { userId: string; name: string; ai?: boolean } | null;
   }>;
 };
 
@@ -78,6 +86,8 @@ export function couchView(campaignId: string): CouchView | null {
     error: forge.status === "failed" ? forge.error : "",
     scenario: scenario ? { title: scenario.title, logline: scenario.logline, briefing: scenario.briefing } : null,
     intro: { step: Math.min(forge.introStep, total), total, key: ready ? couchIntroKey(campaignId) : "" },
+    // Only in the lobby: the AI takes its cards at Begin, once.
+    aiCrew: getCampaignById(campaignId)?.status === "lobby" ? aiCrewStillToSeat(forge.aiCrew, cards.filter((card) => isAiCrewUserId(card.claimedBy)).length) : 0,
     crew: cards.map((card) => {
       const member = ready ? forgedMember(ready.crew, card) : null;
       return {
@@ -89,7 +99,11 @@ export function couchView(campaignId: string): CouchView | null {
         signatureItem: member?.signatureItem ?? "",
         ties: member?.relationships ?? [],
         portraitUrl: card.portraitUrl,
-        claimedBy: card.claimedBy ? { userId: card.claimedBy, name: names.get(card.claimedBy) ?? "A player" } : null,
+        claimedBy: card.claimedBy
+          ? isAiCrewUserId(card.claimedBy)
+            ? { userId: card.claimedBy, name: "AI", ai: true }
+            : { userId: card.claimedBy, name: names.get(card.claimedBy) ?? "A player" }
+          : null,
       };
     }),
   };
@@ -133,6 +147,12 @@ export function claimCrew(campaign: Campaign, userId: string, crewId: string): C
   if (!crewOpen(campaign, forge, listCouchCrew(campaign.id).length)) {
     return { ok: false, status: 409, error: "The crew is still being introduced on the TV. Choosing opens when it ends." };
   }
+  // A crew member the AI plays is a friend's for the asking (a late
+  // arrival, docs/couch-mode-spec.md 2.14): the sheet as it stands, wounds,
+  // gear, agenda and all, changes hands, and the AI's seat leaves.
+  if (card.claimedBy && isAiCrewUserId(card.claimedBy)) {
+    return takeOverFromAi(campaign, userId, card.id, card.claimedBy, card.name);
+  }
   if (!takeCrewCard(campaign.id, crewId, userId)) {
     const now = getCouchCrew(crewId);
     return {
@@ -160,6 +180,28 @@ export function claimCrew(campaign: Campaign, userId: string, crewId: string): C
     return { ok: false, status: 500, error: "That crew card could not be taken. Try again." };
   }
   recordCrewSheet(crewId, sheet.id);
+  seatAddedSheet(campaign, userId, sheet.id);
+  setMemberReady(campaign.id, userId, true);
+  publishPersisted(campaign.id, "sheet_updated", { sheet });
+  publishPersisted(campaign.id, "member_ready", { userId, ready: true });
+  publishCouchChange(campaign.id);
+  publishCouchNavigation(campaign);
+  return { ok: true, sheet };
+}
+
+function takeOverFromAi(campaign: Campaign, userId: string, crewId: string, aiUserId: string, name: string): ClaimOutcome {
+  // A fight's turn order names its seats by player: the hand-over waits
+  // for the fight to end rather than leave a turn with nobody behind it.
+  if (getActiveEncounter(campaign.id)) {
+    return { ok: false, status: 409, error: `${name} is in a fight. Take them over from the AI once it ends.` };
+  }
+  if (!handCrewCardFromAi(campaign.id, crewId, aiUserId, userId)) {
+    return { ok: false, status: 409, error: listCouchCrew(campaign.id).some((entry) => entry.claimedBy === userId) ? "You already have a crew card." : `${name} is already taken.` };
+  }
+  const sheet = getSheetForUser(campaign.id, userId);
+  if (!sheet) {
+    return { ok: false, status: 500, error: `${name} could not be handed over. Try again.` };
+  }
   seatAddedSheet(campaign, userId, sheet.id);
   setMemberReady(campaign.id, userId, true);
   publishPersisted(campaign.id, "sheet_updated", { sheet });

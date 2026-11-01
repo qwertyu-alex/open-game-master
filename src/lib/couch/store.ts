@@ -1,4 +1,6 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
+import { NO_PASSWORD_SENTINEL } from "@/lib/db/users";
+import { AI_CREW_USER_PREFIX } from "@/lib/couch/ai-crew-logic";
 import type { Forge } from "@/lib/couch/forge-logic";
 import { isCouchMood, type MoodState } from "@/lib/couch/mood-logic";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
@@ -31,11 +33,13 @@ export type CouchForgeRow = {
   campaignId: string;
   status: CouchStatus;
   error: string;
+  // The players on phones, and the crew the AI plays besides them
+  // (src/lib/couch/ai-crew.ts): the forge seats players + aiCrew.
   players: number;
-  seed: string;
+  aiCrew: number;
   offLimits: string;
-  // A ready-made story's id (src/lib/couch/scenarios), or "" for one the
-  // story model writes tonight from the seed.
+  // The written story's id (src/lib/couch/scenarios). "" only on a night
+  // from before every night had one, which the forge refuses.
   scenarioId: string;
   forge: Forge | null;
   // The act in force, 0 to 2 (src/lib/couch/play.ts advanceCouchAct).
@@ -94,6 +98,8 @@ function db() {
         status TEXT NOT NULL,
         error TEXT NOT NULL DEFAULT '',
         players INTEGER NOT NULL,
+        -- The line a night written by the story model started from; no
+        -- night is written that way any more.
         seed TEXT NOT NULL DEFAULT '',
         off_limits TEXT NOT NULL DEFAULT '',
         forge_json TEXT NOT NULL DEFAULT '',
@@ -167,6 +173,10 @@ function db() {
     if (!columns.some((column) => column.name === "recaps_json")) {
       database.exec(`ALTER TABLE couch_forges ADD COLUMN recaps_json TEXT NOT NULL DEFAULT ''`);
     }
+    // And the AI crewmates: a night made before them has none.
+    if (!columns.some((column) => column.name === "ai_crew")) {
+      database.exec(`ALTER TABLE couch_forges ADD COLUMN ai_crew INTEGER NOT NULL DEFAULT 0`);
+    }
     // And the act's awards: a night under way counts from its next award.
     if (!columns.some((column) => column.name === "act_points_json")) {
       database.exec(`ALTER TABLE couch_forges ADD COLUMN act_points_json TEXT NOT NULL DEFAULT ''`);
@@ -181,7 +191,7 @@ type ForgeRow = {
   status: string;
   error: string;
   players: number;
-  seed: string;
+  ai_crew: number | null;
   off_limits: string;
   scenario_id: string;
   forge_json: string;
@@ -220,7 +230,7 @@ function mapForge(row: ForgeRow): CouchForgeRow {
     status: row.status === "ready" || row.status === "failed" ? row.status : "forging",
     error: row.error,
     players: row.players,
-    seed: row.seed,
+    aiCrew: row.ai_crew ?? 0,
     offLimits: row.off_limits,
     scenarioId: row.scenario_id ?? "",
     forge: parseJson<Forge | null>(row.forge_json, null),
@@ -261,7 +271,7 @@ export function getCouchForge(campaignId: string): CouchForgeRow | null {
 
 // A new night, or the same night asked again (a reforge): the forge starts
 // over and the old cards go.
-export function beginCouchForge(campaignId: string, input: { players: number; seed: string; offLimits: string; scenarioId?: string }): void {
+export function beginCouchForge(campaignId: string, input: { players: number; aiCrew?: number; offLimits: string; scenarioId?: string }): void {
   const now = nowIso();
   const database = db();
   database.transaction(() => {
@@ -269,13 +279,13 @@ export function beginCouchForge(campaignId: string, input: { players: number; se
     database.prepare(`DELETE FROM couch_moods WHERE campaign_id = ?`).run(campaignId);
     database
       .prepare(
-        `INSERT INTO couch_forges (campaign_id, status, error, players, seed, off_limits, scenario_id, forge_json, act, intro_step, created_at, updated_at)
+        `INSERT INTO couch_forges (campaign_id, status, error, players, ai_crew, off_limits, scenario_id, forge_json, act, intro_step, created_at, updated_at)
          VALUES (?, 'forging', '', ?, ?, ?, ?, '', 0, 0, ?, ?)
-         ON CONFLICT (campaign_id) DO UPDATE SET status = 'forging', error = '', players = excluded.players,
-           seed = excluded.seed, off_limits = excluded.off_limits, scenario_id = excluded.scenario_id, forge_json = '', act = 0,
+         ON CONFLICT (campaign_id) DO UPDATE SET status = 'forging', error = '', players = excluded.players, ai_crew = excluded.ai_crew,
+           off_limits = excluded.off_limits, scenario_id = excluded.scenario_id, forge_json = '', act = 0,
            intro_step = 0, act_since = '', objective_json = '', pressure_at = '', beats_used_json = '', recaps_json = '', act_points_json = '', updated_at = excluded.updated_at`,
       )
-      .run(campaignId, input.players, input.seed, input.offLimits, input.scenarioId ?? "", now, now);
+      .run(campaignId, input.players, input.aiCrew ?? 0, input.offLimits, input.scenarioId ?? "", now, now);
   })();
 }
 
@@ -443,6 +453,60 @@ export function addTakenCrewCard(
 // sheet, so nobody plays them twice. The row keeps who they were.
 export function linkNpcToCrewSheet(npcId: string, sheetId: string): void {
   db().prepare(`UPDATE npcs SET companion_sheet_id = ?, attitude = 'friendly', updated_at = ? WHERE id = ?`).run(sheetId, nowIso(), npcId);
+}
+
+// An AI crewmate's seat (src/lib/couch/ai-crew.ts): a user nobody can sign
+// in as (no password, and the 'comp_' prefix keeps it out of the admin's
+// lists and goes with the campaign when it is deleted, as a companion's
+// owner row does), made a member of the night so its moves go through the
+// same routes a phone's do.
+export function addAiCrewMember(campaignId: string, name: string): string {
+  const database = db();
+  const id = `${AI_CREW_USER_PREFIX}${crypto.randomUUID()}`;
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 24);
+  const username = ["ai-crew", slug, id.slice(-8)].filter(Boolean).join("-");
+  const now = nowIso();
+  database.transaction(() => {
+    database.prepare(`INSERT INTO users (id, username, password_hash, created_at, is_admin) VALUES (?, ?, ?, ?, 0)`).run(id, username, NO_PASSWORD_SENTINEL, now);
+    database.prepare(`INSERT INTO campaign_members (campaign_id, user_id, role, ready, joined_at) VALUES (?, ?, 'player', 1, ?)`).run(campaignId, id, now);
+  })();
+  return id;
+}
+
+// A friend who came late takes a crew member over from the AI
+// (src/lib/couch/ai-crew.ts handCardFromAi): the card, its sheet and the
+// rolls it still owes become theirs, and the AI's seat leaves the table, in
+// one transaction, and only while the AI still holds the card and the
+// friend holds none. The AI's user row stays: the night's messages it
+// wrote are its own (they cascade from it), and it can sign in as nobody.
+export function handCrewCardFromAi(campaignId: string, crewId: string, aiUserId: string, userId: string): boolean {
+  if (!aiUserId.startsWith(AI_CREW_USER_PREFIX)) return false;
+  const database = db();
+  return database.transaction(() => {
+    const moved = database
+      .prepare(
+        `UPDATE couch_crew SET claimed_by = ?
+          WHERE id = ? AND campaign_id = ? AND claimed_by = ? AND sheet_id IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM couch_crew WHERE campaign_id = ? AND claimed_by = ?)`,
+      )
+      .run(userId, crewId, campaignId, aiUserId, campaignId, userId);
+    if (moved.changes !== 1) return false;
+    const now = nowIso();
+    database.prepare(`UPDATE character_sheets SET user_id = ?, updated_at = ? WHERE campaign_id = ? AND user_id = ?`).run(userId, now, campaignId, aiUserId);
+    database.prepare(`UPDATE pending_rolls SET user_id = ? WHERE campaign_id = ? AND user_id = ? AND status = 'pending'`).run(userId, campaignId, aiUserId);
+    database.prepare(`DELETE FROM campaign_members WHERE campaign_id = ? AND user_id = ?`).run(campaignId, aiUserId);
+    return true;
+  })();
+}
+
+// An AI seat whose claim failed: gone again, member row and user.
+export function removeAiCrewMember(campaignId: string, userId: string): void {
+  if (!userId.startsWith(AI_CREW_USER_PREFIX)) return;
+  const database = db();
+  database.transaction(() => {
+    database.prepare(`DELETE FROM campaign_members WHERE campaign_id = ? AND user_id = ?`).run(campaignId, userId);
+    database.prepare(`DELETE FROM users WHERE id = ? AND NOT EXISTS (SELECT 1 FROM character_sheets WHERE user_id = ?)`).run(userId, userId);
+  })();
 }
 
 type MoodRow = { mood: string; since: number; stated: string | null; stated_act: number };

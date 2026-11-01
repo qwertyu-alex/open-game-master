@@ -24,6 +24,7 @@ export type AutoplaySheet = {
   backstory?: string;
   agenda?: Agenda;
   isCompanion?: boolean;
+  deathSaves?: { dead?: boolean } | null;
 };
 export type AutoplayView = {
   campaign: { status: string; floor?: Floor } | null;
@@ -128,7 +129,10 @@ function agendaLine(agenda: Agenda): string {
   return `${agenda.acts[act]}${agenda.hiddenRole ? ` Who you really are: ${agenda.hiddenRole}` : ""}`;
 }
 
-export function playerPrompt({ view, sheet, note = "" }: { view: AutoplayView; sheet: AutoplaySheet; note?: string }): string {
+// crewmate: the prompt of an AI crewmate (src/lib/couch/ai-crew.ts), who
+// plays beside people in the room rather than standing in for one in a
+// test: it backs them up and leaves them the spotlight.
+export function playerPrompt({ view, sheet, note = "", crewmate = false }: { view: AutoplayView; sheet: AutoplaySheet; note?: string; crewmate?: boolean }): string {
   const floor = view.campaign?.floor ?? { mode: "open" };
   const crew = view.sheets
     .filter((other) => !other.isCompanion && other.id !== sheet.id)
@@ -137,7 +141,9 @@ export function playerPrompt({ view, sheet, note = "" }: { view: AutoplayView; s
   const gear = (sheet.equipment ?? []).map((item) => ((item.qty ?? 1) > 1 ? `${item.name} x${item.qty}` : item.name)).join(", ");
   const agenda = agendaLine(sheet.agenda);
   return [
-    `You are a player at a couch game night: friends in one room, an AI GM running a sci-fi horror one-shot on the TV, each player typing on their phone. You play ${sheet.name}.`,
+    crewmate
+      ? `You are an AI crewmate at a couch game night: people in one room, an AI GM running a sci-fi horror one-shot on the TV, each person typing on their phone. You play ${sheet.name}, one of the crew nobody in the room took.`
+      : `You are a player at a couch game night: friends in one room, an AI GM running a sci-fi horror one-shot on the TV, each player typing on their phone. You play ${sheet.name}.`,
     "",
     "Your character:",
     `- ${sheet.name}, ${sheet.crewRole || sheet.class}. HP ${sheet.currentHp}/${sheet.maxHp}.${sheet.conditions?.length ? ` Conditions: ${sheet.conditions.join(", ")}.` : ""}`,
@@ -154,6 +160,9 @@ export function playerPrompt({ view, sheet, note = "" }: { view: AutoplayView; s
     transcript(view),
     "",
     note ? `Direction from the person running this test (follow it): ${note}\n` : "",
+    crewmate
+      ? "The people in the room are the stars of the night. Leave them the big moments: back up their plans, answer what they say to you, offer what your character knows or carries, and never decide for them or speak for their characters. Chase your secret agenda quietly, as a person would."
+      : "",
     "Write your next move the way a real player types on a phone: one or two short sentences, in character, decisive, reacting to what just happened. Act, don't narrate outcomes; the GM decides those. Sometimes speak instead of act.",
     "Answer with exactly one line, starting with DO: for an action or SAY: for words spoken aloud in character. Nothing else.",
   ]

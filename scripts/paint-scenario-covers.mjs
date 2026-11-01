@@ -27,20 +27,6 @@ const STYLE = "late-1970s science fiction film still, 35mm film grain, anamorphi
 
 // What each cover shows: the opening place, as the briefing paints it.
 const COVERS = {
-  "kesslers-moon":
-    "A small mining colony of domes and steel towers half-buried in blue-black ice on a frozen moon at night, sodium-orange lights in the windows, a drill derrick venting steam, an enormous ringed gas giant filling the sky",
-  "good-shepherd":
-    "A huge white hospital ship with a faded teal crescent-and-hand medical emblem (not a cross) drifting in deep space, rows of warm lit portholes, a small battered tug docking under its belly, soft fluorescent glow, condensation on a viewport in the foreground",
-  "sixty-fathoms":
-    "A yellow steel diving bell descending through murky blue-green water toward a research station of linked steel modules on a dark sea floor, a few red and sodium lights, particles drifting in the floodlights",
-  "hollow-night":
-    "A farming colony's greenhouse domes at night on a terraformed moon, endless fields of glowing carved orange gourd lanterns under a frosty sky, a bonfire in the distance, a lone ringed planet on the horizon",
-  "all-souls-station":
-    "An old space relay station in orbit over a colossal banded amber and violet gas giant, its ring-shaped party deck windows glowing ultraviolet purple and pumpkin orange, paper Halloween decorations visible through the glass",
-  "midwinter-rime":
-    "A small polar research station on black ice under a starless sky in a blizzard, warm windows strung with red and green Christmas lights, a crashed cargo drone's red beacon blinking far out on the ice",
-  "unto-us":
-    "A small battered ore freighter in deep space with Christmas lights taped inside its cockpit window, one very bright star-like beacon ahead of it, three distant white-and-gold ships approaching",
   "dead-air":
     "A small dark relay station of three linked modules and a tall antenna mast in deep space, a battered orange salvage tug clamped to its frosted airlock, red warning strobes, a single green light in one window",
   "haddon-outpost":

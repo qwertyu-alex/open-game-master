@@ -7,10 +7,10 @@ import { CouchTvJoin } from "@/components/couch/CouchTvJoin";
 import { CouchTvIntro } from "@/components/couch/CouchTvIntro";
 import { CouchFace } from "@/components/couch/CouchParts";
 import { useCouchRoster } from "@/components/couch/useCouchRoster";
-import { introRunning, unclaimedCount, type CouchCrewCard } from "@/components/couch/couch-logic";
+import { freeCardWords, introRunning, peopleNeeded, unclaimedCount, type CouchCrewCard } from "@/components/couch/couch-logic";
 
-// The TV before the game (docs/couch-mode-spec.md 2.6): "Writing the
-// scenario" over a QR big enough to scan from the couch while the forge
+// The TV before the game (docs/couch-mode-spec.md 2.6): "Setting up the
+// night" over a QR big enough to scan from the couch while the forge
 // works; then the introductions, the briefing and each crew member read
 // aloud (CouchTvIntro.tsx); then the choosing: the title, the QR, the crew
 // greying out as phones take them, and the lead's Begin.
@@ -63,17 +63,22 @@ export function CouchTvLobby({
       });
   const status = roster?.status ?? (missing ? "ready" : "forging");
   const open = roster ? unclaimedCount(roster) : 0;
+  // The people still to choose: the AI crewmates take the rest at Begin.
+  const needed = roster ? peopleNeeded(roster) : 0;
+  const aiTakes = Math.min(open, roster?.aiCrew ?? 0);
   const mayBegin = campaign.ownerUserId === me.id || campaign.leadUserId === me.id;
   const waitingFor =
     !loaded
       ? "Connecting…"
       : status === "forging"
-        ? "The GM is still writing."
+        ? "The GM is still setting up."
         : status === "failed"
-          ? "The scenario could not be written."
-          : open > 0
-            ? `Waiting for ${open} more ${open === 1 ? "player" : "players"} to pick a character.`
-            : "";
+          ? "The night could not be set up."
+          : needed > 0
+            ? `Waiting for ${needed} more ${needed === 1 ? "player" : "players"} to pick a character.`
+            : aiTakes > 0
+              ? `The AI plays the ${aiTakes === 1 ? "character" : `${aiTakes} characters`} left free.`
+              : "";
 
   // A forge that failed is written again on the lead's word (the route
   // refuses anyone else, and any story a phone has already taken a card in).
@@ -98,6 +103,17 @@ export function CouchTvLobby({
     setBusy(true);
     setError("");
     try {
+      // The AI crewmates take the cards left free first: the start's gate
+      // asks every crew card to have its player.
+      if (aiTakes > 0) {
+        const seated = await fetch(`/api/campaigns/${campaign!.id}/couch/ai-crew`, { method: "POST" });
+        if (!seated.ok) {
+          const data = (await seated.json().catch(() => ({}))) as { error?: string };
+          setError(data.error || "The AI crew could not take their characters.");
+          refetch();
+          return;
+        }
+      }
       // The TV's seat readies with the press, for a gate that still asks.
       await fetch(`/api/campaigns/${campaign!.id}/ready`, {
         method: "POST",
@@ -152,12 +168,12 @@ export function CouchTvLobby({
           {status === "forging" ? (
             <p className="couch-tv-forging" role="status">
               <span className="couch-pulse" aria-hidden="true" />
-              Writing the scenario and the crew…
+              Setting up the night and the crew…
             </p>
           ) : status === "failed" ? (
             <div className="grid justify-items-start gap-3">
               <p className="couch-tv-forging" role="alert">
-                {roster?.error || "The scenario could not be written."}
+                {roster?.error || "The night could not be set up."}
               </p>
               {mayBegin ? (
                 <button type="button" className="couch-btn" onClick={() => void retry()} disabled={busy}>
@@ -168,7 +184,7 @@ export function CouchTvLobby({
           ) : roster?.intro.total ? (
             // The room has heard the briefing and met the crew: now they pick.
             <p className="couch-tv-lobby-pick">
-              {open > 0 ? "Choose your character on your phone." : "Everyone has a character."}
+              {needed > 0 ? "Choose your character on your phone." : open > 0 ? "Everyone has a character. The AI plays the rest." : "Everyone has a character."}
             </p>
           ) : briefing ? (
             <p className="couch-tv-lobby-brief">{briefing}</p>
@@ -184,7 +200,7 @@ export function CouchTvLobby({
                   <span className="couch-tv-member-text">
                     <span className="couch-tv-member-name">{card.name}</span>
                     {card.crewRole ? <span className="couch-tv-member-role">{card.crewRole}</span> : null}
-                    <span className="couch-tv-seat-claim">{card.claimedBy ? `Taken by ${card.claimedBy.name || "a player"}` : "Free"}</span>
+                    <span className="couch-tv-seat-claim">{card.claimedBy ? (card.claimedBy.ai ? "AI crewmate" : `Taken by ${card.claimedBy.name || "a player"}`) : freeCardWords(roster)}</span>
                   </span>
                 </li>
               ))}
@@ -199,7 +215,7 @@ export function CouchTvLobby({
                 type="button"
                 className="couch-btn couch-btn-primary"
                 onClick={() => void begin()}
-                disabled={busy || !loaded || status !== "ready" || open > 0}
+                disabled={busy || !loaded || status !== "ready" || needed > 0}
               >
                 {busy ? "Starting…" : "Begin"}
               </button>

@@ -3,10 +3,11 @@
 This repository is a fork of [Open Game Master](https://github.com/Lebbitheplow/open-game-master)
 (the `origin` remote; this fork is `private`) with one product: the **couch
 night**. One laptop drives the TV, three to five friends in the same room
-play on their phones, and the AI writes and runs a sci-fi horror one-shot.
+play on their phones, and the AI runs a written sci-fi horror one-shot,
+played on an overhead map of its site.
 Read [docs/couch-mode-spec.md](docs/couch-mode-spec.md) for what a night is
-and how it is built, and [docs/couch-navigation.md](docs/couch-navigation.md)
-for the map.
+and how it is built, and [docs/couch-overhead-spec.md](docs/couch-overhead-spec.md)
+and [docs/couch-navigation.md](docs/couch-navigation.md) for the map.
 
 Assume without being told:
 

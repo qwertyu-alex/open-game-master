@@ -110,7 +110,7 @@ await test("the quiet room fires after the GM spoke, three minutes on, twice at 
   assert.deepEqual(decideQuiet({ ...facts, now: at + QUIET_MS + QUIET_STALE_MS + 1 }), { fire: false, retryAt: null });
 });
 
-await test("the forge reads an act's deck, and the ready-made test night has one in every act", async () => {
+await test("the forge reads an act's deck, and the written test night has one in every act", async () => {
   const { writtenForge } = await import("../src/lib/couch/scenarios/index.ts");
   const forged = writtenForge("dead-air", 2);
   assert.ok("forge" in forged, JSON.stringify(forged));
@@ -119,10 +119,6 @@ await test("the forge reads an act's deck, and the ready-made test night has one
     assert.ok(beats.length >= 4, `${act.title}: ${beats.length} beats`);
     for (const kind of ["sign", "human", "strike"]) assert.ok(beats.some((beat) => beat.kind === kind), `${act.title} has a ${kind}`);
   }
-  const { forgeSystemPrompt } = await import("../src/lib/couch/forge-logic.ts");
-  const asked = forgeSystemPrompt(3, "");
-  assert.match(asked, /"beats":\[\{"kind":"sign"\|"human"\|"strike","what":string\}\]/);
-  assert.match(asked, /beats: the act's deck of four or five scares/);
 });
 
 // ---- the rim, at a couch table ----
